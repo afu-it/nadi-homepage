@@ -773,7 +773,7 @@ function addButtonToColumn(col) {
         header: header,
         type: 'buttons',
         cols: cols,
-        maxRows: 1,
+        maxRows: 10,
         columnHeaders: columnHeaders,
         rowTitles: [],
         buttons: buttons
@@ -891,58 +891,54 @@ else {
 
 
                     const gridWrapper = document.createElement('div');
-                    const cols = sec.cols || 2;
-                    const maxRows = sec.maxRows || 2;
-                    
-                    if (sec.columnHeaders && sec.columnHeaders.some(h => h.trim())) {
-                        const headerRow = document.createElement('div');
-                        headerRow.className = "grid gap-4 mb-3";
-                        headerRow.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-                        
-                        sec.columnHeaders.forEach((headerText, i) => {
-                            if (i < cols) {
-                                const colHeader = document.createElement('div');
-                                colHeader.className = "text-center text-xs font-bold text-slate-600 uppercase tracking-wide py-2 border-b-2 border-slate-300";
-                                colHeader.textContent = headerText || `Col ${i + 1}`;
-                                headerRow.appendChild(colHeader);
-                            }
-                        });
-                        gridWrapper.appendChild(headerRow);
-                    }
+const cols = sec.cols || 2;
 
-                    for (let r = 1; r <= maxRows; r++) {
-                        const rowButtons = sec.buttons ? sec.buttons.filter(b => b.row === r) : [];
-                        if (rowButtons.length === 0) continue;
+// Show column headers if any exist
+if (sec.columnHeaders && sec.columnHeaders.some(h => h.trim())) {
+    const headerRow = document.createElement('div');
+    headerRow.className = "grid gap-4 mb-3";
+    headerRow.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    
+    sec.columnHeaders.forEach((headerText, i) => {
+        if (i < cols) {
+            const colHeader = document.createElement('div');
+            colHeader.className = "text-center text-xs font-bold text-slate-600 uppercase tracking-wide py-2 border-b-2 border-slate-300";
+            colHeader.textContent = headerText || `Col ${i + 1}`;
+            headerRow.appendChild(colHeader);
+        }
+    });
+    gridWrapper.appendChild(headerRow);
+}
 
-                        const rowTitle = sec.rowTitles && sec.rowTitles[r - 1] ? sec.rowTitles[r - 1] : '';
-                        if (rowTitle) {
-                            const titleDiv = document.createElement('div');
-                            titleDiv.className = "text-xs font-bold text-slate-700 uppercase tracking-wide mt-5 mb-2 text-center";
-                            titleDiv.textContent = rowTitle;
-                            gridWrapper.appendChild(titleDiv);
-                        }
+// Create main grid container for all columns
+const mainGrid = document.createElement('div');
+mainGrid.className = "grid gap-4";
+mainGrid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
 
-                        const rowGrid = document.createElement('div');
-                        rowGrid.className = "grid gap-4 mb-3";
-                        rowGrid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+// For each column, create a vertical stack of buttons
+for (let c = 1; c <= cols; c++) {
+    const columnDiv = document.createElement('div');
+    columnDiv.className = "flex flex-col gap-3";
+    
+    // Get all buttons for this column, sorted by row
+    const colButtons = sec.buttons ? sec.buttons.filter(b => b.col === c).sort((a, b) => a.row - b.row) : [];
+    
+    if (colButtons.length > 0) {
+        colButtons.forEach(btnData => {
+            const a = document.createElement('a');
+            a.href = btnData.url;
+            a.target = '_blank';
+            a.className = "flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-nadi hover:text-nadi hover:shadow text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg transition-all";
+            a.innerHTML = `<span>${btnData.label}</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>`;
+            columnDiv.appendChild(a);
+        });
+    }
+    
+    mainGrid.appendChild(columnDiv);
+}
 
-                        for (let c = 1; c <= cols; c++) {
-                            const btnData = rowButtons.find(b => b.col === c);
-                            
-                            if (btnData) {
-                                const a = document.createElement('a');
-                                a.href = btnData.url;
-                                a.target = '_blank';
-                                a.className = "flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-nadi hover:text-nadi hover:shadow text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg transition-all";
-                                a.innerHTML = `<span>${btnData.label}</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>`;
-                                rowGrid.appendChild(a);
-                            } else {
-                                rowGrid.appendChild(document.createElement('div'));
-                            }
-                        }
+gridWrapper.appendChild(mainGrid);
 
-                        gridWrapper.appendChild(rowGrid);
-                    }
 
                     sectionDiv.appendChild(gridWrapper);
                 }
