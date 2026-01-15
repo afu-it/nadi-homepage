@@ -111,16 +111,31 @@
                 <!-- Events List -->
                 <div class="w-full md:w-5/12 order-2 md:order-1 flex flex-col">
                     <div class="flex items-center justify-between mb-2">
-                        <h2 class="text-base font-bold text-slate-900">Programs List</h2>
-                        <div class="flex gap-2">
-                            <button onclick="toggleFilter()" class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm">
-                                <i class="fa-solid fa-filter text-[10px]"></i>
-                            </button>
-                            <button onclick="openModal()" class="text-[10px] font-bold text-white bg-slate-900 hover:bg-slate-700 px-3 py-1.5 rounded shadow flex items-center gap-1">
-                                <i class="fa-solid fa-plus"></i> Add
-                            </button>
-                        </div>
-                    </div>
+    <h2 class="text-base font-bold text-slate-900">Programs List</h2>
+    <div class="flex gap-2">
+        <button onclick="toggleFilter()" class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm">
+            <i class="fa-solid fa-filter text-[10px]"></i>
+        </button>
+        <button onclick="toggleSort()" class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-purple-600 hover:border-purple-300 shadow-sm" title="Sort">
+            <i class="fa-solid fa-arrow-down-a-z text-[10px]"></i>
+        </button>
+        <button onclick="openModal()" class="text-[10px] font-bold text-white bg-slate-900 hover:bg-slate-700 px-3 py-1.5 rounded shadow flex items-center gap-1">
+            <i class="fa-solid fa-plus"></i> Add
+        </button>
+    </div>
+</div>
+
+<div id="sortSection" class="hidden bg-white p-2 rounded-lg border border-slate-200 mb-3 shadow-sm">
+    <div class="flex justify-between items-center mb-1">
+        <span class="text-[9px] font-bold text-slate-500 uppercase">Sort By</span>
+    </div>
+    <select id="sortSelect" onchange="applySorting()" class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-semibold outline-none focus:border-purple-400">
+        <option value="category">Category</option>
+        <option value="startTime">Start Time</option>
+    </select>
+</div>
+
+
                     <div id="filterSection" class="filter-hidden bg-white p-2 rounded-lg border border-slate-200 mb-3 shadow-sm">
                         <div class="flex justify-between items-center mb-1">
                             <span class="text-[9px] font-bold text-slate-500 uppercase">Date Range</span>
@@ -377,37 +392,62 @@
                                 <input type="date" id="endDate" class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:border-slate-400 outline-none">
                             </div>
                         </div>
+
+    
+    <div>
+    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Time</label>
+    <div class="flex flex-col gap-2">
+        <div class="flex items-center gap-1.5">
+            <span class="text-[9px] text-slate-500 font-semibold w-10">Start</span>
+            <select id="timeHour" class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"></select>
+            <span class="text-slate-400 text-xs">:</span>
+            <select id="timeMinute" class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12">
+                <option value="00">00</option>
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="45">45</option>
+            </select>
+            <select id="timeAMPM" class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16">
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+            </select>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
+            <select id="endTimeHour" class="px-1.5 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-mono focus:border-blue-400 focus:text-slate-800 w-12">
+                <option value="" selected>-</option>
+            </select>
+            <span class="text-slate-400 text-xs">:</span>
+            <select id="endTimeMinute" class="px-1.5 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-mono focus:border-blue-400 focus:text-slate-800 w-12">
+                <option value="00">00</option>
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="45">45</option>
+            </select>
+            <select id="endTimeAMPM" class="px-2 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-bold focus:border-blue-400 focus:text-slate-800 w-16">
+                <option value="" selected>-</option>
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+
                         <div>
-                            <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Time</label>
-                            <div class="flex items-center gap-2">
-                                <div class="flex gap-1 w-5/12">
-                                    <select id="timeHour" class="w-full px-1 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono"></select>
-                                    <select id="timeMinute" class="w-full px-1 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono">
-                                        <option value="00">00</option>
-                                        <option value="15">15</option>
-                                        <option value="30">30</option>
-                                        <option value="45">45</option>
-                                    </select>
-                                </div>
-                                <span class="text-slate-300 text-[10px]">-</span>
-                                <div class="flex gap-1 w-5/12">
-                                    <select id="endTimeHour" class="w-full px-1 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-mono focus:border-blue-400 focus:text-slate-800">
-                                        <option value="" selected>-</option>
-                                    </select>
-                                    <select id="endTimeMinute" class="w-full px-1 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-mono focus:border-blue-400 focus:text-slate-800">
-                                        <option value="00">00</option>
-                                        <option value="15">15</option>
-                                        <option value="30">30</option>
-                                        <option value="45">45</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Links</label>
-                            <div id="linksContainer" class="space-y-1.5 mb-2"></div>
-                            <button type="button" onclick="addLinkRow()" class="w-full py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-100 transition-colors">+ Add Link</button>
-                        </div>
+    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1.5">Registration</label>
+    <label class="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded cursor-pointer hover:bg-blue-100 transition-colors">
+        <input type="checkbox" id="ssoRegistration" class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500">
+        <span class="text-xs font-semibold text-slate-700">Register using SSO website</span>
+    </label>
+</div>
+
+<div class="mt-3">
+    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Links</label>
+    <div id="linksContainer" class="space-y-1.5 mb-2"></div>
+    <button type="button" onclick="addLinkRow()" class="w-full py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-100 transition-colors">+ Add Link</button>
+</div>
+
                     </form>
                 </div>
                 <div class="px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
@@ -436,7 +476,7 @@
         };
 
         const schoolHolidays = {};
-        const platformOptions = ["NES", "Gmeet", "Gform", "Gdrive", "Youtube", "Website", "Jotform"];
+        const platformOptions = ["NES", "Gmeet", "Zoom", "Gform", "Gdrive", "Youtube", "Website", "Jotform"];
 
         function toLocalISOString(date) {
             const y = date.getFullYear();
@@ -538,19 +578,20 @@ function saveToFirebase() {
             `;
 
             const hourSelect = document.getElementById('timeHour');
-            const endHourSelect = document.getElementById('endTimeHour');
-            for(let i=7; i<=18; i++) {
-                const val = i.toString().padStart(2, '0');
-                const opt = document.createElement('option');
-                opt.value = val;
-                opt.text = val;
-                if(val === '09') opt.selected = true;
-                hourSelect.appendChild(opt);
-                const opt2 = document.createElement('option');
-                opt2.value = val;
-                opt2.text = val;
-                endHourSelect.appendChild(opt2);
-            }
+const endHourSelect = document.getElementById('endTimeHour');
+for(let i=1; i<=12; i++) {
+    const val = i.toString().padStart(2, '0');
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.text = val;
+    if(val === '09') opt.selected = true;
+    hourSelect.appendChild(opt);
+    const opt2 = document.createElement('option');
+    opt2.value = val;
+    opt2.text = val;
+    endHourSelect.appendChild(opt2);
+}
+
 
             loadFromFirebase();
 
@@ -755,19 +796,22 @@ function addButtonToColumn(col) {
         columnHeaders.push(input ? input.value.trim() : '');
     }
     
-    // Collect buttons from all columns
-    const buttons = [];
-    for (let c = 1; c <= cols; c++) {
-        const colButtons = document.querySelectorAll(`#col-${c}-buttons .btn-label`);
-        colButtons.forEach((labelInput) => {
-            const urlInput = labelInput.nextElementSibling;
-            const label = labelInput.value.trim();
-            const url = urlInput.value.trim();
-            if (label && url) {
-                buttons.push({ label, url, row: 1, col: c });
-            }
-        });
-    }
+    // Collect buttons from all columns with sequential row numbers
+const buttons = [];
+for (let c = 1; c <= cols; c++) {
+    const colButtons = document.querySelectorAll(`#col-${c}-buttons .btn-label`);
+    let rowIndex = 1;
+    colButtons.forEach((labelInput) => {
+        const urlInput = labelInput.nextElementSibling;
+        const label = labelInput.value.trim();
+        const url = urlInput.value.trim();
+        if (label && url) {
+            buttons.push({ label, url, row: rowIndex, col: c });
+            rowIndex++;
+        }
+    });
+}
+
 
     const newSection = {
         header: header,
@@ -828,18 +872,67 @@ function renderSettingsSectionList() {
 
 
 
-        function deleteSection() {
-    const idx = parseInt(document.getElementById('editSectionId').value); // Fixed: editSectionId not editSectionIndex
+let deleteSectionIdx = null;
+
+function deleteSection() {
+    const idx = parseInt(document.getElementById('editSectionId').value);
     if (idx === -1) return;
-    if(!confirm("Delete this section?")) return;
     
-    siteSettings.sections.splice(idx, 1);
-    saveToFirebase();;
-    renderCustomLinks();
-    openSectionList(); // ✅ NEW FUNCTION
+    deleteSectionIdx = idx;
+    const modal = document.getElementById('deleteModal');
+    const panel = document.getElementById('deleteModalPanel');
+    
+    // Update modal text for section
+    document.querySelector('#deleteModal h3').textContent = 'Delete Section?';
+    document.querySelector('#deleteModal p').textContent = 'All buttons in this section will be removed.';
+    
+    modal.classList.remove('hidden');
+    
+    setTimeout(() => {
+        panel.style.transform = 'scale(1)';
+        panel.style.opacity = '1';
+    }, 10);
 }
 
+function confirmDelete() {
+    if (deleteEventId) {
+        // Delete event
+        events = events.filter(e => e.id !== deleteEventId);
+        saveToFirebase();
+        renderEventList();
+        renderCalendar();
+        closeDeleteModal();
+    } else if (deleteSectionIdx !== null) {
+        // Delete section
+        siteSettings.sections.splice(deleteSectionIdx, 1);
+        saveToFirebase();
+        renderCustomLinks();
+        openSectionList();
+        
+        // Reset modal text
+        setTimeout(() => {
+            document.querySelector('#deleteModal h3').textContent = 'Delete Program?';
+            document.querySelector('#deleteModal p').textContent = 'This action cannot be undone.';
+        }, 300);
+        
+        deleteSectionIdx = null;
+    }
+    closeDeleteModal();
+}
 
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    const panel = document.getElementById('deleteModalPanel');
+    
+    panel.style.transform = 'scale(0.95)';
+    panel.style.opacity = '0';
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        deleteEventId = null;
+        deleteSectionIdx = null;
+    }, 200);
+}
 
         function renderCustomLinks() {
             const container = document.getElementById('customLinksWrapper');
@@ -951,6 +1044,19 @@ gridWrapper.appendChild(mainGrid);
             const fs = document.getElementById('filterSection');
             fs.classList.toggle('filter-hidden');
         }
+
+        function toggleSort() {
+    const ss = document.getElementById('sortSection');
+    ss.classList.toggle('hidden');
+}
+
+let currentSort = 'category'; // Default sort
+
+function applySorting() {
+    currentSort = document.getElementById('sortSelect').value;
+    renderEventList();
+}
+
 
         function renderCalendar() {
             const grid = document.getElementById('calendarGrid');
@@ -1089,7 +1195,46 @@ gridWrapper.appendChild(mainGrid);
                 displayEvents = events.filter(e => e.end >= todayStr);
             }
 
-            displayEvents.sort((a, b) => a.start.localeCompare(b.start));
+// Apply sorting
+if (currentSort === 'category') {
+    displayEvents.sort((a, b) => {
+        if (a.category === b.category) {
+            return a.start.localeCompare(b.start);
+        }
+        return a.category.localeCompare(b.category);
+    });
+} else if (currentSort === 'startTime') {
+    displayEvents.sort((a, b) => {
+        // Sort by date first
+        const dateCompare = a.start.localeCompare(b.start);
+        if (dateCompare !== 0) return dateCompare;
+        
+        // If same date, sort by time
+        if (a.time && b.time) {
+            const timeA = a.time.split(' - ')[0]; // Get start time only
+            const timeB = b.time.split(' - ')[0];
+            
+            // Convert to 24-hour for comparison
+            const convertTo24 = (time12) => {
+                const match = time12.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                if (!match) return '00:00';
+                let hour = parseInt(match[1]);
+                const min = match[2];
+                const ampm = match[3].toUpperCase();
+                
+                if (ampm === 'PM' && hour !== 12) hour += 12;
+                if (ampm === 'AM' && hour === 12) hour = 0;
+                
+                return `${hour.toString().padStart(2, '0')}:${min}`;
+            };
+            
+            return convertTo24(timeA).localeCompare(convertTo24(timeB));
+        }
+        
+        return 0;
+    });
+}
+
 
             if (displayEvents.length === 0) {
                 container.innerHTML = `<div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-slate-400 text-xs mt-2">No programs found.</div>`;
@@ -1127,32 +1272,36 @@ gridWrapper.appendChild(mainGrid);
                     linksHtml += '</div>';
                 }
 
-                card.innerHTML = `
-                    <div class="flex flex-col gap-1 relative">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplay}</span>
-                                <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5">${ev.title}</h4>
-                            </div>
-                            <div class="flex flex-col items-end w-auto text-right">
-                                <div class="flex flex-col items-end justify-center px-2 py-1 rounded border ${cat.color} min-w-[80px]">
-                                    <span class="text-[9px] font-bold uppercase whitespace-nowrap leading-none">${cat.label}</span>
-                                    <span class="text-[8px] opacity-80 whitespace-nowrap leading-none mt-0.5">${cat.sub}</span>
-                                </div>
-                            </div>
-                        </div>
-                        ${ev.time ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time}</div>` : ''}
-                        ${linksHtml}
-                        <div class="absolute top-8 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
-                            <button onclick="openModal(${ev.id})" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
-                                <i class="fa-solid fa-pen text-xs"></i>
-                            </button>
-                            <button onclick="deleteEvent(${ev.id})" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete">
-                                <i class="fa-solid fa-trash text-xs"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
+const ssoText = ev.ssoRegistration ? '<div class="text-[8px] font-bold text-red-600 uppercase tracking-wide mb-1 flex items-center gap-1"><svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"/></svg>Register on SSO website!</div>' : '';
+
+card.innerHTML = `
+    <div class="flex flex-col gap-1 relative">
+        <div class="flex justify-between items-start">
+            <div class="flex-1">
+                <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplay}</span>
+                <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5">${ev.title}</h4>
+            </div>
+            <div class="flex flex-col items-end w-auto text-right">
+                <div class="flex flex-col items-end justify-center px-2 py-1 rounded border ${cat.color} min-w-[80px]">
+                    <span class="text-[9px] font-bold uppercase whitespace-nowrap leading-none">${cat.label}</span>
+                    <span class="text-[8px] opacity-80 whitespace-nowrap leading-none mt-0.5">${cat.sub}</span>
+                </div>
+            </div>
+        </div>
+        ${ev.time ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time}</div>` : ''}
+        ${ssoText}
+        ${linksHtml}
+        <div class="absolute top-8 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
+            <button onclick="openModal('${ev.id}')" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
+                <i class="fa-solid fa-pen text-xs"></i>
+            </button>
+            <button onclick="deleteEvent('${ev.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete">
+                <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+        </div>
+    </div>
+`;
+
                 container.appendChild(card);
             });
         }
@@ -1180,84 +1329,93 @@ gridWrapper.appendChild(mainGrid);
             document.getElementById(`link-${id}`).remove();
         }
 
-        function openModal(editId = null) {
-            const modal = document.getElementById('eventModal');
-            const panel = document.getElementById('modalPanel');
-            const title = document.getElementById('modalTitle');
-            const linksContainer = document.getElementById('linksContainer');
+        function openModal(id = null) {
+    const modal = document.getElementById('eventModal');
+    const panel = document.getElementById('modalPanel');
+    modal.classList.remove('hidden');
+    
+    setTimeout(() => {
+        panel.style.transform = 'scale(1)';
+        panel.style.opacity = '1';
+    }, 10);
 
-            linksContainer.innerHTML = '';
+    // Clear form
+    document.getElementById('eventForm').reset();
+    document.getElementById('linksContainer').innerHTML = '';
+    
+    if (id) {
+        // Edit mode
+        const ev = events.find(e => e.id === id);
+        if (!ev) return;
+        
+        document.getElementById('modalTitle').textContent = 'Edit Program';
+        document.getElementById('eventId').value = ev.id;
+        document.getElementById('eventTitle').value = ev.title;
+        document.getElementById('startDate').value = ev.start;
+        document.getElementById('endDate').value = ev.end;
+        document.getElementById('ssoRegistration').checked = ev.ssoRegistration || false;
+        
+        // Set category
+        const catRadio = document.querySelector(`input[name="category"][value="${ev.category}"]`);
+        if (catRadio) catRadio.checked = true;
+        
+        // Set time with AM/PM
+        if (ev.time) {
+            const parts = ev.time.split(' - ');
+            const startPart = parts[0];
+            const endPart = parts.length > 1 ? parts[1] : null;
             
-            if (editId) {
-                const ev = events.find(e => e.id === editId);
-                if (!ev) return;
-
-                title.textContent = "Edit Program";
-                document.getElementById('eventId').value = ev.id;
-                document.getElementById('startDate').value = ev.start;
-                document.getElementById('endDate').value = ev.end;
-                document.getElementById('eventTitle').value = ev.title;
-                
-                const radios = document.getElementsByName('category');
-                for(const r of radios) {
-                    if(r.value === ev.category) r.checked = true;
+            if (startPart) {
+                const timeMatch = startPart.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                if (timeMatch) {
+                    document.getElementById('timeHour').value = timeMatch[1].padStart(2, '0');
+                    document.getElementById('timeMinute').value = timeMatch[2];
+                    document.getElementById('timeAMPM').value = timeMatch[3].toUpperCase();
                 }
-
-                if (ev.time) {
-                    const parts = ev.time.split(' - ');
-                    const startPart = parts[0];
-                    const endPart = parts.length > 1 ? parts[1] : null;
-
-                    if(startPart) {
-                        const [h, m] = startPart.split(':');
-                        document.getElementById('timeHour').value = h;
-                        document.getElementById('timeMinute').value = m;
-                    }
-                    if(endPart) {
-                        const [eh, em] = endPart.split(':');
-                        document.getElementById('endTimeHour').value = eh;
-                        document.getElementById('endTimeMinute').value = em;
-                    } else {
-                        document.getElementById('endTimeHour').value = "";
-                        document.getElementById('endTimeMinute').value = "00";
-                    }
-                } else {
-                    document.getElementById('timeHour').value = "09";
-                    document.getElementById('timeMinute').value = "00";
-                    document.getElementById('endTimeHour').value = "";
-                }
-
-                if (ev.links && ev.links.length > 0) {
-                    ev.links.forEach(l => addLinkRow(l.platform, l.url));
-                } else {
-                    addLinkRow();
+            }
+            
+            if (endPart) {
+                const timeMatch = endPart.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                if (timeMatch) {
+                    document.getElementById('endTimeHour').value = timeMatch[1].padStart(2, '0');
+                    document.getElementById('endTimeMinute').value = timeMatch[2];
+                    document.getElementById('endTimeAMPM').value = timeMatch[3].toUpperCase();
                 }
             } else {
-                title.textContent = "New Program";
-                document.getElementById('eventId').value = '';
-                document.getElementById('eventTitle').value = '';
-                
-                document.getElementById('timeHour').value = "09";
-                document.getElementById('timeMinute').value = "00";
-                document.getElementById('endTimeHour').value = "";
-                document.getElementById('endTimeMinute').value = "00";
-                
-                const radios = document.getElementsByName('category');
-                for(const r of radios) r.checked = false;
-                
-                const defaultDate = selectedFilterDate || toLocalISOString(new Date());
-                document.getElementById('startDate').value = defaultDate;
-                document.getElementById('endDate').value = defaultDate;
-                
-                addLinkRow();
+                document.getElementById('endTimeHour').value = '';
+                document.getElementById('endTimeMinute').value = '00';
+                document.getElementById('endTimeAMPM').value = '';
             }
-
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                panel.classList.remove('scale-95', 'opacity-0');
-                panel.classList.add('scale-100', 'opacity-100');
-            }, 10);
+        } else {
+            document.getElementById('timeHour').value = '09';
+            document.getElementById('timeMinute').value = '00';
+            document.getElementById('timeAMPM').value = 'AM';
+            document.getElementById('endTimeHour').value = '';
+            document.getElementById('endTimeAMPM').value = '';
         }
+        
+        // Load links
+        if (ev.links && ev.links.length > 0) {
+            ev.links.forEach(link => {
+                addLinkRow(link.platform, link.url);
+            });
+        }
+    } else {
+    // New mode
+    const todayStr = toLocalISOString(today);
+    document.getElementById('modalTitle').textContent = 'New Program';
+    document.getElementById('eventId').value = '';
+    document.getElementById('startDate').value = todayStr;
+    document.getElementById('endDate').value = todayStr;
+    document.getElementById('timeHour').value = '09';
+    document.getElementById('timeMinute').value = '00';
+    document.getElementById('timeAMPM').value = 'AM';
+    document.getElementById('endTimeHour').value = '';
+    document.getElementById('endTimeAMPM').value = '';
+    document.getElementById('ssoRegistration').checked = false;
+}
+
+}
 
         function closeModal() {
             const modal = document.getElementById('eventModal');
@@ -1281,36 +1439,53 @@ gridWrapper.appendChild(mainGrid);
                 if(r.checked) category = r.value;
             }
 
-            const h = document.getElementById('timeHour').value;
-            const m = document.getElementById('timeMinute').value;
-            let timeStr = `${h}:${m}`;
-            
-            const eh = document.getElementById('endTimeHour').value;
-            const em = document.getElementById('endTimeMinute').value;
-            
-            if (eh) timeStr += ` - ${eh}:${em}`;
+            const timeHour = document.getElementById('timeHour').value;
+const timeMin = document.getElementById('timeMinute').value;
+const timeAMPM = document.getElementById('timeAMPM').value;
+const endTimeHour = document.getElementById('endTimeHour').value;
+const endTimeMin = document.getElementById('endTimeMinute').value;
+const endTimeAMPM = document.getElementById('endTimeAMPM').value;
+
+let timeStr = '';
+if (timeHour && timeMin) {
+    timeStr = `${timeHour}:${timeMin} ${timeAMPM}`;
+    if (endTimeHour && endTimeMin && endTimeAMPM) {
+        timeStr += ` - ${endTimeHour}:${endTimeMin} ${endTimeAMPM}`;
+    }
+}
+
             
             const linkRows = document.querySelectorAll('#linksContainer > div');
-            const links = [];
-            linkRows.forEach(row => {
-                const p = row.querySelector('.link-platform').value.trim();
-                const u = row.querySelector('.link-url').value.trim();
-                if(u) links.push({ platform: p || 'Link', url: u });
-            });
+const links = [];
+linkRows.forEach(row => {
+    const p = row.querySelector('.link-platform').value.trim();
+    const u = row.querySelector('.link-url').value.trim();
+    if (u) {
+        links.push({ platform: p || 'Link', url: u });
+    }
+});
+
+
 
             if (!start || !title) return alert("Start Date and Title are required.");
             if (!category) return alert("Please select a Category.");
             if (end < start) return alert("End Date cannot be before Start Date.");
 
-            const eventData = {
-                id: id ? parseInt(id) : Date.now(),
-                title,
-                category,
-                start,
-                end: end || start,
-                time: timeStr,
-                links
-            };
+            const ssoRegistration = document.getElementById('ssoRegistration').checked;
+
+const eventData = {
+    id: id || Date.now().toString(),
+    title: title,
+    category: category,
+    start: start,
+    end: end || start,
+    time: timeStr,
+    ssoRegistration: ssoRegistration,
+    links: links
+};
+
+
+
 
             if (id) {
                 const index = events.findIndex(e => e.id === parseInt(id));
@@ -1325,13 +1500,68 @@ gridWrapper.appendChild(mainGrid);
             renderEventList();
         }
 
-        function deleteEvent(id) {
-            if(!confirm("Delete this program?")) return;
-            events = events.filter(e => e.id !== id);
-            saveToFirebase();;
-            renderCalendar();
-            renderEventList();
-        }
+        let deleteEventId = null;
+
+function deleteEvent(id) {
+    deleteEventId = id;
+    const modal = document.getElementById('deleteModal');
+    const panel = document.getElementById('deleteModalPanel');
+    modal.classList.remove('hidden');
+    
+    setTimeout(() => {
+        panel.style.transform = 'scale(1)';
+        panel.style.opacity = '1';
+    }, 10);
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    const panel = document.getElementById('deleteModalPanel');
+    
+    panel.style.transform = 'scale(0.95)';
+    panel.style.opacity = '0';
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        deleteEventId = null;
+    }, 200);
+}
+
+function confirmDelete() {
+    if (deleteEventId) {
+        events = events.filter(e => e.id !== deleteEventId);
+        saveToFirebase();
+        renderEventList();
+        renderCalendar();
+    }
+    closeDeleteModal();
+}
     </script>
+    
+    <!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="fixed inset-0 z-50 hidden">
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeDeleteModal()"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-xs transform transition-all scale-95 opacity-0" id="deleteModalPanel">
+            <div class="p-5 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
+                    <i class="fa-solid fa-trash text-red-600 text-lg"></i>
+                </div>
+                <h3 class="text-base font-bold text-slate-900 mb-1">Delete Program?</h3>
+                <p class="text-xs text-slate-500 mb-4">This action cannot be undone.</p>
+                
+                <div class="flex gap-2">
+                    <button onclick="closeDeleteModal()" class="flex-1 px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="confirmDelete()" class="flex-1 px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
