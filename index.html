@@ -1465,13 +1465,9 @@ linkRows.forEach(row => {
     }
 });
 
-
-
             if (!start || !title) return alert("Start Date and Title are required.");
             if (!category) return alert("Please select a Category.");
             if (end < start) return alert("End Date cannot be before Start Date.");
-
-            const ssoRegistration = document.getElementById('ssoRegistration').checked;
 
 const eventData = {
     id: id || Date.now().toString(),
@@ -1480,15 +1476,12 @@ const eventData = {
     start: start,
     end: end || start,
     time: timeStr,
-    ssoRegistration: ssoRegistration,
-    links: links
+    links: links,
+    ssoRegistration: ssoRegistration
 };
 
-
-
-
             if (id) {
-                const index = events.findIndex(e => e.id === parseInt(id));
+                const index = events.findIndex(e => e.id === id);
                 if (index !== -1) events[index] = eventData;
             } else {
                 events.push(eventData);
@@ -1537,7 +1530,7 @@ function confirmDelete() {
     closeDeleteModal();
 }
     </script>
-    
+
     <!-- Delete Confirmation Modal -->
 <div id="deleteModal" class="fixed inset-0 z-50 hidden">
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeDeleteModal()"></div>
