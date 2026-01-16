@@ -1422,42 +1422,43 @@ card.innerHTML = `
             document.getElementById(`link-${id}`).remove();
         }
 
-        function openModal(id = null) {
+        function openModal(id = null, dateHint = null) {
     const modal = document.getElementById('eventModal');
     const panel = document.getElementById('modalPanel');
     modal.classList.remove('hidden');
-    
+
     setTimeout(() => {
         panel.style.transform = 'scale(1)';
         panel.style.opacity = '1';
     }, 10);
 
-    // Clear form
-    document.getElementById('eventForm').reset();
-    document.getElementById('linksContainer').innerHTML = '';
-    
     if (id) {
-        // Edit mode
+        // EDIT MODE - Don't use reset(), set everything manually
         const ev = events.find(e => e.id === id);
         if (!ev) return;
-        
+
+        // Clear links container only
+        document.getElementById('linksContainer').innerHTML = '';
+
+        // Set all fields directly WITHOUT reset()
         document.getElementById('modalTitle').textContent = 'Edit Program';
         document.getElementById('eventId').value = ev.id;
         document.getElementById('eventTitle').value = ev.title;
         document.getElementById('startDate').value = ev.start;
         document.getElementById('endDate').value = ev.end;
-        document.getElementById('ssoRegistration').checked = ev.ssoRegistration || false;
-        
-        // Set category
+
+        // Set category radio button
         const catRadio = document.querySelector(`input[name="category"][value="${ev.category}"]`);
-        if (catRadio) catRadio.checked = true;
-        
-        // Set time with AM/PM
+        if (catRadio) {
+            catRadio.checked = true;
+        }
+
+        // Set time fields
         if (ev.time) {
             const parts = ev.time.split(' - ');
             const startPart = parts[0];
             const endPart = parts.length > 1 ? parts[1] : null;
-            
+
             if (startPart) {
                 const timeMatch = startPart.match(/(\d+):(\d+)\s*(AM|PM)/i);
                 if (timeMatch) {
@@ -1466,7 +1467,7 @@ card.innerHTML = `
                     document.getElementById('timeAMPM').value = timeMatch[3].toUpperCase();
                 }
             }
-            
+
             if (endPart) {
                 const timeMatch = endPart.match(/(\d+):(\d+)\s*(AM|PM)/i);
                 if (timeMatch) {
@@ -1480,36 +1481,40 @@ card.innerHTML = `
                 document.getElementById('endTimeAMPM').value = '';
             }
         } else {
+            // No time saved, use defaults
             document.getElementById('timeHour').value = '09';
             document.getElementById('timeMinute').value = '00';
             document.getElementById('timeAMPM').value = 'AM';
             document.getElementById('endTimeHour').value = '';
+            document.getElementById('endTimeMinute').value = '00';
             document.getElementById('endTimeAMPM').value = '';
         }
-        
-        // Load links
+
+        // Load links after clearing container
         if (ev.links && ev.links.length > 0) {
             ev.links.forEach(link => {
-                addLinkRow(link.platform, link.url);
+                addLinkRow(link.platform || 'NES', link.url || '');
             });
         }
+
     } else {
-    // New mode - use selected date if available, otherwise today
-    const dateToUse = selectedFilterDate || toLocalISOString(today);
-    document.getElementById('modalTitle').textContent = 'New Program';
-    document.getElementById('eventId').value = '';
-    document.getElementById('startDate').value = dateToUse;
-    document.getElementById('endDate').value = dateToUse;
-    document.getElementById('timeHour').value = '09';
-    document.getElementById('timeMinute').value = '00';
-    document.getElementById('timeAMPM').value = 'AM';
-    document.getElementById('endTimeHour').value = '';
-    document.getElementById('endTimeAMPM').value = '';
-    document.getElementById('ssoRegistration').checked = false;
-}
+        // NEW MODE - Use reset() here since we're starting fresh
+        document.getElementById('eventForm').reset();
+        document.getElementById('linksContainer').innerHTML = '';
 
+        const dateToUse = dateHint || selectedFilterDate || toLocalISOString(today);
+        document.getElementById('modalTitle').textContent = 'New Program';
+        document.getElementById('eventId').value = '';
+        document.getElementById('startDate').value = dateToUse;
+        document.getElementById('endDate').value = dateToUse;
+        document.getElementById('timeHour').value = '09';
+        document.getElementById('timeMinute').value = '00';
+        document.getElementById('timeAMPM').value = 'AM';
+        document.getElementById('endTimeHour').value = '';
+        document.getElementById('endTimeMinute').value = '00';
+        document.getElementById('endTimeAMPM').value = '';
+    }
 }
-
         function closeModal() {
             const modal = document.getElementById('eventModal');
             const panel = document.getElementById('modalPanel');
