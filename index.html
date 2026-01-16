@@ -381,9 +381,24 @@
                                 </label>
                             </div>
                         </div>
+                        <div id="subcategorySection" class="mt-2 hidden col-span-2">
+                            <label class="text-[8px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Sub-Category</label>
+                            <select id="subcategory" class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-semibold text-slate-600 focus:border-slate-400 outline-none">
+                                <option value="">-- Select Sub-Category --</option>
+                            </select>
+                        </div>
                         <div>
                             <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Title <span class="text-red-500">*</span></label>
                             <input type="text" id="eventTitle" required class="w-full px-3 py-2 bg-[#eff6ff] border border-slate-200 rounded text-sm font-semibold text-slate-800 focus:border-slate-400 focus:ring-0 outline-none" placeholder="Nama Program">
+                        </div>
+                        <div>
+                            <button type="button" onclick="toggleProgramInfo()" class="w-full text-left flex items-center justify-between px-2 py-1.5 bg-slate-50 hover:bg-slate-100 rounded border border-slate-200 transition-colors mb-1">
+                                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide">Program Info (Optional)</span>
+                                <i id="infoToggleIcon" class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform"></i>
+                            </button>
+                            <div id="programInfoContainer" class="hidden">
+                                <textarea id="programInfo" rows="3" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 focus:border-blue-400 outline-none resize-none" placeholder="Additional details, notes, or description..."></textarea>
+                            </div>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <div>
@@ -460,6 +475,14 @@
             wellbeing: { label: 'Kesejahteraan', sub: 'Wellbeing', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
             awareness: { label: 'Kesedaran', sub: 'Awareness', color: 'bg-violet-100 text-violet-700 border-violet-200', dot: 'bg-violet-500' },
             gov: { label: 'Inisiatif Kerajaan', sub: 'Gov Initiative', color: 'bg-red-100 text-red-700 border-red-200', dot: 'bg-red-500' }
+        };
+
+        const subcategories = {
+            entrepreneur: ['e-Kelas (Maxis)', 'Preneur/EmpowHer', 'Kidventure'],
+            learning: ['e-Kelas (Maxis)', 'Dilea', 'Tiny Techies', 'e-Sport', 'Cybersecurity', 'Mahir'],
+            wellbeing: ['Care'],
+            awareness: ['Safe', 'Shield'],
+            gov: []
         };
 
         const holidays = {
@@ -629,7 +652,14 @@ for(let i=1; i<=12; i++) {
                 // Set minimum for end date to prevent backdating
                 endDateInput.min = startDate;
             });
-        })();
+        
+            // Category change listener for subcategories
+            document.querySelectorAll('input[name="category"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    updateSubcategories(this.value);
+                });
+            });
+})();
 
         // ADD THESE NEW FUNCTIONS
 
@@ -1273,131 +1303,125 @@ function applySorting() {
         }
 
         function renderEventList() {
-            renderCategoryCounts();
-            const container = document.getElementById('eventListContainer');
-            container.innerHTML = '';
-
-            let displayEvents = [];
-            
-            if (selectedFilterDate) {
-                displayEvents = events.filter(e => selectedFilterDate >= e.start && selectedFilterDate <= e.end);
-            } else if (rangeFilter.start && rangeFilter.end) {
-                displayEvents = events.filter(e => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
-            } else {
-                const todayStr = toLocalISOString(today);
-                displayEvents = events.filter(e => e.end >= todayStr);
+    renderCategoryCounts();
+    const container = document.getElementById('eventListContainer');
+    container.innerHTML = '';
+    
+    let displayEvents = [];
+    
+    if (selectedFilterDate) {
+        displayEvents = events.filter(e => selectedFilterDate >= e.start && selectedFilterDate <= e.end);
+    } else if (rangeFilter.start && rangeFilter.end) {
+        displayEvents = events.filter(e => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
+    } else {
+        const todayStr = toLocalISOString(today);
+        displayEvents = events.filter(e => e.end >= todayStr);
+    }
+    
+    if (currentSort === 'category') {
+        displayEvents.sort((a, b) => {
+            if (a.category !== b.category) return a.start.localeCompare(b.start);
+            return a.category.localeCompare(b.category);
+        });
+    } else if (currentSort === 'startTime') {
+        displayEvents.sort((a, b) => {
+            const dateCompare = a.start.localeCompare(b.start);
+            if (dateCompare !== 0) return dateCompare;
+            if (a.time && b.time) {
+                const timeA = a.time.split(' - ')[0];
+                const timeB = b.time.split(' - ')[0];
+                const convertTo24 = (time12) => {
+                    const match = time12.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                    if (!match) return '0000';
+                    let hour = parseInt(match[1]);
+                    const min = match[2];
+                    const ampm = match[3].toUpperCase();
+                    if (ampm === 'PM' && hour !== 12) hour += 12;
+                    if (ampm === 'AM' && hour === 12) hour = 0;
+                    return hour.toString().padStart(2, '0') + min;
+                };
+                return convertTo24(timeA).localeCompare(convertTo24(timeB));
             }
-
-// Apply sorting
-if (currentSort === 'category') {
-    displayEvents.sort((a, b) => {
-        if (a.category === b.category) {
-            return a.start.localeCompare(b.start);
-        }
-        return a.category.localeCompare(b.category);
-    });
-} else if (currentSort === 'startTime') {
-    displayEvents.sort((a, b) => {
-        // Sort by date first
-        const dateCompare = a.start.localeCompare(b.start);
-        if (dateCompare !== 0) return dateCompare;
+            return 0;
+        });
+    }
+    
+    if (displayEvents.length === 0) {
+        container.innerHTML = '<div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-slate-400 text-xs mt-2">No programs found.</div>';
+        return;
+    }
+    
+    displayEvents.forEach(ev => {
+        const cat = categories[ev.category];
+        const card = document.createElement('div');
+        card.className = 'event-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative overflow-hidden';
         
-        // If same date, sort by time
-        if (a.time && b.time) {
-            const timeA = a.time.split(' - ')[0]; // Get start time only
-            const timeB = b.time.split(' - ')[0];
-            
-            // Convert to 24-hour for comparison
-            const convertTo24 = (time12) => {
-                const match = time12.match(/(\d+):(\d+)\s*(AM|PM)/i);
-                if (!match) return '00:00';
-                let hour = parseInt(match[1]);
-                const min = match[2];
-                const ampm = match[3].toUpperCase();
-                
-                if (ampm === 'PM' && hour !== 12) hour += 12;
-                if (ampm === 'AM' && hour === 12) hour = 0;
-                
-                return `${hour.toString().padStart(2, '0')}:${min}`;
-            };
-            
-            return convertTo24(timeA).localeCompare(convertTo24(timeB));
+        const startParts = ev.start.split('-');
+        const endParts = ev.end.split('-');
+        const d1 = new Date(startParts[0], startParts[1]-1, startParts[2]);
+        const d2 = new Date(endParts[0], endParts[1]-1, endParts[2]);
+        
+        let dateDisplay = d1.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+        if (ev.start !== ev.end) {
+            dateDisplay += ' - ' + d2.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
         }
         
-        return 0;
+        let linksHtml = '';
+        if (Array.isArray(ev.links) && ev.links.length > 0) {
+            linksHtml = '<div class="mt-2 flex flex-col gap-1">';
+            ev.links.forEach(l => {
+                if(l.url) {
+                    linksHtml += `
+                        <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                            <span class="font-bold text-slate-600 w-12 truncate">${l.platform}</span>
+                            <a href="${l.url}" target="_blank" class="text-blue-600 hover:underline truncate flex-1 block">${l.url}</a>
+                        </div>`;
+                }
+            });
+            linksHtml += '</div>';
+        }
+        
+                card.innerHTML = `
+            <div class="flex flex-col gap-1 relative">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplay}</span>
+                        <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5">${ev.title}</h4>
+                    </div>
+                    <div class="flex flex-col items-end w-auto text-right gap-1">
+                        <div class="flex flex-col items-end justify-center px-2 py-1 rounded border ${cat.color} min-w-[80px]">
+                            <span class="text-[9px] font-bold uppercase whitespace-nowrap leading-none">${cat.label}</span>
+                            <span class="text-[8px] opacity-80 whitespace-nowrap leading-none mt-0.5">${cat.sub}</span>
+                        </div>
+                        ${ev.subcategory ? `<span class="text-[9px] font-semibold ${cat.color.split(' ')[1]} ${cat.color.split(' ')[2]}">${ev.subcategory}</span>` : ''}
+                    </div>
+                </div>
+                ${ev.time ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time}</div>` : ''}
+                ${ev.info ? `
+                <div class="mt-1 flex justify-end">
+                    <button type="button" onclick="toggleEventInfo('${ev.id}')" class="text-[8px] text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors">
+                        <span class="font-semibold">Program Info</span>
+                        <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]"></i>
+                    </button>
+                </div>
+                <div id="event-info-${ev.id}" class="hidden text-[9px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line">${ev.info}</div>
+                ` : ''}
+                ${linksHtml}
+                <div class="absolute top-0 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
+                    <button onclick="openModal('${ev.id}')" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
+                        <i class="fa-solid fa-pen text-xs"></i>
+                    </button>
+                    <button onclick="deleteEvent('${ev.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete">
+                        <i class="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(card);
     });
 }
 
-
-            if (displayEvents.length === 0) {
-                container.innerHTML = `<div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-slate-400 text-xs mt-2">No programs found.</div>`;
-                return;
-            }
-
-            displayEvents.forEach(ev => {
-                const cat = categories[ev.category];
-                const card = document.createElement('div');
-                card.className = "event-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative overflow-hidden";
-                
-                const startParts = ev.start.split('-');
-                const endParts = ev.end.split('-');
-                const d1 = new Date(startParts[0], startParts[1]-1, startParts[2]);
-                const d2 = new Date(endParts[0], endParts[1]-1, endParts[2]);
-
-                let dateDisplay = d1.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                if (ev.start !== ev.end) {
-                    dateDisplay += ` - ${d2.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
-                }
-
-                let linksHtml = '';
-                if (Array.isArray(ev.links) && ev.links.length > 0) {
-                    linksHtml = '<div class="mt-2 flex flex-col gap-1">';
-                    ev.links.forEach(l => {
-                        if(l.url) {
-                            linksHtml += `
-                                <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100">
-                                    <span class="font-bold text-slate-600 w-12 truncate">${l.platform}:</span>
-                                    <a href="${l.url}" target="_blank" class="text-blue-600 hover:underline truncate flex-1 block">${l.url}</a>
-                                </div>
-                            `;
-                        }
-                    });
-                    linksHtml += '</div>';
-                }
-
-const ssoText = ev.ssoRegistration ? '<div class="text-[8px] font-bold text-red-600 uppercase tracking-wide mb-1 flex items-center gap-1"><svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"/></svg>Register on SSO website!</div>' : '';
-
-card.innerHTML = `
-    <div class="flex flex-col gap-1 relative">
-        <div class="flex justify-between items-start">
-            <div class="flex-1">
-                <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplay}</span>
-                <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5">${ev.title}</h4>
-            </div>
-            <div class="flex flex-col items-end w-auto text-right">
-                <div class="flex flex-col items-end justify-center px-2 py-1 rounded border ${cat.color} min-w-[80px]">
-                    <span class="text-[9px] font-bold uppercase whitespace-nowrap leading-none">${cat.label}</span>
-                    <span class="text-[8px] opacity-80 whitespace-nowrap leading-none mt-0.5">${cat.sub}</span>
-                </div>
-            </div>
-        </div>
-        ${ev.time ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time}</div>` : ''}
-        ${ssoText}
-        ${linksHtml}
-        <div class="absolute top-8 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
-            <button onclick="openModal('${ev.id}')" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
-                <i class="fa-solid fa-pen text-xs"></i>
-            </button>
-            <button onclick="deleteEvent('${ev.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete">
-                <i class="fa-solid fa-trash text-xs"></i>
-            </button>
-        </div>
-    </div>
-`;
-
-                container.appendChild(card);
-            });
-        }
 
         function addLinkRow(platform = 'NES', url = '') {
             const container = document.getElementById('linksContainer');
@@ -1433,27 +1457,39 @@ card.innerHTML = `
     }, 10);
 
     if (id) {
-        // EDIT MODE - Don't use reset(), set everything manually
         const ev = events.find(e => e.id === id);
         if (!ev) return;
 
-        // Clear links container only
         document.getElementById('linksContainer').innerHTML = '';
-
-        // Set all fields directly WITHOUT reset()
         document.getElementById('modalTitle').textContent = 'Edit Program';
         document.getElementById('eventId').value = ev.id;
         document.getElementById('eventTitle').value = ev.title;
         document.getElementById('startDate').value = ev.start;
         document.getElementById('endDate').value = ev.end;
 
-        // Set category radio button
+        document.getElementById('programInfo').value = ev.info || '';
+        if (ev.info) {
+            document.getElementById('programInfoContainer').classList.remove('hidden');
+            document.getElementById('infoToggleIcon').classList.add('fa-chevron-up');
+            document.getElementById('infoToggleIcon').classList.remove('fa-chevron-down');
+        } else {
+            document.getElementById('programInfoContainer').classList.add('hidden');
+            document.getElementById('infoToggleIcon').classList.remove('fa-chevron-up');
+            document.getElementById('infoToggleIcon').classList.add('fa-chevron-down');
+        }
+
         const catRadio = document.querySelector(`input[name="category"][value="${ev.category}"]`);
         if (catRadio) {
             catRadio.checked = true;
+            updateSubcategories(ev.category);
         }
 
-        // Set time fields
+        if (ev.subcategory) {
+            setTimeout(() => {
+                document.getElementById('subcategory').value = ev.subcategory;
+            }, 50);
+        }
+
         if (ev.time) {
             const parts = ev.time.split(' - ');
             const startPart = parts[0];
@@ -1481,7 +1517,6 @@ card.innerHTML = `
                 document.getElementById('endTimeAMPM').value = '';
             }
         } else {
-            // No time saved, use defaults
             document.getElementById('timeHour').value = '09';
             document.getElementById('timeMinute').value = '00';
             document.getElementById('timeAMPM').value = 'AM';
@@ -1490,7 +1525,6 @@ card.innerHTML = `
             document.getElementById('endTimeAMPM').value = '';
         }
 
-        // Load links after clearing container
         if (ev.links && ev.links.length > 0) {
             ev.links.forEach(link => {
                 addLinkRow(link.platform || 'NES', link.url || '');
@@ -1498,9 +1532,12 @@ card.innerHTML = `
         }
 
     } else {
-        // NEW MODE - Use reset() here since we're starting fresh
         document.getElementById('eventForm').reset();
         document.getElementById('linksContainer').innerHTML = '';
+        document.getElementById('programInfoContainer').classList.add('hidden');
+        document.getElementById('infoToggleIcon').classList.remove('fa-chevron-up');
+        document.getElementById('infoToggleIcon').classList.add('fa-chevron-down');
+        document.getElementById('subcategorySection').classList.add('hidden');
 
         const dateToUse = dateHint || selectedFilterDate || toLocalISOString(today);
         document.getElementById('modalTitle').textContent = 'New Program';
@@ -1515,7 +1552,62 @@ card.innerHTML = `
         document.getElementById('endTimeAMPM').value = '';
     }
 }
-        function closeModal() {
+
+        
+        function toggleProgramInfo() {
+            const container = document.getElementById('programInfoContainer');
+            const icon = document.getElementById('infoToggleIcon');
+
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+            } else {
+                container.classList.add('hidden');
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
+            }
+        }
+
+        function updateSubcategories(categoryValue) {
+            const subcategorySection = document.getElementById('subcategorySection');
+            const subcategorySelect = document.getElementById('subcategory');
+
+            if (!categoryValue || !subcategories[categoryValue] || subcategories[categoryValue].length === 0) {
+                subcategorySection.classList.add('hidden');
+                subcategorySelect.innerHTML = '<option value="">-- Select Sub-Category --</option>';
+                return;
+            }
+
+            subcategorySection.classList.remove('hidden');
+            subcategorySelect.innerHTML = '<option value="">-- Select Sub-Category --</option>';
+
+            subcategories[categoryValue].forEach(sub => {
+                const option = document.createElement('option');
+                option.value = sub;
+                option.textContent = sub;
+                subcategorySelect.appendChild(option);
+            });
+        }
+
+            function toggleEventInfo(eventId) {
+    const container = document.getElementById('event-info-' + eventId);
+    const icon = document.getElementById('info-icon-' + eventId);
+    
+    if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    } else {
+        container.classList.add('hidden');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    }
+}
+
+        
+
+function closeModal() {
             const modal = document.getElementById('eventModal');
             const panel = document.getElementById('modalPanel');
             
@@ -1526,6 +1618,8 @@ card.innerHTML = `
         }
 
         function saveEvent() {
+        const subcategoryVal = document.getElementById('subcategory').value;
+        const programInfoVal = document.getElementById('programInfo').value;
             const id = document.getElementById('eventId').value;
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
@@ -1571,6 +1665,8 @@ const eventData = {
     id: id || Date.now().toString(),
     title: title,
     category: category,
+    subcategory: subcategoryVal || '',    // ✅ ADDED
+    info: programInfoVal || '',           // ✅ ADDED
     start: start,
     end: end || start,
     time: timeStr,
