@@ -217,13 +217,13 @@
                 </button>
               </div>
               <div class="grid grid-cols-7 mb-2 border-b border-slate-100 pb-2">
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SUN</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">MON</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">TUE</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">WED</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">THU</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">FRI</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SAT</div>
-                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SUN</div>
               </div>
               <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
               <div class="mt-4 pt-3 border-t border-slate-100">
@@ -253,6 +253,18 @@
                   <div class="flex items-center gap-1.5">
                     <span class="w-3 h-3 rounded-full border-2 border-yellow-400 bg-yellow-100"></span>
                     Cuti Sekolah
+                  </div>
+                </div>
+                <div
+                  class="flex justify-center gap-4 text-[9px] font-semibold text-slate-500 border-t border-slate-100 pt-2 mt-2"
+                >
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-px rounded-sm bg-[#00aff0]"></span>
+                    M Off
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-px rounded-sm bg-[#90cf53]"></span>
+                    AM Off
                   </div>
                 </div>
               </div>
@@ -375,6 +387,17 @@
                 <div>
                   <h4 class="text-sm font-bold text-slate-800">Edit Header Text</h4>
                   <p class="text-[10px] text-slate-500">Change site title and location</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+              </button>
+
+              <button
+                onclick="openOffdaySettings()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Manage Offday Calendar</h4>
+                  <p class="text-[10px] text-slate-500">Set Manager & Assistant Manager offdays</p>
                 </div>
                 <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
               </button>
@@ -533,6 +556,109 @@
                 class="text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded shadow"
               >
                 <i class="fa-solid fa-check mr-1"></i> Save
+              </button>
+            </div>
+          </div>
+
+          <!-- VIEW 5: Offday Settings -->
+          <div id="offdaySettingsView" class="hidden flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-600">
+                  <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 class="text-base font-bold text-slate-900">Offday Calendar</h3>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+              <!-- Manager Offdays -->
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#00aff0]/10 border-b border-[#00aff0]/20 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1.5 rounded-sm bg-[#00aff0]"></span>
+                    <span class="text-xs font-bold text-slate-800">Manager (M) Offdays</span>
+                  </div>
+                  <span id="managerOffdayCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3 space-y-2">
+                  <div class="grid grid-cols-2 gap-2 items-end">
+                    <div>
+                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">From</label>
+                      <input
+                        type="date"
+                        id="managerOffdayStart"
+                        onchange="autoSetOffdayEnd('manager')"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-[#00aff0]"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">To</label>
+                      <input
+                        type="date"
+                        id="managerOffdayEnd"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-[#00aff0]"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onclick="addOffdayRange('manager')"
+                    class="w-full py-1.5 bg-[#00aff0] hover:bg-[#0099d6] text-white text-[10px] font-bold rounded transition-colors"
+                  >
+                    Add Date Range
+                  </button>
+                  <div id="managerOffdayList" class="space-y-1 max-h-[120px] overflow-y-auto"></div>
+                </div>
+              </div>
+
+              <!-- Assistant Manager Offdays -->
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#90cf53]/15 border-b border-[#90cf53]/25 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1.5 rounded-sm bg-[#90cf53]"></span>
+                    <span class="text-xs font-bold text-slate-800">Assistant Manager (AM) Offdays</span>
+                  </div>
+                  <span id="amOffdayCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3 space-y-2">
+                  <div class="grid grid-cols-2 gap-2 items-end">
+                    <div>
+                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">From</label>
+                      <input
+                        type="date"
+                        id="amOffdayStart"
+                        onchange="autoSetOffdayEnd('am')"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-[#90cf53]"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">To</label>
+                      <input
+                        type="date"
+                        id="amOffdayEnd"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-[#90cf53]"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onclick="addOffdayRange('am')"
+                    class="w-full py-1.5 bg-[#90cf53] hover:bg-[#7eb947] text-white text-[10px] font-bold rounded transition-colors"
+                  >
+                    Add Date Range
+                  </button>
+                  <div id="amOffdayList" class="space-y-1 max-h-[120px] overflow-y-auto"></div>
+                </div>
+              </div>
+
+              <p class="text-[9px] text-slate-400 text-center">Selected dates will appear on the calendar with color indicators.</p>
+            </div>
+
+            <div class="px-4 py-4 border-t border-slate-100 bg-slate-50 flex justify-end mt-auto">
+              <button
+                onclick="saveOffdaySettings()"
+                class="px-5 py-1.5 bg-nadi hover:bg-blue-900 text-white text-xs font-bold rounded shadow"
+              >
+                Save Changes
               </button>
             </div>
           </div>
@@ -1061,7 +1187,13 @@
       const database = firebase.database();
 
       let events = [];
-      let siteSettings = { title: "NADI SCSB", subtitle: "PULAU PINANG", sections: [] };
+      let siteSettings = { 
+        title: "NADI SCSB", 
+        subtitle: "PULAU PINANG", 
+        sections: [],
+        managerOffdays: [],
+        assistantManagerOffdays: []
+      };
       let editingSectionIndex = -1;
       let isDataLoaded = false;
 
@@ -1079,10 +1211,18 @@
 
         // Load site settings
         database.ref("siteSettings").once("value", (snapshot) => {
-          siteSettings = snapshot.val() || { title: "NADI SCSB", subtitle: "PULAU PINANG", sections: [] };
+          const loadedSettings = snapshot.val() || {};
+          siteSettings = {
+            title: loadedSettings.title || "NADI SCSB",
+            subtitle: loadedSettings.subtitle || "PULAU PINANG",
+            sections: loadedSettings.sections || [],
+            managerOffdays: loadedSettings.managerOffdays || [],
+            assistantManagerOffdays: loadedSettings.assistantManagerOffdays || []
+          };
           console.log("Settings loaded:", siteSettings);
           updateUIFromSettings();
           renderCustomLinks();
+          renderCalendar();
           isDataLoaded = true;
         });
       }
@@ -1186,7 +1326,7 @@
 
       // Settings Modals - View Switching
       function showView(viewId) {
-        const views = ["settingsMenuView", "headerSettingsView", "sectionsListView", "sectionEditorView"];
+        const views = ["settingsMenuView", "headerSettingsView", "sectionsListView", "sectionEditorView", "offdaySettingsView"];
         const panel = document.getElementById("settingsModalPanel");
 
         views.forEach((id) => {
@@ -1220,6 +1360,150 @@
 
       function backToMenu() {
         showView("settingsMenuView");
+      }
+
+      // ========== OFFDAY SETTINGS FUNCTIONS ==========
+      function openOffdaySettings() {
+        renderOffdayLists();
+        showView("offdaySettingsView");
+      }
+
+      function renderOffdayLists() {
+        // Render Manager Offdays
+        const managerList = document.getElementById("managerOffdayList");
+        const managerCount = document.getElementById("managerOffdayCount");
+        managerList.innerHTML = "";
+        const mOffdays = siteSettings.managerOffdays || [];
+        managerCount.textContent = `${mOffdays.length} date${mOffdays.length !== 1 ? 's' : ''}`;
+        
+        mOffdays.sort().forEach((date, idx) => {
+          const div = document.createElement("div");
+          div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
+          div.innerHTML = `
+            <span class="text-[10px] font-semibold text-slate-600">${new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <button onclick="removeOffday('manager', ${idx})" class="text-red-400 hover:text-red-600 transition-colors">
+              <i class="fa-solid fa-times text-[10px]"></i>
+            </button>
+          `;
+          managerList.appendChild(div);
+        });
+
+        // Render Assistant Manager Offdays
+        const amList = document.getElementById("amOffdayList");
+        const amCount = document.getElementById("amOffdayCount");
+        amList.innerHTML = "";
+        const amOffdays = siteSettings.assistantManagerOffdays || [];
+        amCount.textContent = `${amOffdays.length} date${amOffdays.length !== 1 ? 's' : ''}`;
+        
+        amOffdays.sort().forEach((date, idx) => {
+          const div = document.createElement("div");
+          div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
+          div.innerHTML = `
+            <span class="text-[10px] font-semibold text-slate-600">${new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <button onclick="removeOffday('am', ${idx})" class="text-red-400 hover:text-red-600 transition-colors">
+              <i class="fa-solid fa-times text-[10px]"></i>
+            </button>
+          `;
+          amList.appendChild(div);
+        });
+      }
+
+      function autoSetOffdayEnd(type) {
+        const startId = type === 'manager' ? 'managerOffdayStart' : 'amOffdayStart';
+        const endId = type === 'manager' ? 'managerOffdayEnd' : 'amOffdayEnd';
+        
+        const startDate = document.getElementById(startId).value;
+        if (!startDate) return;
+        
+        // Set end date to day after start date
+        const nextDay = new Date(startDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const y = nextDay.getFullYear();
+        const m = String(nextDay.getMonth() + 1).padStart(2, '0');
+        const d = String(nextDay.getDate()).padStart(2, '0');
+        
+        document.getElementById(endId).value = `${y}-${m}-${d}`;
+      }
+
+      function addOffdayRange(type) {
+        const startId = type === 'manager' ? 'managerOffdayStart' : 'amOffdayStart';
+        const endId = type === 'manager' ? 'managerOffdayEnd' : 'amOffdayEnd';
+        
+        const startDate = document.getElementById(startId).value;
+        const endDate = document.getElementById(endId).value;
+        
+        if (!startDate) {
+          alert('Please select a start date.');
+          return;
+        }
+        
+        const end = endDate || startDate; // If no end date, use start date
+        let current = new Date(startDate);
+        const last = new Date(end);
+        
+        if (current > last) {
+          alert('End date cannot be before start date.');
+          return;
+        }
+        
+        const dates = type === 'manager' ? siteSettings.managerOffdays : siteSettings.assistantManagerOffdays;
+        if (!dates) {
+          siteSettings[type === 'manager' ? 'managerOffdays' : 'assistantManagerOffdays'] = [];
+        }
+        
+        while (current <= last) {
+          const dateStr = toLocalISOString(current);
+          const arr = type === 'manager' ? siteSettings.managerOffdays : siteSettings.assistantManagerOffdays;
+          if (!arr.includes(dateStr)) {
+            arr.push(dateStr);
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        
+        // Clear inputs
+        document.getElementById(startId).value = "";
+        document.getElementById(endId).value = "";
+        
+        renderOffdayLists();
+      }
+
+      function addSingleOffday(type) {
+        const inputId = type === 'manager' ? 'managerOffdayInput' : 'amOffdayInput';
+        const input = document.getElementById(inputId);
+        const date = input.value;
+        
+        if (!date) return;
+        
+        if (type === 'manager') {
+          if (!siteSettings.managerOffdays) siteSettings.managerOffdays = [];
+          if (!siteSettings.managerOffdays.includes(date)) {
+            siteSettings.managerOffdays.push(date);
+          }
+        } else {
+          if (!siteSettings.assistantManagerOffdays) siteSettings.assistantManagerOffdays = [];
+          if (!siteSettings.assistantManagerOffdays.includes(date)) {
+            siteSettings.assistantManagerOffdays.push(date);
+          }
+        }
+        
+        input.value = "";
+        renderOffdayLists();
+      }
+
+      function removeOffday(type, idx) {
+        if (type === 'manager') {
+          siteSettings.managerOffdays.splice(idx, 1);
+        } else {
+          siteSettings.assistantManagerOffdays.splice(idx, 1);
+        }
+        renderOffdayLists();
+      }
+
+      function saveOffdaySettings() {
+        saveToFirebase();
+        backToMenu();
+        renderCalendar();
       }
 
       function openHeaderSettings() {
@@ -1622,11 +1906,10 @@
         monthLabel.textContent = date.toLocaleDateString("en-US", { month: "long" });
         yearLabel.textContent = currentYear;
 
-        const firstDayIndexStd = date.getDay();
-        const firstDayIndexMon = (firstDayIndexStd + 6) % 7;
+        const firstDayIndex = date.getDay();
         const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-        for (let i = 0; i < firstDayIndexMon; i++) {
+        for (let i = 0; i < firstDayIndex; i++) {
           grid.appendChild(document.createElement("div"));
         }
 
@@ -1638,6 +1921,8 @@
           const isHoliday = holidays[dateStr];
           const sHoliday = schoolHolidays[dateStr];
           const isSchoolHoliday = !!sHoliday;
+          const isManagerOffday = siteSettings.managerOffdays && siteSettings.managerOffdays.includes(dateStr);
+          const isAMOffday = siteSettings.assistantManagerOffdays && siteSettings.assistantManagerOffdays.includes(dateStr);
 
           const daysEvents = events.filter((e) => dateStr >= e.start && dateStr <= e.end);
 
@@ -1654,23 +1939,43 @@
           if (isToday) {
             numSpan.className +=
               " w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-bold";
-          } else {
-            if (isHoliday && isSchoolHoliday) {
-              const circle = document.createElement("span");
-              circle.className = "absolute inset-0 rounded-full border-2 border-slate-300 bg-[#fff59c] z-0";
-              numWrapper.appendChild(circle);
-            } else if (isHoliday) {
-              const circle = document.createElement("span");
-              circle.className = "absolute inset-0 rounded-full bg-slate-300 z-0";
-              numWrapper.appendChild(circle);
-            } else if (isSchoolHoliday) {
-              const circle = document.createElement("span");
-              circle.className = "absolute inset-0 rounded-full bg-[#fff59c] z-0";
-              numWrapper.appendChild(circle);
-            }
+          }
+
+          // Add holiday circles first (background)
+          if (isHoliday && isSchoolHoliday) {
+            const circle = document.createElement("span");
+            circle.className = "absolute inset-0 rounded-full border-2 border-slate-300 bg-[#fff59c] z-0";
+            numWrapper.appendChild(circle);
+          } else if (isHoliday) {
+            const circle = document.createElement("span");
+            circle.className = "absolute inset-0 rounded-full bg-slate-300 z-0";
+            numWrapper.appendChild(circle);
+          } else if (isSchoolHoliday) {
+            const circle = document.createElement("span");
+            circle.className = "absolute inset-0 rounded-full bg-[#fff59c] z-0";
+            numWrapper.appendChild(circle);
           }
 
           numWrapper.appendChild(numSpan);
+          
+          // Add horizontal line for offdays (overlays on top of holiday circles)
+          if (isManagerOffday && isAMOffday) {
+            const line = document.createElement("span");
+            line.className = "absolute rounded-sm z-10";
+            line.style.cssText = "bottom: 0px; left: 4px; right: 4px; height: 1px; background-color: #a855f7;";
+            numWrapper.appendChild(line);
+          } else if (isManagerOffday) {
+            const line = document.createElement("span");
+            line.className = "absolute rounded-sm z-10";
+            line.style.cssText = "bottom: 0px; left: 4px; right: 4px; height: 1px; background-color: #00aff0;";
+            numWrapper.appendChild(line);
+          } else if (isAMOffday) {
+            const line = document.createElement("span");
+            line.className = "absolute rounded-sm z-10";
+            line.style.cssText = "bottom: 0px; left: 4px; right: 4px; height: 1px; background-color: #90cf53;";
+            numWrapper.appendChild(line);
+          }
+
           cell.appendChild(numWrapper);
 
           if (isHoliday) {
