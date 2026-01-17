@@ -259,12 +259,20 @@
                   class="flex justify-center gap-4 text-[9px] font-semibold text-slate-500 border-t border-slate-100 pt-2 mt-2"
                 >
                   <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-px rounded-sm bg-[#00aff0]"></span>
+                    <span class="w-3 h-1 rounded-sm bg-[#00aff0]"></span>
                     M Off
                   </div>
                   <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-px rounded-sm bg-[#90cf53]"></span>
+                    <span class="w-3 h-1 rounded-sm bg-[#90cf53]"></span>
                     AM Off
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-1 rounded-sm bg-[#00aff0]" style="box-shadow: 0 0 3px #00aff0;"></span>
+                    M Replace
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-1 rounded-sm bg-[#90cf53]" style="box-shadow: 0 0 3px #90cf53;"></span>
+                    AM Replace
                   </div>
                 </div>
               </div>
@@ -576,10 +584,10 @@
               <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
                 <div class="px-3 py-2 bg-[#00aff0]/10 border-b border-[#00aff0]/20 flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <span class="w-3 h-1.5 rounded-sm bg-[#00aff0]"></span>
+                    <span class="w-3 h-1 rounded-sm bg-[#00aff0]"></span>
                     <span class="text-xs font-bold text-slate-800">Manager (M) Offdays</span>
                   </div>
-                  <span id="managerOffdayCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                  <span id="managerOffdayCount" class="text-[10px] font-semibold text-slate-500">0 ranges</span>
                 </div>
                 <div class="p-3 space-y-2">
                   <div class="grid grid-cols-2 gap-2 items-end">
@@ -607,7 +615,7 @@
                   >
                     Add Date Range
                   </button>
-                  <div id="managerOffdayList" class="space-y-1 max-h-[120px] overflow-y-auto"></div>
+                  <div id="managerOffdayList" class="space-y-1 max-h-[80px] overflow-y-auto"></div>
                 </div>
               </div>
 
@@ -615,10 +623,10 @@
               <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
                 <div class="px-3 py-2 bg-[#90cf53]/15 border-b border-[#90cf53]/25 flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <span class="w-3 h-1.5 rounded-sm bg-[#90cf53]"></span>
+                    <span class="w-3 h-1 rounded-sm bg-[#90cf53]"></span>
                     <span class="text-xs font-bold text-slate-800">Assistant Manager (AM) Offdays</span>
                   </div>
-                  <span id="amOffdayCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                  <span id="amOffdayCount" class="text-[10px] font-semibold text-slate-500">0 ranges</span>
                 </div>
                 <div class="p-3 space-y-2">
                   <div class="grid grid-cols-2 gap-2 items-end">
@@ -646,7 +654,63 @@
                   >
                     Add Date Range
                   </button>
-                  <div id="amOffdayList" class="space-y-1 max-h-[120px] overflow-y-auto"></div>
+                  <div id="amOffdayList" class="space-y-1 max-h-[80px] overflow-y-auto"></div>
+                </div>
+              </div>
+
+              <!-- Manager Replacement -->
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#00aff0]/15 border-b border-[#00aff0]/25 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1 rounded-sm bg-[#00aff0]" style="box-shadow: 0 0 3px #00aff0;"></span>
+                    <span class="text-xs font-bold text-slate-800">Manager (M) Replacement</span>
+                  </div>
+                  <span id="managerReplacementCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3 space-y-2">
+                  <div>
+                    <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Date</label>
+                    <input
+                      type="date"
+                      id="managerReplacementStart"
+                      class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-[#00aff0]"
+                    />
+                  </div>
+                  <button
+                    onclick="addReplacementDate('manager')"
+                    class="w-full py-1.5 bg-[#00aff0] hover:#0099d6 text-white text-[10px] font-bold rounded transition-colors"
+                  >
+                    Add Date
+                  </button>
+                  <div id="managerReplacementList" class="space-y-1 max-h-[80px] overflow-y-auto"></div>
+                </div>
+              </div>
+
+              <!-- Assistant Manager Replacement -->
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#90cf53]/15 border-b border-[#90cf53]/25 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1 rounded-sm bg-[#90cf53]" style="box-shadow: 0 0 3px #90cf53;"></span>
+                    <span class="text-xs font-bold text-slate-800">Assistant Manager (AM) Replacement</span>
+                  </div>
+                  <span id="amReplacementCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3 space-y-2">
+                  <div>
+                    <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Date</label>
+                    <input
+                      type="date"
+                      id="amReplacementStart"
+                      class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-[#90cf53]"
+                    />
+                  </div>
+                  <button
+                    onclick="addReplacementDate('am')"
+                    class="w-full py-1.5 bg-[#90cf53] hover:#7eb947 text-white text-[10px] font-bold rounded transition-colors"
+                  >
+                    Add Date
+                  </button>
+                  <div id="amReplacementList" class="space-y-1 max-h-[80px] overflow-y-auto"></div>
                 </div>
               </div>
 
@@ -1192,7 +1256,9 @@
         subtitle: "PULAU PINANG", 
         sections: [],
         managerOffdays: [],
-        assistantManagerOffdays: []
+        assistantManagerOffdays: [],
+        managerReplacements: [],
+        assistantManagerReplacements: []
       };
       let editingSectionIndex = -1;
       let isDataLoaded = false;
@@ -1217,7 +1283,9 @@
             subtitle: loadedSettings.subtitle || "PULAU PINANG",
             sections: loadedSettings.sections || [],
             managerOffdays: loadedSettings.managerOffdays || [],
-            assistantManagerOffdays: loadedSettings.assistantManagerOffdays || []
+            assistantManagerOffdays: loadedSettings.assistantManagerOffdays || [],
+            managerReplacements: loadedSettings.managerReplacements || [],
+            assistantManagerReplacements: loadedSettings.assistantManagerReplacements || []
           };
           console.log("Settings loaded:", siteSettings);
           updateUIFromSettings();
@@ -1365,6 +1433,7 @@
       // ========== OFFDAY SETTINGS FUNCTIONS ==========
       function openOffdaySettings() {
         renderOffdayLists();
+        renderReplacementLists();
         showView("offdaySettingsView");
       }
 
@@ -1409,8 +1478,15 @@
       }
 
       function autoSetOffdayEnd(type) {
-        const startId = type === 'manager' ? 'managerOffdayStart' : 'amOffdayStart';
-        const endId = type === 'manager' ? 'managerOffdayEnd' : 'amOffdayEnd';
+        let startId, endId;
+        
+        if (type === 'manager') {
+          startId = 'managerOffdayStart';
+          endId = 'managerOffdayEnd';
+        } else if (type === 'am') {
+          startId = 'amOffdayStart';
+          endId = 'amOffdayEnd';
+        }
         
         const startDate = document.getElementById(startId).value;
         if (!startDate) return;
@@ -1424,6 +1500,86 @@
         const d = String(nextDay.getDate()).padStart(2, '0');
         
         document.getElementById(endId).value = `${y}-${m}-${d}`;
+      }
+
+      function addReplacementDate(type) {
+        const startId = type === 'manager' ? 'managerReplacementStart' : 'amReplacementStart';
+        
+        const startDate = document.getElementById(startId).value;
+        
+        if (!startDate) {
+          alert('Please select a date.');
+          return;
+        }
+        
+        if (type === 'manager') {
+          if (!siteSettings.managerReplacements) siteSettings.managerReplacements = [];
+          if (!siteSettings.managerReplacements.includes(startDate)) {
+            siteSettings.managerReplacements.push(startDate);
+          }
+        } else {
+          if (!siteSettings.assistantManagerReplacements) siteSettings.assistantManagerReplacements = [];
+          if (!siteSettings.assistantManagerReplacements.includes(startDate)) {
+            siteSettings.assistantManagerReplacements.push(startDate);
+          }
+        }
+        
+        document.getElementById(startId).value = "";
+        
+        renderReplacementLists();
+      }
+
+      function removeReplacementDate(type, dateStr) {
+        if (type === 'manager') {
+          siteSettings.managerReplacements = siteSettings.managerReplacements.filter(d => d !== dateStr);
+        } else {
+          siteSettings.assistantManagerReplacements = siteSettings.assistantManagerReplacements.filter(d => d !== dateStr);
+        }
+        renderReplacementLists();
+      }
+
+      function renderReplacementLists() {
+        // Render Manager Replacement
+        const managerReplacementList = document.getElementById("managerReplacementList");
+        const managerReplacementCount = document.getElementById("managerReplacementCount");
+        if (managerReplacementList && managerReplacementCount) {
+          managerReplacementList.innerHTML = "";
+          const mReplacement = siteSettings.managerReplacements || [];
+          managerReplacementCount.textContent = `${mReplacement.length} date${mReplacement.length !== 1 ? 's' : ''}`;
+          
+          mReplacement.sort().forEach((date) => {
+            const div = document.createElement("div");
+            div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
+            div.innerHTML = `
+              <span class="text-[10px] font-semibold text-slate-600">${new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              <button onclick="removeReplacementDate('manager', '${date}')" class="text-red-400 hover:text-red-600 transition-colors">
+                <i class="fa-solid fa-times text-[10px]"></i>
+              </button>
+            `;
+            managerReplacementList.appendChild(div);
+          });
+        }
+
+        // Render Assistant Manager Replacement
+        const amReplacementList = document.getElementById("amReplacementList");
+        const amReplacementCount = document.getElementById("amReplacementCount");
+        if (amReplacementList && amReplacementCount) {
+          amReplacementList.innerHTML = "";
+          const amReplacement = siteSettings.assistantManagerReplacements || [];
+          amReplacementCount.textContent = `${amReplacement.length} date${amReplacement.length !== 1 ? 's' : ''}`;
+          
+          amReplacement.sort().forEach((date) => {
+            const div = document.createElement("div");
+            div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
+            div.innerHTML = `
+              <span class="text-[10px] font-semibold text-slate-600">${new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              <button onclick="removeReplacementDate('am', '${date}')" class="text-red-400 hover:text-red-600 transition-colors">
+                <i class="fa-solid fa-times text-[10px]"></i>
+              </button>
+            `;
+            amReplacementList.appendChild(div);
+          });
+        }
       }
 
       function addOffdayRange(type) {
@@ -1923,6 +2079,8 @@
           const isSchoolHoliday = !!sHoliday;
           const isManagerOffday = siteSettings.managerOffdays && siteSettings.managerOffdays.includes(dateStr);
           const isAMOffday = siteSettings.assistantManagerOffdays && siteSettings.assistantManagerOffdays.includes(dateStr);
+          const isManagerReplacement = siteSettings.managerReplacements && siteSettings.managerReplacements.includes(dateStr);
+          const isAMReplacement = siteSettings.assistantManagerReplacements && siteSettings.assistantManagerReplacements.includes(dateStr);
 
           const daysEvents = events.filter((e) => dateStr >= e.start && dateStr <= e.end);
 
@@ -1958,22 +2116,42 @@
 
           numWrapper.appendChild(numSpan);
           
-          // Add horizontal line for offdays (overlays on top of holiday circles)
-          if (isManagerOffday && isAMOffday) {
+          // Add horizontal lines for offdays and replacements (all lines same height, positioned below the number)
+          if (isManagerOffday) {
             const line = document.createElement("span");
             line.className = "absolute rounded-sm z-10";
-            line.style.cssText = "bottom: 0px; left: 4px; right: 4px; height: 1px; background-color: #a855f7;";
+            line.style.cssText = "bottom: 2px; left: 4px; right: 4px; height: 2px; background-color: #00aff0;";
             numWrapper.appendChild(line);
-          } else if (isManagerOffday) {
+          }
+          if (isAMOffday) {
             const line = document.createElement("span");
             line.className = "absolute rounded-sm z-10";
-            line.style.cssText = "bottom: 0px; left: 4px; right: 4px; height: 1px; background-color: #00aff0;";
+            line.style.cssText = "bottom: 2px; left: 4px; right: 4px; height: 2px; background-color: #90cf53;";
             numWrapper.appendChild(line);
-          } else if (isAMOffday) {
-            const line = document.createElement("span");
-            line.className = "absolute rounded-sm z-10";
-            line.style.cssText = "bottom: 0px; left: 4px; right: 4px; height: 1px; background-color: #90cf53;";
-            numWrapper.appendChild(line);
+          }
+          if (isManagerReplacement) {
+            // First half line (left side)
+            const line1 = document.createElement("span");
+            line1.className = "absolute rounded-sm z-10";
+            line1.style.cssText = "bottom: 2px; left: 4px; width: calc(50% - 6px); height: 2px; background-color: #00aff0; box-shadow: 0 0 3px #00aff0;";
+            numWrapper.appendChild(line1);
+            // Second half line (right side)
+            const line2 = document.createElement("span");
+            line2.className = "absolute rounded-sm z-10";
+            line2.style.cssText = "bottom: 2px; right: 4px; width: calc(50% - 6px); height: 2px; background-color: #00aff0; box-shadow: 0 0 3px #00aff0;";
+            numWrapper.appendChild(line2);
+          }
+          if (isAMReplacement) {
+            // First half line (left side)
+            const line1 = document.createElement("span");
+            line1.className = "absolute rounded-sm z-10";
+            line1.style.cssText = "bottom: 2px; left: 4px; width: calc(50% - 6px); height: 2px; background-color: #90cf53; box-shadow: 0 0 3px #90cf53;";
+            numWrapper.appendChild(line1);
+            // Second half line (right side)
+            const line2 = document.createElement("span");
+            line2.className = "absolute rounded-sm z-10";
+            line2.style.cssText = "bottom: 2px; right: 4px; width: calc(50% - 6px); height: 2px; background-color: #90cf53; box-shadow: 0 0 3px #90cf53;";
+            numWrapper.appendChild(line2);
           }
 
           cell.appendChild(numWrapper);
