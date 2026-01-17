@@ -216,6 +216,7 @@
                   <i class="fa-solid fa-chevron-right text-xs"></i>
                 </button>
               </div>
+              
               <div class="grid grid-cols-7 mb-2 border-b border-slate-100 pb-2">
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SUN</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">MON</div>
@@ -256,7 +257,7 @@
                   </div>
                 </div>
                 <div
-                  class="flex justify-center gap-4 text-[9px] font-semibold text-slate-500 border-t border-slate-100 pt-2 mt-2"
+                  class="flex justify-center gap-4 text-[9px] font-semibold text-slate-500 border-t border-slate-100 pt-2 mt-2 relative items-center"
                 >
                   <div class="flex items-center gap-1.5">
                     <span class="w-3 h-1 rounded-sm bg-[#00aff0]"></span>
@@ -277,6 +278,41 @@
                     <span class="w-0.5 h-0.5 rounded-sm bg-transparent"></span>
                     <span class="w-2 h-0.5 rounded-sm bg-[#90cf53]" style="box-shadow: 0 0 3px #90cf53;"></span>
                     AM Replace
+                  </div>
+                  <div class="relative">
+                    <button
+                      onclick="toggleCalendarFilter()"
+                      id="calendarFilterBtn"
+                      class="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-colors"
+                      title="Filter Calendar"
+                    >
+                      <i class="fa-solid fa-eye-slash text-[9px]"></i>
+                    </button>
+                    <!-- Compact Filter Panel Popup -->
+                    <div id="calendarFilterPanel" class="filter-hidden absolute bottom-full right-0 mb-2 bg-white rounded-lg border border-slate-200 shadow-lg p-2 w-36 z-50">
+                      <div class="flex justify-between items-center mb-1.5 pb-1 border-b border-slate-100">
+                        <span class="text-[9px] font-bold text-slate-500 uppercase">Show/Hide</span>
+                        <button onclick="resetCalendarFilters()" class="text-[8px] text-blue-600 hover:underline">Reset</button>
+                      </div>
+                      <div class="space-y-1 text-[9px]">
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                          <input type="checkbox" id="filterShowCategories" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                          <span>Categories</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                          <input type="checkbox" id="filterShowHolidays" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                          <span>Cuti Umum</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                          <input type="checkbox" id="filterShowSchoolHolidays" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                          <span>Cuti Sekolah</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                          <input type="checkbox" id="filterShowOffdays" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                          <span>Off Days</span>
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1266,6 +1302,14 @@
       };
       let editingSectionIndex = -1;
       let isDataLoaded = false;
+      let calendarFilters = {
+        showCategories: true,
+        showHolidays: true,
+        showSchoolHolidays: true,
+        showOffdays: true
+      };
+      let programInfoContent = "";
+      let currentSort = "startTime"; // Default sort
 
       // Load data from Firebase
       function loadFromFirebase() {
@@ -1275,6 +1319,10 @@
         database.ref("events").once("value", (snapshot) => {
           events = snapshot.val() || [];
           console.log("Events loaded:", events.length);
+          renderCalendar();
+          renderEventList();
+        }, (error) => {
+          console.error("Error loading events:", error);
           renderCalendar();
           renderEventList();
         });
@@ -1296,6 +1344,11 @@
           renderCustomLinks();
           renderCalendar();
           isDataLoaded = true;
+        }, (error) => {
+          console.error("Error loading settings:", error);
+          updateUIFromSettings();
+          renderCustomLinks();
+          renderCalendar();
         });
       }
 
@@ -1316,6 +1369,7 @@
 
       // Initialize
       (function init() {
+        console.log("Init function starting...");
         const dayName = today.toLocaleDateString("en-MY", { weekday: "long" });
         const dateFull = today.toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
         document.getElementById("current-date-header").innerHTML = `
@@ -1338,9 +1392,17 @@
           endHourSelect.appendChild(opt2);
         }
 
-        loadFromFirebase();
+        // Initial render before Firebase loads
+        console.log("Calling renderCalendar and renderEventList...");
+        renderCalendar();
+        renderEventList();
 
+        loadFromFirebase();
+        loadCalendarFilters();
+
+        console.log("Setting up event listeners...");
         document.getElementById("prevMonth").addEventListener("click", () => {
+          console.log("Prev month clicked");
           currentMonth--;
           if (currentMonth < 0) {
             currentMonth = 11;
@@ -1351,6 +1413,7 @@
         });
 
         document.getElementById("nextMonth").addEventListener("click", () => {
+          console.log("Next month clicked");
           currentMonth++;
           if (currentMonth > 11) {
             currentMonth = 0;
@@ -2049,7 +2112,53 @@
         ss.classList.toggle("filter-hidden");
       }
 
-      let currentSort = "startTime"; // Default sort
+      // Calendar Filter Functions
+      function loadCalendarFilters() {
+        const saved = localStorage.getItem("scsb_calendarFilters");
+        if (saved) {
+          calendarFilters = JSON.parse(saved);
+        }
+        // Update checkbox states
+        document.getElementById("filterShowCategories").checked = calendarFilters.showCategories;
+        document.getElementById("filterShowHolidays").checked = calendarFilters.showHolidays;
+        document.getElementById("filterShowSchoolHolidays").checked = calendarFilters.showSchoolHolidays;
+        document.getElementById("filterShowOffdays").checked = calendarFilters.showOffdays;
+      }
+
+      function saveCalendarFilters() {
+        calendarFilters.showCategories = document.getElementById("filterShowCategories").checked;
+        calendarFilters.showHolidays = document.getElementById("filterShowHolidays").checked;
+        calendarFilters.showSchoolHolidays = document.getElementById("filterShowSchoolHolidays").checked;
+        calendarFilters.showOffdays = document.getElementById("filterShowOffdays").checked;
+        localStorage.setItem("scsb_calendarFilters", JSON.stringify(calendarFilters));
+        renderCalendar();
+      }
+
+      function resetCalendarFilters() {
+        calendarFilters = {
+          showCategories: true,
+          showHolidays: true,
+          showSchoolHolidays: true,
+          showOffdays: true
+        };
+        saveCalendarFilters();
+      }
+
+      function toggleCalendarFilter() {
+        const panel = document.getElementById("calendarFilterPanel");
+        panel.classList.toggle("filter-hidden");
+      }
+
+      // Close filter panel when clicking outside
+      document.addEventListener("click", (e) => {
+        const panel = document.getElementById("calendarFilterPanel");
+        const btn = document.getElementById("calendarFilterBtn");
+        if (!panel.classList.contains("filter-hidden") && 
+            !panel.contains(e.target) && 
+            !btn.contains(e.target)) {
+          panel.classList.add("filter-hidden");
+        }
+      });
 
       function applySorting() {
         currentSort = document.getElementById("sortSelect").value;
@@ -2096,23 +2205,24 @@
 
           const numSpan = document.createElement("span");
           numSpan.textContent = i;
-          numSpan.className = "relative z-20 text-xs font-medium";
+          numSpan.className = "relative z-20 text-xs font-medium text-slate-800";
+          numSpan.style.textShadow = "0 0 2px white";
 
           if (isToday) {
             numSpan.className +=
               " w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-bold";
           }
 
-          // Add holiday circles first (background)
-          if (isHoliday && isSchoolHoliday) {
+          // Add holiday circles first (background) - respect filter settings
+          if (calendarFilters.showHolidays && isHoliday && calendarFilters.showSchoolHolidays && isSchoolHoliday) {
             const circle = document.createElement("span");
             circle.className = "absolute inset-0 rounded-full border-2 border-slate-300 bg-[#fff59c] z-0";
             numWrapper.appendChild(circle);
-          } else if (isHoliday) {
+          } else if (calendarFilters.showHolidays && isHoliday) {
             const circle = document.createElement("span");
             circle.className = "absolute inset-0 rounded-full bg-slate-300 z-0";
             numWrapper.appendChild(circle);
-          } else if (isSchoolHoliday) {
+          } else if (calendarFilters.showSchoolHolidays && isSchoolHoliday) {
             const circle = document.createElement("span");
             circle.className = "absolute inset-0 rounded-full bg-[#fff59c] z-0";
             numWrapper.appendChild(circle);
@@ -2120,20 +2230,20 @@
 
           numWrapper.appendChild(numSpan);
           
-          // Add horizontal lines for offdays and replacements (all lines same height, positioned below the number)
-          if (isManagerOffday) {
+          // Add horizontal lines for offdays and replacements - respect filter settings
+          if (calendarFilters.showOffdays && isManagerOffday) {
             const line = document.createElement("span");
             line.className = "absolute rounded-sm z-10";
             line.style.cssText = "bottom: 2px; left: 4px; right: 4px; height: 2px; background-color: #00aff0;";
             numWrapper.appendChild(line);
           }
-          if (isAMOffday) {
+          if (calendarFilters.showOffdays && isAMOffday) {
             const line = document.createElement("span");
             line.className = "absolute rounded-sm z-10";
             line.style.cssText = "bottom: 2px; left: 4px; right: 4px; height: 2px; background-color: #90cf53;";
             numWrapper.appendChild(line);
           }
-          if (isManagerReplacement) {
+          if (calendarFilters.showOffdays && isManagerReplacement) {
             // First half line (left side)
             const line1 = document.createElement("span");
             line1.className = "absolute rounded-sm z-10";
@@ -2145,7 +2255,7 @@
             line2.style.cssText = "bottom: 2px; right: 4px; width: calc(50% - 6px); height: 2px; background-color: #00aff0; box-shadow: 0 0 3px #00aff0;";
             numWrapper.appendChild(line2);
           }
-          if (isAMReplacement) {
+          if (calendarFilters.showOffdays && isAMReplacement) {
             // First half line (left side)
             const line1 = document.createElement("span");
             line1.className = "absolute rounded-sm z-10";
@@ -2160,13 +2270,14 @@
 
           cell.appendChild(numWrapper);
 
-          if (isHoliday) {
+          // Holiday text labels - respect filter settings
+          if (calendarFilters.showHolidays && isHoliday) {
             const hText = document.createElement("span");
             hText.className =
               "text-[6px] leading-tight text-center text-slate-500 font-bold mt-0.5 px-0.5 line-clamp-1 w-full";
             hText.textContent = isHoliday;
             cell.appendChild(hText);
-          } else if (sHoliday && sHoliday.showLabel) {
+          } else if (calendarFilters.showSchoolHolidays && sHoliday && sHoliday.showLabel) {
             const sText = document.createElement("span");
             sText.className =
               "text-[6px] leading-tight text-center text-yellow-600 font-bold mt-0.5 px-0.5 line-clamp-1 w-full";
@@ -2174,7 +2285,8 @@
             cell.appendChild(sText);
           }
 
-          if (daysEvents.length > 0) {
+          // Category dots - respect filter settings
+          if (calendarFilters.showCategories && daysEvents.length > 0) {
             const dotsDiv = document.createElement("div");
             dotsDiv.className = "flex gap-0.5 mt-0.5";
 
@@ -2308,8 +2420,14 @@
       }
 
       function renderEventList() {
+        console.log("renderEventList called, events length:", events.length);
         renderCategoryCounts();
         const container = document.getElementById("eventListContainer");
+        if (!container) {
+          console.error("eventListContainer not found!");
+          return;
+        }
+        console.log("Container found, setting innerHTML");
         container.innerHTML = "";
 
         let displayEvents = [];
@@ -2352,8 +2470,13 @@
         }
 
         if (displayEvents.length === 0) {
-          container.innerHTML =
-            '<div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-slate-400 text-xs mt-2">No programs found.</div>';
+          container.innerHTML = `
+            <div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 text-slate-500 text-xs mt-2">
+              <i class="fa-regular fa-calendar-xmark text-2xl text-slate-300 mb-2"></i>
+              <p class="font-medium">No programs found</p>
+              <p class="text-[10px] text-slate-400 mt-1">Select a date to add a program or click "Add" to create one</p>
+            </div>
+          `;
           return;
         }
 
@@ -2585,8 +2708,6 @@
       }
 
       // Rich Text Editor Functions
-      let programInfoContent = "";
-
       function openRichTextEditor() {
         const modal = document.getElementById("richTextModal");
         const panel = document.getElementById("richTextPanel");
