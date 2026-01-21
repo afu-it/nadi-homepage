@@ -460,6 +460,17 @@
                 </div>
                 <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
               </button>
+
+              <button
+                onclick="openHolidaySettings()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Manage Public Holidays</h4>
+                  <p class="text-[10px] text-slate-500">Add & edit holidays on calendar</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+              </button>
             </div>
           </div>
 
@@ -760,6 +771,84 @@
             <div class="px-4 py-4 border-t border-slate-100 bg-slate-50 flex justify-end mt-auto">
               <button
                 onclick="saveOffdaySettings()"
+                class="px-5 py-1.5 bg-nadi hover:bg-blue-900 text-white text-xs font-bold rounded shadow"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+
+          <!-- VIEW 6: Public Holiday Settings -->
+          <div id="holidaySettingsView" class="hidden flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-600">
+                  <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 class="text-base font-bold text-slate-900">Public Holidays</h3>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+              <!-- Add Holiday -->
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-slate-400"></span>
+                    <span class="text-xs font-bold text-slate-800">Add New Holiday</span>
+                  </div>
+                  <span id="holidayCount" class="text-[10px] font-semibold text-slate-500">0 holidays</span>
+                </div>
+                <div class="p-3 space-y-2">
+                  <div>
+                    <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
+                    <input
+                      type="text"
+                      id="holidayName"
+                      class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                      placeholder="e.g. Hari Raya Puasa"
+                    />
+                  </div>
+                  <div class="grid grid-cols-2 gap-2 items-end">
+                    <div>
+                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Date</label>
+                      <input
+                        type="date"
+                        id="holidayDate"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                      />
+                    </div>
+                    <button
+                      onclick="addPublicHoliday()"
+                      class="py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold rounded transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Holiday List -->
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-slate-100 border-b border-slate-200">
+                  <span class="text-xs font-bold text-slate-800">Holiday List</span>
+                </div>
+                <div class="p-3">
+                  <div id="holidayList" class="space-y-1 max-h-[200px] overflow-y-auto">
+                    <!-- Populated by JS -->
+                  </div>
+                  <div id="noHolidayMessage" class="text-center py-4 text-[10px] text-slate-400">
+                    No holidays added yet.
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-[9px] text-slate-400 text-center">Holidays will appear on the calendar with a gray circle indicator.</p>
+            </div>
+
+            <div class="px-4 py-4 border-t border-slate-100 bg-slate-50 flex justify-end mt-auto">
+              <button
+                onclick="saveHolidaySettings()"
                 class="px-5 py-1.5 bg-nadi hover:bg-blue-900 text-white text-xs font-bold rounded shadow"
               >
                 Save Changes
@@ -1224,7 +1313,7 @@
         gov: [],
       };
 
-      const holidays = {
+      const defaultHolidays = {
         "2026-01-01": "Tahun Baru",
         "2026-02-01": "Thaipusam",
         "2026-02-17": "Tahun Baru Cina",
@@ -1298,7 +1387,8 @@
         managerOffdays: [],
         assistantManagerOffdays: [],
         managerReplacements: [],
-        assistantManagerReplacements: []
+        assistantManagerReplacements: [],
+        publicHolidays: {}
       };
       let editingSectionIndex = -1;
       let isDataLoaded = false;
@@ -1337,7 +1427,8 @@
             managerOffdays: loadedSettings.managerOffdays || [],
             assistantManagerOffdays: loadedSettings.assistantManagerOffdays || [],
             managerReplacements: loadedSettings.managerReplacements || [],
-            assistantManagerReplacements: loadedSettings.assistantManagerReplacements || []
+            assistantManagerReplacements: loadedSettings.assistantManagerReplacements || [],
+            publicHolidays: loadedSettings.publicHolidays || {}
           };
           console.log("Settings loaded:", siteSettings);
           updateUIFromSettings();
@@ -1726,6 +1817,123 @@
       function saveOffdaySettings() {
         saveToFirebase();
         backToMenu();
+        renderCalendar();
+      }
+
+      // Holiday Settings Functions
+      let tempPublicHolidays = {};
+
+      function openHolidaySettings() {
+        // Load current holidays
+        tempPublicHolidays = JSON.parse(JSON.stringify(siteSettings.publicHolidays || {}));
+        renderHolidayList();
+        
+        // Switch view
+        document.getElementById("settingsMenuView").classList.add("hidden");
+        document.getElementById("headerSettingsView").classList.add("hidden");
+        document.getElementById("sectionsListView").classList.add("hidden");
+        document.getElementById("sectionEditorView").classList.add("hidden");
+        document.getElementById("offdaySettingsView").classList.add("hidden");
+        document.getElementById("holidaySettingsView").classList.remove("hidden");
+      }
+
+      function renderHolidayList() {
+        const listContainer = document.getElementById("holidayList");
+        const noMessage = document.getElementById("noHolidayMessage");
+        const countSpan = document.getElementById("holidayCount");
+        
+        // Merge default holidays with user-added holidays
+        // User-added holidays (in tempPublicHolidays) will override defaults if same date
+        const allHolidays = {};
+        
+        // Add default holidays first
+        Object.keys(defaultHolidays).forEach(date => {
+          allHolidays[date] = { name: defaultHolidays[date], isDefault: true };
+        });
+        
+        // Override with user-added holidays (user can customize or delete them)
+        Object.keys(tempPublicHolidays).forEach(date => {
+          allHolidays[date] = { name: tempPublicHolidays[date], isDefault: false };
+        });
+        
+        const holidayDates = Object.keys(allHolidays).sort();
+        
+        countSpan.textContent = `${holidayDates.length} holiday${holidayDates.length !== 1 ? 's' : ''}`;
+        
+        if (holidayDates.length === 0) {
+          listContainer.innerHTML = "";
+          noMessage.style.display = "block";
+          return;
+        }
+        
+        noMessage.style.display = "none";
+        listContainer.innerHTML = "";
+        
+        holidayDates.forEach(date => {
+          const holidayData = allHolidays[date];
+          const holiday = holidayData.name;
+          const isDefault = holidayData.isDefault;
+          
+          const div = document.createElement("div");
+          div.className = "flex items-center justify-between px-2 py-1.5 rounded border border-slate-100";
+          // Different background for default vs user-added holidays
+          div.style.backgroundColor = isDefault ? "#f8fafc" : "#f0fdf4";
+          div.id = `holiday-${date}`;
+          
+          const dateObj = new Date(date);
+          const dateDisplay = dateObj.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          
+          // Show indicator for default vs custom
+          const badge = isDefault 
+            ? '<span class="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded ml-2">Default</span>'
+            : '<span class="text-[8px] bg-green-200 text-green-700 px-1.5 py-0.5 rounded ml-2">Custom</span>';
+          
+          div.innerHTML = `
+            <div class="flex-1">
+              <span class="text-[10px] font-bold text-slate-800">${holiday}</span>
+              ${badge}
+              <span class="text-[9px] text-slate-500 ml-2">${dateDisplay}</span>
+            </div>
+            <button onclick="deletePublicHoliday('${date}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete">
+              <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+          `;
+          listContainer.appendChild(div);
+        });
+      }
+
+      function addPublicHoliday() {
+        const name = document.getElementById("holidayName").value.trim();
+        const date = document.getElementById("holidayDate").value;
+        
+        if (!name) return alert("Please enter a holiday name.");
+        if (!date) return alert("Please select a date.");
+        
+        tempPublicHolidays[date] = name;
+        
+        // Clear inputs
+        document.getElementById("holidayName").value = "";
+        document.getElementById("holidayDate").value = "";
+        
+        renderHolidayList();
+      }
+
+      function deletePublicHoliday(date) {
+        // If it's a default holiday, mark it as deleted by setting empty string
+        // This will override the default holiday and hide it
+        if (defaultHolidays[date]) {
+          tempPublicHolidays[date] = "";
+        } else {
+          // If it's a user-added holiday, remove it completely
+          delete tempPublicHolidays[date];
+        }
+        renderHolidayList();
+      }
+
+      function saveHolidaySettings() {
+        siteSettings.publicHolidays = JSON.parse(JSON.stringify(tempPublicHolidays));
+        saveToFirebase();
+        closeSettings();
         renderCalendar();
       }
 
@@ -2187,7 +2395,13 @@
           const dateStr = toLocalISOString(dayDate);
           const isToday = dateStr === toLocalISOString(today);
           const isSelected = selectedFilterDate === dateStr;
-          const isHoliday = holidays[dateStr];
+          // Merge default holidays with user-defined holidays
+          const userHolidayObj = siteSettings.publicHolidays && siteSettings.publicHolidays[dateStr];
+          const userHoliday = (userHolidayObj !== undefined) ? userHolidayObj : "";
+          const defaultHoliday = defaultHolidays[dateStr] || "";
+          // If user has explicitly set a holiday (even empty to delete), use that
+          // Otherwise use default
+          const isHoliday = (userHoliday !== "" && userHoliday) || defaultHoliday || "";
           const sHoliday = schoolHolidays[dateStr];
           const isSchoolHoliday = !!sHoliday;
           const isManagerOffday = siteSettings.managerOffdays && siteSettings.managerOffdays.includes(dateStr);
