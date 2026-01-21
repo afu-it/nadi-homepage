@@ -3383,6 +3383,14 @@
         // Set the editor content
         editor.innerHTML = programInfoContent || "";
 
+        // Add paste event listener to auto-convert URLs to hyperlinks
+        editor.onpaste = function(e) {
+          // Let the paste happen first
+          setTimeout(() => {
+            autoConvertUrlsToLinks(editor);
+          }, 0);
+        };
+
         modal.classList.remove("hidden");
 
         setTimeout(() => {
@@ -3392,6 +3400,26 @@
 
         // Focus the editor
         setTimeout(() => editor.focus(), 100);
+      }
+
+      // Auto-convert plain text URLs to hyperlinks
+      function autoConvertUrlsToLinks(editor) {
+        const content = editor.innerHTML;
+        // Regex to match plain text URLs that are not already inside <a> tags
+        const urlRegex = /(?<!<a[^>]*>)(https?:\/\/[^\s<]+)(?!<\/a>)/g;
+        
+        if (urlRegex.test(content)) {
+          const newContent = content.replace(urlRegex, '<a href="$1" target="_blank" style="color: #2563eb; text-decoration: underline;">$1</a>');
+          editor.innerHTML = newContent;
+          
+          // Move cursor to end
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
       }
 
       function closeRichTextModal() {
@@ -3440,9 +3468,14 @@
       let savedSelectionRange = null;
 
       function insertLink() {
-        // Save the current selection range
+        const editor = document.getElementById("richTextEditor");
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
+        
+        // Save the current selection range
+        if (selection.rangeCount > 0) {
+          savedSelectionRange = selection.getRangeAt(0).cloneRange();
+        }
         
         // Open custom URL input modal
         const modal = document.getElementById("urlInputModal");
@@ -3477,21 +3510,29 @@
         const displayText = textInput.value.trim();
         
         if (url) {
-          // Focus the editor first
           const editor = document.getElementById("richTextEditor");
-          editor.focus();
           
+          // Restore the saved selection
+          if (savedSelectionRange) {
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(savedSelectionRange);
+          }
+          
+          // Replace selected text with linked text, or insert new link
           if (displayText) {
-            // If custom text provided, create link with custom text
+            // Use insertHTML to replace selection with link containing the display text
             document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" style="color: #2563eb; text-decoration: underline;">${displayText}</a>`);
           } else {
-            // If no custom text, create link using browser command
-            document.execCommand("createLink", false, url);
+            // If no display text, just insert the URL as a link
+            document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" style="color: #2563eb; text-decoration: underline;">${url}</a>`);
           }
           
           editor.focus();
         }
         
+        // Clear saved selection
+        savedSelectionRange = null;
         closeUrlInputModal();
       }
 
