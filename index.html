@@ -1164,14 +1164,14 @@
                     <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
                     <select
                       id="endTimeHour"
-                      class="px-1.5 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-mono focus:border-blue-400 focus:text-slate-800 w-12"
+                      class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     >
                       <option value="" selected>-</option>
                     </select>
                     <span class="text-slate-400 text-xs">:</span>
                     <select
                       id="endTimeMinute"
-                      class="px-1.5 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-mono focus:border-blue-400 focus:text-slate-800 w-12"
+                      class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     >
                       <option value="00">00</option>
                       <option value="15">15</option>
@@ -1180,12 +1180,82 @@
                     </select>
                     <select
                       id="endTimeAMPM"
-                      class="px-2 py-1.5 bg-white border border-slate-200 text-slate-400 rounded text-xs outline-none text-center font-bold focus:border-blue-400 focus:text-slate-800 w-16"
+                      class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
                     >
                       <option value="" selected>-</option>
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
                     </select>
+                  </div>
+                  
+                  <!-- Second Session (Optional) -->
+                  <div class="mt-1 pt-1 border-t border-dashed border-slate-200">
+                    <label class="flex items-center gap-2 cursor-pointer mb-1.5">
+                      <input
+                        type="checkbox"
+                        id="hasSecondSession"
+                        onchange="toggleSecondSession()"
+                        class="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span class="text-[9px] font-semibold text-slate-600">Add Second Session</span>
+                    </label>
+                    <div id="secondSessionContainer" class="flex flex-col gap-2 pl-4 hidden">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[9px] text-slate-500 font-semibold w-10">Start</span>
+                        <select
+                          id="time2Hour"
+                          onchange="updateEndTime2()"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="" selected>-</option>
+                        </select>
+                        <span class="text-slate-400 text-xs">:</span>
+                        <select
+                          id="time2Minute"
+                          onchange="updateEndTime2()"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="00">00</option>
+                          <option value="15">15</option>
+                          <option value="30">30</option>
+                          <option value="45">45</option>
+                        </select>
+                        <select
+                          id="time2AMPM"
+                          onchange="updateEndTime2()"
+                          class="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
+                        <select
+                          id="endTime2Hour"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="" selected>-</option>
+                        </select>
+                        <span class="text-slate-400 text-xs">:</span>
+                        <select
+                          id="endTime2Minute"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="00">00</option>
+                          <option value="15">15</option>
+                          <option value="30">30</option>
+                          <option value="45">45</option>
+                        </select>
+                        <select
+                          id="endTime2AMPM"
+                          class="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1581,6 +1651,8 @@
 
         const hourSelect = document.getElementById("timeHour");
         const endHourSelect = document.getElementById("endTimeHour");
+        const time2HourSelect = document.getElementById("time2Hour");
+        const endTime2HourSelect = document.getElementById("endTime2Hour");
         for (let i = 1; i <= 12; i++) {
           const val = i.toString().padStart(2, "0");
           const opt = document.createElement("option");
@@ -1592,6 +1664,14 @@
           opt2.value = val;
           opt2.text = val;
           endHourSelect.appendChild(opt2);
+          const opt3 = document.createElement("option");
+          opt3.value = val;
+          opt3.text = val;
+          time2HourSelect.appendChild(opt3);
+          const opt4 = document.createElement("option");
+          opt4.value = val;
+          opt4.text = val;
+          endTime2HourSelect.appendChild(opt4);
         }
 
         // Initial render before Firebase loads
@@ -3166,7 +3246,14 @@
                         ${ev.subcategory ? `<span class="text-[9px] font-semibold ${cat.color.split(" ")[1]} ${cat.color.split(" ")[2]}">${ev.subcategory}</span>` : ""}
                     </div>
                 </div>
-                ${ev.time ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time}</div>` : ""}
+                ${
+                  ev.time || ev.secondTime
+                    ? `<div class="text-[10px] text-slate-500 font-medium">
+                        <i class="fa-regular fa-clock mr-1"></i>${ev.time || ""}
+                        ${ev.secondTime ? `<br><i class="fa-regular fa-clock mr-1"></i>${ev.secondTime}` : ""}
+                       </div>`
+                    : ""
+                }
                 ${
                   ev.info
                     ? `
@@ -3211,10 +3298,19 @@
                 <select class="w-1/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none link-platform cursor-pointer">
                     ${options}
                 </select>
-                <input type="text" placeholder="URL" value="${url}" class="w-2/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none link-url">
+                <input type="text" placeholder="URL" value="${url}" onchange="fixLinkUrl(this)" class="w-2/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none link-url">
                 <button type="button" onclick="removeLinkRow('${id}')" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-xmark text-xs"></i></button>
             `;
         container.appendChild(div);
+      }
+
+      // Auto-fix URL by adding https:// if missing
+      function fixLinkUrl(input) {
+        let url = input.value.trim();
+        if (url && !url.match(/^https?:\/\//i)) {
+          // Add https:// prefix if no protocol exists
+          input.value = "https://" + url;
+        }
       }
 
       function removeLinkRow(id) {
@@ -3301,6 +3397,43 @@
             document.getElementById("endTimeAMPM").value = "PM";
           }
 
+          // Handle second session time
+          if (ev.secondTime) {
+            document.getElementById("hasSecondSession").checked = true;
+            document.getElementById("secondSessionContainer").classList.remove("hidden");
+            
+            const parts = ev.secondTime.split(" - ");
+            const startPart = parts[0];
+            const endPart = parts.length > 1 ? parts[1] : null;
+
+            if (startPart) {
+              const timeMatch = startPart.match(/(\d+):(\d+)\s*(AM|PM)/i);
+              if (timeMatch) {
+                document.getElementById("time2Hour").value = timeMatch[1].padStart(2, "0");
+                document.getElementById("time2Minute").value = timeMatch[2];
+                document.getElementById("time2AMPM").value = timeMatch[3].toUpperCase();
+              }
+            }
+
+            if (endPart) {
+              const timeMatch = endPart.match(/(\d+):(\d+)\s*(AM|PM)/i);
+              if (timeMatch) {
+                document.getElementById("endTime2Hour").value = timeMatch[1].padStart(2, "0");
+                document.getElementById("endTime2Minute").value = timeMatch[2];
+                document.getElementById("endTime2AMPM").value = timeMatch[3].toUpperCase();
+              }
+            }
+          } else {
+            document.getElementById("hasSecondSession").checked = false;
+            document.getElementById("secondSessionContainer").classList.add("hidden");
+            document.getElementById("time2Hour").value = "";
+            document.getElementById("time2Minute").value = "00";
+            document.getElementById("time2AMPM").value = "AM";
+            document.getElementById("endTime2Hour").value = "";
+            document.getElementById("endTime2Minute").value = "00";
+            document.getElementById("endTime2AMPM").value = "AM";
+          }
+
           if (ev.links && ev.links.length > 0) {
             ev.links.forEach((link) => {
               addLinkRow(link.platform || "NES", link.url || "");
@@ -3329,6 +3462,16 @@
           document.getElementById("endTimeHour").value = "06";
           document.getElementById("endTimeMinute").value = "00";
           document.getElementById("endTimeAMPM").value = "PM";
+          
+          // Reset second session
+          document.getElementById("hasSecondSession").checked = false;
+          document.getElementById("secondSessionContainer").classList.add("hidden");
+          document.getElementById("time2Hour").value = "";
+          document.getElementById("time2Minute").value = "00";
+          document.getElementById("time2AMPM").value = "AM";
+          document.getElementById("endTime2Hour").value = "";
+          document.getElementById("endTime2Minute").value = "00";
+          document.getElementById("endTime2AMPM").value = "AM";
         }
       }
 
@@ -3402,14 +3545,40 @@
         setTimeout(() => editor.focus(), 100);
       }
 
-      // Auto-convert plain text URLs to hyperlinks
+      // Auto-convert plain text URLs to hyperlinks in the rich text editor
       function autoConvertUrlsToLinks(editor) {
-        const content = editor.innerHTML;
-        // Regex to match plain text URLs that are not already inside <a> tags
-        const urlRegex = /(?<!<a[^>]*>)(https?:\/\/[^\s<]+)(?!<\/a>)/g;
+        // Get plain text content to detect URLs
+        const textContent = editor.textContent || editor.innerText || "";
         
-        if (urlRegex.test(content)) {
-          const newContent = content.replace(urlRegex, '<a href="$1" target="_blank" style="color: #2563eb; text-decoration: underline;">$1</a>');
+        // Find all URLs in the text
+        const urlPattern = /(https?:\/\/[^\s<]+|www\.[^\s<]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}[^\s<]*)/gi;
+        
+        const matches = textContent.match(urlPattern);
+        
+        if (matches && matches.length > 0) {
+          let newContent = editor.innerHTML;
+          
+          matches.forEach((url) => {
+            // Skip if already inside an anchor tag
+            if (newContent.includes(`>${url}<`)) return;
+            
+            // Clean the URL (remove trailing punctuation if any)
+            const cleanUrl = url.replace(/[.,;:)\]]+$/, '');
+            const cleanDisplayText = url.replace(/[.,;:)\]]+$/, '');
+            
+            // Add https:// if no protocol
+            const fullUrl = cleanUrl.match(/^https?:\/\//i) ? cleanUrl : `https://${cleanUrl}`;
+            
+            // For display text, use the full URL or domain if it has a path
+            let displayText = cleanDisplayText;
+            if (cleanDisplayText.includes('/') && cleanDisplayText.split('/')[0].includes('.')) {
+              displayText = cleanDisplayText.split('/')[0];
+            }
+            
+            const linkHtml = `<a href="${fullUrl}" target="_blank" style="color: #2563eb; text-decoration: underline;">${displayText}</a>`;
+            newContent = newContent.replace(cleanDisplayText, linkHtml);
+          });
+          
           editor.innerHTML = newContent;
           
           // Move cursor to end
@@ -3634,6 +3803,23 @@
         }
       }
 
+      function toggleSecondSession() {
+        const checkbox = document.getElementById("hasSecondSession");
+        const container = document.getElementById("secondSessionContainer");
+        if (checkbox.checked) {
+          container.classList.remove("hidden");
+        } else {
+          container.classList.add("hidden");
+          // Clear second session values
+          document.getElementById("time2Hour").value = "";
+          document.getElementById("time2Minute").value = "00";
+          document.getElementById("time2AMPM").value = "AM";
+          document.getElementById("endTime2Hour").value = "";
+          document.getElementById("endTime2Minute").value = "00";
+          document.getElementById("endTime2AMPM").value = "AM";
+        }
+      }
+
       function updateEndTime() {
         const startHour = parseInt(document.getElementById("timeHour").value) || 9;
         const startMinute = document.getElementById("timeMinute").value || "00";
@@ -3653,6 +3839,29 @@
         document.getElementById("endTimeHour").value = endHour.toString().padStart(2, "0");
         document.getElementById("endTimeMinute").value = startMinute;
         document.getElementById("endTimeAMPM").value = endAMPM;
+      }
+
+      function updateEndTime2() {
+        const startHour = parseInt(document.getElementById("time2Hour").value) || 0;
+        const startMinute = document.getElementById("time2Minute").value || "00";
+        const startAMPM = document.getElementById("time2AMPM").value;
+
+        if (!startHour || !startAMPM) return;
+
+        // Calculate end time (1 hour later)
+        let endHour = startHour + 1;
+        let endAMPM = startAMPM;
+
+        // Handle hour overflow (12 -> 1, 1 PM -> 1 AM)
+        if (endHour > 12) {
+          endHour = endHour - 12;
+          endAMPM = startAMPM === "AM" ? "PM" : "AM";
+        }
+
+        // Update end time dropdowns
+        document.getElementById("endTime2Hour").value = endHour.toString().padStart(2, "0");
+        document.getElementById("endTime2Minute").value = startMinute;
+        document.getElementById("endTime2AMPM").value = endAMPM;
       }
 
       function closeModal() {
@@ -3685,12 +3894,30 @@
         const endTimeHour = document.getElementById("endTimeHour").value;
         const endTimeMin = document.getElementById("endTimeMinute").value;
         const endTimeAMPM = document.getElementById("endTimeAMPM").value;
+        
+        // Second session times
+        const hasSecondSession = document.getElementById("hasSecondSession").checked;
+        const time2Hour = document.getElementById("time2Hour").value;
+        const time2Min = document.getElementById("time2Minute").value;
+        const time2AMPM = document.getElementById("time2AMPM").value;
+        const endTime2Hour = document.getElementById("endTime2Hour").value;
+        const endTime2Min = document.getElementById("endTime2Minute").value;
+        const endTime2AMPM = document.getElementById("endTime2AMPM").value;
 
         let timeStr = "";
+        let secondTimeStr = "";
+        
         if (timeHour && timeMin) {
           timeStr = `${timeHour}:${timeMin} ${timeAMPM}`;
           if (endTimeHour && endTimeMin && endTimeAMPM) {
             timeStr += ` - ${endTimeHour}:${endTimeMin} ${endTimeAMPM}`;
+          }
+        }
+        
+        if (hasSecondSession && time2Hour && time2Min) {
+          secondTimeStr = `${time2Hour}:${time2Min} ${time2AMPM}`;
+          if (endTime2Hour && endTime2Min && endTime2AMPM) {
+            secondTimeStr += ` - ${endTime2Hour}:${endTime2Min} ${endTime2AMPM}`;
           }
         }
 
@@ -3698,7 +3925,11 @@
         const links = [];
         linkRows.forEach((row) => {
           const p = row.querySelector(".link-platform").value.trim();
-          const u = row.querySelector(".link-url").value.trim();
+          let u = row.querySelector(".link-url").value.trim();
+          // Fix URL by adding https:// if missing
+          if (u && !u.match(/^https?:\/\//i)) {
+            u = "https://" + u;
+          }
           if (u) {
             links.push({ platform: p || "Link", url: u });
           }
@@ -3712,11 +3943,12 @@
           id: id || Date.now().toString(),
           title: title,
           category: category,
-          subcategory: subcategoryVal || "", // ✅ ADDED
-          info: programInfoVal || "", // ✅ ADDED
+          subcategory: subcategoryVal || "",
+          info: programInfoVal || "",
           start: start,
           end: end || start,
           time: timeStr,
+          secondTime: secondTimeStr,
           links: links,
         };
 
