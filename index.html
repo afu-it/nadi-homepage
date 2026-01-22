@@ -84,43 +84,39 @@
       /* Default font size for editor is 9.5px (matching event-info-content) */
       #richTextEditor {
         font-size: 9.5px;
-        line-height: 1.5;
+        line-height: 1.4;
+        font-family: inherit;
+        color: inherit;
       }
       #richTextEditor:empty:before {
         content: attr(placeholder);
         color: #94a3b8;
         pointer-events: none;
       }
-      #richTextEditor ul,
-      #richTextEditor ol {
-        margin-left: 1.5rem;
-        margin-top: 0.25rem;
-        margin-bottom: 0.25rem;
-        padding-left: 0.5rem;
-      }
-      #richTextEditor li {
-        margin: 0.125rem 0;
-        list-style-type: disc;
-        font-size: inherit;
-      }
-      #richTextEditor ol li {
-        list-style-type: decimal;
-        font-size: inherit;
+      #richTextEditor br {
+        display: block;
+        margin: 2px 0;
+        content: "";
       }
       #richTextEditor a {
         color: #2563eb;
         text-decoration: underline;
         cursor: pointer;
       }
-      #richTextEditor font {
-        /* Ensure font tags created by execCommand render properly */
-        display: inline-block;
+      #richTextEditor * {
+        /* Enforce our font settings on all pasted content */
+        font-size: inherit !important;
+        font-family: inherit !important;
+        line-height: inherit !important;
+        color: inherit !important;
+        margin: 0 !important;
+        padding: 0 !important;
       }
       /* Display styles for formatted event info */
       /* Default font size for event info is text-[9.5px] = 9.5px */
       .event-info-content {
         font-size: 9.5px;
-        line-height: 1.5;
+        line-height: 1.4;
       }
       .event-info-content b,
       .event-info-content strong {
@@ -163,7 +159,9 @@
         margin: 0.25rem 0;
       }
       .event-info-content br {
-        margin: 0.125rem 0;
+        display: block;
+        margin: 2px 0;
+        content: "";
       }
       .event-info-content span[style*="font-size"],
       .event-info-content font[size] {
@@ -3526,9 +3524,29 @@
         // Set the editor content
         editor.innerHTML = programInfoContent || "";
 
-        // Add paste event listener to auto-convert URLs to hyperlinks
+        // Add paste event listener to strip formatting and auto-convert URLs to hyperlinks
         editor.onpaste = function(e) {
-          // Let the paste happen first
+          e.preventDefault();
+          
+          // Try to get HTML content first (WhatsApp may copy with HTML formatting)
+          const html = (e.clipboardData || window.clipboardData).getData('text/html');
+          const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+          
+          let processedText = '';
+          
+          if (html && text) {
+            // If both HTML and text are available, use text but preserve line breaks
+            // Process the text with our WhatsApp formatting
+            processedText = convertWhatsAppFormatting(text);
+          } else if (text) {
+            // Only plain text available
+            processedText = convertWhatsAppFormatting(text);
+          }
+          
+          // Insert the processed HTML
+          document.execCommand('insertHTML', false, processedText);
+          
+          // Then auto-convert any remaining plain URLs to hyperlinks
           setTimeout(() => {
             autoConvertUrlsToLinks(editor);
           }, 0);
@@ -3545,49 +3563,104 @@
         setTimeout(() => editor.focus(), 100);
       }
 
+      // Convert WhatsApp-style formatting to HTML
+      function convertWhatsAppFormatting(text) {
+        // Escape HTML first to prevent XSS
+        let html = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        
+        // Convert single line breaks to spaces, double line breaks to <br><br>
+        html = html.replace(/\n\n/g, '<br><br>');
+        html = html.replace(/\n/g, ' ');
+        
+        // Bold: *text* or _text_ or (text)
+        html = html.replace(/(\*|_|\()(.+?)\1/g, '<b>$2</b>');
+        
+        // Italic: ~text~
+        html = html.replace(/~(.+?)~/g, '<i>$1</i>');
+        
+        // Monospace: `text`
+        html = html.replace(/`(.+?)`/g, '<span style="font-family: monospace;">$1</span>');
+        
+        return html;
+      }
+
+      // Clean formatting from pasted HTML content
+      function cleanFormatting(html) {
+        // Create a temporary element to clean the HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        
+        // Remove all style attributes
+        const allElements = tempDiv.querySelectorAll('*');
+        allElements.forEach(el => {
+          el.removeAttribute('style');
+          el.removeAttribute('class');
+          el.removeAttribute('face');
+          el.removeAttribute('size');
+        });
+        
+        // Get plain text and preserve line breaks
+        return tempDiv.innerHTML;
+      }
+
       // Auto-convert plain text URLs to hyperlinks in the rich text editor
       function autoConvertUrlsToLinks(editor) {
-        // Get plain text content to detect URLs
         const textContent = editor.textContent || editor.innerText || "";
         
         // Find all URLs in the text
-        const urlPattern = /(https?:\/\/[^\s<]+|www\.[^\s<]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}[^\s<]*)/gi;
+        // Pattern 1: www.something.domain patterns
+        const wwwPattern = /\bwww\.[^\s<"\]]+\b/gi;
+        // Pattern 2: http/https URLs
+        const httpPattern = /https?:\/\/[^\s<"\]]+/gi;
         
-        const matches = textContent.match(urlPattern);
+        // Combine all matches
+        const wwwMatches = textContent.match(wwwPattern) || [];
+        const httpMatches = textContent.match(httpPattern) || [];
+        const allMatches = [...wwwMatches, ...httpMatches];
         
-        if (matches && matches.length > 0) {
+        if (allMatches.length > 0) {
+          // Use Set to get unique URLs
+          const uniqueUrls = [...new Set(allMatches)];
+          
           let newContent = editor.innerHTML;
           
-          matches.forEach((url) => {
-            // Skip if already inside an anchor tag
-            if (newContent.includes(`>${url}<`)) return;
-            
-            // Clean the URL (remove trailing punctuation if any)
+          uniqueUrls.forEach((url) => {
+            // Clean the URL (remove trailing punctuation)
             const cleanUrl = url.replace(/[.,;:)\]]+$/, '');
-            const cleanDisplayText = url.replace(/[.,;:)\]]+$/, '');
             
-            // Add https:// if no protocol
-            const fullUrl = cleanUrl.match(/^https?:\/\//i) ? cleanUrl : `https://${cleanUrl}`;
-            
-            // For display text, use the full URL or domain if it has a path
-            let displayText = cleanDisplayText;
-            if (cleanDisplayText.includes('/') && cleanDisplayText.split('/')[0].includes('.')) {
-              displayText = cleanDisplayText.split('/')[0];
+            // Skip if already converted to a link (check in newContent)
+            if (newContent.includes(`href="${cleanUrl}"`) || newContent.includes(`href="https://${cleanUrl}"`) || newContent.includes(`href="http://${cleanUrl}"`)) {
+              return;
             }
             
-            const linkHtml = `<a href="${fullUrl}" target="_blank" style="color: #2563eb; text-decoration: underline;">${displayText}</a>`;
-            newContent = newContent.replace(cleanDisplayText, linkHtml);
+            // Add https:// if no protocol (for www. URLs)
+            const fullUrl = url.startsWith('www.') ? `https://${cleanUrl}` : cleanUrl;
+            
+            // Create the link HTML
+            const linkHtml = `<a href="${fullUrl}" target="_blank" style="color: #2563eb; text-decoration: underline;">${cleanUrl}</a>`;
+            
+            // Escape special regex characters in the URL for safe replacement
+            const escapedUrl = cleanUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            // Replace the plain URL with the linked version (global replacement)
+            const urlRegex = new RegExp(escapedUrl, 'g');
+            newContent = newContent.replace(urlRegex, linkHtml);
           });
           
           editor.innerHTML = newContent;
           
           // Move cursor to end
-          const range = document.createRange();
-          const sel = window.getSelection();
-          range.selectNodeContents(editor);
-          range.collapse(false);
-          sel.removeAllRanges();
-          sel.addRange(range);
+          setTimeout(() => {
+            const range = document.createRange();
+            const sel = window.getSelection();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }, 0);
         }
       }
 
