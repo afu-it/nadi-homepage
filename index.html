@@ -99,7 +99,7 @@
         content: "";
       }
       #richTextEditor a {
-        color: #2563eb;
+        color: #2563eb !important;
         text-decoration: underline;
         cursor: pointer;
       }
@@ -3524,29 +3524,9 @@
         // Set the editor content
         editor.innerHTML = programInfoContent || "";
 
-        // Add paste event listener to strip formatting and auto-convert URLs to hyperlinks
+        // Add paste event listener to auto-convert URLs to hyperlinks
         editor.onpaste = function(e) {
-          e.preventDefault();
-          
-          // Try to get HTML content first (WhatsApp may copy with HTML formatting)
-          const html = (e.clipboardData || window.clipboardData).getData('text/html');
-          const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-          
-          let processedText = '';
-          
-          if (html && text) {
-            // If both HTML and text are available, use text but preserve line breaks
-            // Process the text with our WhatsApp formatting
-            processedText = convertWhatsAppFormatting(text);
-          } else if (text) {
-            // Only plain text available
-            processedText = convertWhatsAppFormatting(text);
-          }
-          
-          // Insert the processed HTML
-          document.execCommand('insertHTML', false, processedText);
-          
-          // Then auto-convert any remaining plain URLs to hyperlinks
+          // Let the paste happen first
           setTimeout(() => {
             autoConvertUrlsToLinks(editor);
           }, 0);
@@ -3563,52 +3543,9 @@
         setTimeout(() => editor.focus(), 100);
       }
 
-      // Convert WhatsApp-style formatting to HTML
-      function convertWhatsAppFormatting(text) {
-        // Escape HTML first to prevent XSS
-        let html = text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        
-        // Convert single line breaks to spaces, double line breaks to <br><br>
-        html = html.replace(/\n\n/g, '<br><br>');
-        html = html.replace(/\n/g, ' ');
-        
-        // Bold: *text* or _text_ or (text)
-        html = html.replace(/(\*|_|\()(.+?)\1/g, '<b>$2</b>');
-        
-        // Italic: ~text~
-        html = html.replace(/~(.+?)~/g, '<i>$1</i>');
-        
-        // Monospace: `text`
-        html = html.replace(/`(.+?)`/g, '<span style="font-family: monospace;">$1</span>');
-        
-        return html;
-      }
-
-      // Clean formatting from pasted HTML content
-      function cleanFormatting(html) {
-        // Create a temporary element to clean the HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        
-        // Remove all style attributes
-        const allElements = tempDiv.querySelectorAll('*');
-        allElements.forEach(el => {
-          el.removeAttribute('style');
-          el.removeAttribute('class');
-          el.removeAttribute('face');
-          el.removeAttribute('size');
-        });
-        
-        // Get plain text and preserve line breaks
-        return tempDiv.innerHTML;
-      }
-
-      // Auto-convert plain text URLs to hyperlinks in the rich text editor
+      // Auto-convert plain text URLs to hyperlinks
       function autoConvertUrlsToLinks(editor) {
-        const textContent = editor.textContent || editor.innerText || "";
+        const content = editor.innerHTML;
         
         // Find all URLs in the text
         // Pattern 1: www.something.domain patterns
@@ -3617,8 +3554,8 @@
         const httpPattern = /https?:\/\/[^\s<"\]]+/gi;
         
         // Combine all matches
-        const wwwMatches = textContent.match(wwwPattern) || [];
-        const httpMatches = textContent.match(httpPattern) || [];
+        const wwwMatches = content.match(wwwPattern) || [];
+        const httpMatches = content.match(httpPattern) || [];
         const allMatches = [...wwwMatches, ...httpMatches];
         
         if (allMatches.length > 0) {
