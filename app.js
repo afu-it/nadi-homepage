@@ -95,15 +95,14 @@ let siteSettings = {
   assistantManagerReplacements: [],
   publicHolidays: {},
   schoolHolidays: {},
+  calendarFilters: {
+    showCategories: true,
+    showHolidays: true,
+    showSchoolHolidays: true,
+    showOffdays: true,
+  },
 };
-let editingSectionIndex = -1;
-let isDataLoaded = false;
-let calendarFilters = {
-  showCategories: true,
-  showHolidays: true,
-  showSchoolHolidays: true,
-  showOffdays: true,
-};
+let announcements = [];
 let programInfoContent = "";
 let currentSort = "startTime";
 let deleteEventId = null;
@@ -111,8 +110,26 @@ let deleteSectionIdx = null;
 let savedSelectionRange = null;
 let tempPublicHolidays = {};
 let tempSchoolHolidays = {};
+let firebaseLoaded = false;
+let isDataLoaded = false;
+let calendarFilters = {
+  showCategories: true,
+  showHolidays: true,
+  showSchoolHolidays: true,
+  showOffdays: true,
+};
 
 function loadFromFirebase() {
+  const loadTimeout = setTimeout(() => {
+    if (!firebaseLoaded) {
+      console.log("Firebase load timeout - rendering with empty data");
+      renderCalendar();
+      renderEventList();
+      renderCustomLinks();
+      updateUIFromSettings();
+    }
+  }, 3000);
+
   database.ref("events").once(
     "value",
     (snapshot) => {
@@ -141,23 +158,45 @@ function loadFromFirebase() {
         assistantManagerReplacements: loadedSettings.assistantManagerReplacements || [],
         publicHolidays: loadedSettings.publicHolidays || {},
         schoolHolidays: loadedSettings.schoolHolidays || {},
+        calendarFilters: loadedSettings.calendarFilters || {
+          showCategories: true,
+          showHolidays: true,
+          showSchoolHolidays: true,
+          showOffdays: true,
+        },
       };
+      if (loadedSettings.announcements) {
+        announcements = loadedSettings.announcements;
+      }
       updateUIFromSettings();
+      loadCalendarFilters();
       renderCustomLinks();
       renderCalendar();
+      renderEventList();
+      checkNewAnnouncements();
       isDataLoaded = true;
+      firebaseLoaded = true;
+      clearTimeout(loadTimeout);
     },
     (error) => {
       console.error("Error loading settings:", error);
       updateUIFromSettings();
+      loadCalendarFilters();
       renderCustomLinks();
       renderCalendar();
+      renderEventList();
+      checkNewAnnouncements();
+      isDataLoaded = true;
+      firebaseLoaded = true;
+      clearTimeout(loadTimeout);
     }
   );
 }
 
 function saveToFirebase() {
   if (!isDataLoaded) return;
+  siteSettings.calendarFilters = calendarFilters;
+  siteSettings.announcements = announcements;
   database.ref("events").set(events);
   database.ref("siteSettings").set(siteSettings);
 }
@@ -167,44 +206,86 @@ function updateUIFromSettings() {
   document.getElementById("siteSubtitle").textContent = siteSettings.subtitle;
 }
 
+function checkNewAnnouncements() {
+  const lastReadAnnouncement = localStorage.getItem("lastReadAnnouncementId");
+  const announcements = siteSettings.announcements || [];
+  
+  if (announcements.length === 0) {
+    document.getElementById("newAnnouncementDot").classList.add("hidden");
+    return;
+  }
+  
+  const latestAnnouncement = announcements.reduce((latest, ann) => {
+    const annDate = new Date(ann.createdAt);
+    const latestDate = latest ? new Date(latest.createdAt) : new Date(0);
+    return annDate > latestDate ? ann : latest;
+  }, null);
+  
+  if (!latestAnnouncement) {
+    document.getElementById("newAnnouncementDot").classList.add("hidden");
+    return;
+  }
+  
+  if (lastReadAnnouncement !== latestAnnouncement.id) {
+    document.getElementById("newAnnouncementDot").classList.remove("hidden");
+  } else {
+    document.getElementById("newAnnouncementDot").classList.add("hidden");
+  }
+}
+
+function markAnnouncementsAsRead() {
+  const announcements = siteSettings.announcements || [];
+  if (announcements.length > 0) {
+    const latestAnnouncement = announcements.reduce((latest, ann) => {
+      const annDate = new Date(ann.createdAt);
+      const latestDate = latest ? new Date(latest.createdAt) : new Date(0);
+      return annDate > latestDate ? ann : latest;
+    }, null);
+    if (latestAnnouncement) {
+      localStorage.setItem("lastReadAnnouncementId", latestAnnouncement.id);
+      document.getElementById("newAnnouncementDot").classList.add("hidden");
+    }
+  }
+}
+
 (function init() {
-  const dayName = today.toLocaleDateString("en-MY", { weekday: "long" });
-  const dateFull = today.toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
-  document.getElementById("current-date-header").innerHTML = `
-    <span class="text-[9px] font-bold text-white/70 uppercase tracking-wide leading-none mb-0.5">${dayName}</span>
-    <span class="text-xs font-bold text-white leading-none">${dateFull}</span>
-  `;
+  const dateHeader = document.getElementById("current-date-header");
+  if (dateHeader) {
+    const dayName = today.toLocaleDateString("en-MY", { weekday: "long" });
+    const dateFull = today.toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
+    dateHeader.innerHTML = `
+      <span class="text-[9px] font-bold text-white/70 uppercase tracking-wide leading-none mb-0.5">${dayName}</span>
+      <span class="text-xs font-bold text-white leading-none">${dateFull}</span>
+    `;
+  }
 
   const hourSelect = document.getElementById("timeHour");
   const endHourSelect = document.getElementById("endTimeHour");
   const time2HourSelect = document.getElementById("time2Hour");
   const endTime2HourSelect = document.getElementById("endTime2Hour");
-  for (let i = 1; i <= 12; i++) {
-    const val = i.toString().padStart(2, "0");
-    const opt = document.createElement("option");
-    opt.value = val;
-    opt.text = val;
-    if (val === "09") opt.selected = true;
-    hourSelect.appendChild(opt);
-    const opt2 = document.createElement("option");
-    opt2.value = val;
-    opt2.text = val;
-    endHourSelect.appendChild(opt2);
-    const opt3 = document.createElement("option");
-    opt3.value = val;
-    opt3.text = val;
-    time2HourSelect.appendChild(opt3);
-    const opt4 = document.createElement("option");
-    opt4.value = val;
-    opt4.text = val;
-    endTime2HourSelect.appendChild(opt4);
-  }
+    for (let i = 1; i <= 12; i++) {
+      const val = i.toString().padStart(2, "0");
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.text = val;
+      if (val === "09") opt.selected = true;
+      hourSelect.appendChild(opt);
+      const opt2 = document.createElement("option");
+      opt2.value = val;
+      opt2.text = val;
+      endHourSelect.appendChild(opt2);
+      const opt3 = document.createElement("option");
+      opt3.value = val;
+      opt3.text = val;
+      time2HourSelect.appendChild(opt3);
+      const opt4 = document.createElement("option");
+      opt4.value = val;
+      opt4.text = val;
+      endTime2HourSelect.appendChild(opt4);
+    }
 
-  renderCalendar();
-  renderEventList();
-
-  loadFromFirebase();
-  loadCalendarFilters();
+    loadFromFirebase();
+    loadCalendarFilters();
 
   document.getElementById("prevMonth").addEventListener("click", () => {
     currentMonth--;
@@ -252,6 +333,8 @@ function updateUIFromSettings() {
       updateSubcategories(this.value);
     });
   });
+
+  document.getElementById("announcementBtn").addEventListener("click", markAnnouncementsAsRead);
 })();
 
 function showView(viewId) {
@@ -858,14 +941,21 @@ function toggleSort() {
 }
 
 function loadCalendarFilters() {
-  const saved = localStorage.getItem("scsb_calendarFilters");
-  if (saved) {
-    calendarFilters = JSON.parse(saved);
+  if (siteSettings.calendarFilters) {
+    calendarFilters = siteSettings.calendarFilters;
   }
-  document.getElementById("filterShowCategories").checked = calendarFilters.showCategories;
-  document.getElementById("filterShowHolidays").checked = calendarFilters.showHolidays;
-  document.getElementById("filterShowSchoolHolidays").checked = calendarFilters.showSchoolHolidays;
-  document.getElementById("filterShowOffdays").checked = calendarFilters.showOffdays;
+  if (document.getElementById("filterShowCategories")) {
+    document.getElementById("filterShowCategories").checked = calendarFilters.showCategories;
+  }
+  if (document.getElementById("filterShowHolidays")) {
+    document.getElementById("filterShowHolidays").checked = calendarFilters.showHolidays;
+  }
+  if (document.getElementById("filterShowSchoolHolidays")) {
+    document.getElementById("filterShowSchoolHolidays").checked = calendarFilters.showSchoolHolidays;
+  }
+  if (document.getElementById("filterShowOffdays")) {
+    document.getElementById("filterShowOffdays").checked = calendarFilters.showOffdays;
+  }
 }
 
 function saveCalendarFilters() {
@@ -873,7 +963,8 @@ function saveCalendarFilters() {
   calendarFilters.showHolidays = document.getElementById("filterShowHolidays").checked;
   calendarFilters.showSchoolHolidays = document.getElementById("filterShowSchoolHolidays").checked;
   calendarFilters.showOffdays = document.getElementById("filterShowOffdays").checked;
-  localStorage.setItem("scsb_calendarFilters", JSON.stringify(calendarFilters));
+  siteSettings.calendarFilters = calendarFilters;
+  saveToFirebase();
   renderCalendar();
 }
 
@@ -1013,6 +1104,16 @@ function renderCalendar() {
     }
 
     numWrapper.appendChild(numSpan);
+
+    const annBtn = document.createElement("button");
+    annBtn.className = "absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-slate-200 rounded z-30";
+    annBtn.innerHTML = '<i class="fa-solid fa-bullhorn text-[8px] text-amber-500"></i>';
+    annBtn.onclick = (e) => {
+      e.stopPropagation();
+      openAnnouncementModal(dateStr);
+    };
+    annBtn.title = "Announcements";
+    cell.appendChild(annBtn);
 
     if (calendarFilters.showOffdays && isManagerOffday) {
       const line = document.createElement("span");
