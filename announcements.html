@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Announcements - NADI SCSB</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  </head>
+  <body class="min-h-screen flex flex-col text-slate-800 font-sans bg-slate-50">
+    <header class="sticky top-0 z-40 header-bg shadow-md">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="index.html" class="flex items-center gap-2 text-white hover:text-slate-200 transition-colors">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span class="text-xs font-bold">Back</span>
+          </a>
+          <div class="w-px h-6 bg-white/20"></div>
+          <div>
+            <h1 class="text-base font-bold leading-tight text-white">Announcements</h1>
+            <p class="text-[9px] font-bold text-slate-300 tracking-wider">NADI SCSB</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-grow w-full px-4 py-6">
+      <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-xl shadow-card border border-slate-200 overflow-hidden">
+          <div class="p-4 border-b border-slate-100">
+            <div class="flex flex-wrap gap-2">
+              <button data-ann-filter="all" onclick="setAnnouncementFilter('all')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-nadi text-white">All</button>
+              <button data-ann-filter="Urgent" onclick="setAnnouncementFilter('Urgent')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-red-500 text-white hover:bg-red-600">Urgent</button>
+              <button data-ann-filter="TP" onclick="setAnnouncementFilter('TP')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">TP</button>
+              <button data-ann-filter="Samudra" onclick="setAnnouncementFilter('Samudra')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">Samudra</button>
+              <button data-ann-filter="Maxis" onclick="setAnnouncementFilter('Maxis')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">Maxis</button>
+              <button data-ann-filter="SSO" onclick="setAnnouncementFilter('SSO')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">SSO</button>
+            </div>
+          </div>
+
+          <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-end">
+            <button onclick="annShowAddForm()" class="px-4 py-2 bg-nadi hover:bg-[#1b1d8a] text-white text-xs font-bold rounded-lg shadow transition-colors flex items-center gap-2">
+              <i class="fa-solid fa-plus-circle"></i> Add Announcement
+            </button>
+          </div>
+
+          <div id="announcementListContainer" class="p-4 space-y-4">
+            <p class="text-sm text-slate-400 text-center py-8">Loading announcements...</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="addForm" class="hidden fixed top-20 right-4 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+      <div class="px-4 py-3 bg-nadi flex justify-between items-center">
+        <h3 class="text-xs font-bold text-white">Create Announcement</h3>
+        <button onclick="annHideAddForm()" class="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+      </div>
+      <div class="p-4 space-y-3 max-h-[calc(100vh-180px)] overflow-y-auto">
+        <div>
+          <input type="text" id="announcementTitle" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" placeholder="Title..." />
+        </div>
+        <div class="grid grid-cols-5 gap-1">
+          <label class="relative cursor-pointer group">
+            <input type="radio" name="annCategory" value="Urgent" onchange="annCategoryChanged()" class="peer sr-only" />
+            <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-red-700 peer-checked:border-red-400 peer-checked:bg-red-50 text-center transition-all flex items-center justify-center">
+              <span class="text-[8px] font-bold uppercase">Urgent</span>
+            </div>
+          </label>
+          <label class="relative cursor-pointer group">
+            <input type="radio" name="annCategory" value="TP" onchange="annCategoryChanged()" class="peer sr-only" />
+            <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-slate-600 peer-checked:border-slate-400 peer-checked:bg-slate-100 text-center transition-all flex items-center justify-center">
+              <span class="text-[8px] font-bold uppercase">TP</span>
+            </div>
+          </label>
+          <label class="relative cursor-pointer group">
+            <input type="radio" name="annCategory" value="Samudra" onchange="annCategoryChanged()" class="peer sr-only" />
+            <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-cyan-700 peer-checked:border-cyan-400 peer-checked:bg-cyan-50 text-center transition-all flex items-center justify-center">
+              <span class="text-[8px] font-bold uppercase">Samudra</span>
+            </div>
+          </label>
+          <label class="relative cursor-pointer group">
+            <input type="radio" name="annCategory" value="Maxis" onchange="annCategoryChanged()" class="peer sr-only" />
+            <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-rose-700 peer-checked:border-rose-400 peer-checked:bg-rose-50 text-center transition-all flex items-center justify-center">
+              <span class="text-[8px] font-bold uppercase">Maxis</span>
+            </div>
+          </label>
+          <label class="relative cursor-pointer group">
+            <input type="radio" name="annCategory" value="SSO" onchange="annCategoryChanged()" class="peer sr-only" />
+            <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-nadi peer-checked:border-nadi peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center">
+              <span class="text-[8px] font-bold uppercase">SSO</span>
+            </div>
+          </label>
+        </div>
+        <div id="ssoMainContainer" class="hidden">
+          <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Category</label>
+          <div class="grid grid-cols-2 gap-1.5">
+            <label class="relative cursor-pointer group">
+              <input type="radio" name="ssoCategory" value="Usahawan" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-yellow-700 peer-checked:border-yellow-400 peer-checked:bg-yellow-50 text-center transition-all flex items-center justify-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
+                <span class="text-[9px] font-bold uppercase">Usahawan</span>
+              </div>
+            </label>
+            <label class="relative cursor-pointer group">
+              <input type="radio" name="ssoCategory" value="Kesejahteraan Kendiri" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-emerald-700 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 text-center transition-all flex items-center justify-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span class="text-[9px] font-bold uppercase">Kesejahteraan</span>
+              </div>
+            </label>
+            <label class="relative cursor-pointer group">
+              <input type="radio" name="ssoCategory" value="Keseddar an" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-violet-700 peer-checked:border-violet-400 peer-checked:bg-violet-50 text-center transition-all flex items-center justify-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
+                <span class="text-[9px] font-bold uppercase">Keseddar an</span>
+              </div>
+            </label>
+            <label class="relative cursor-pointer group">
+              <input type="radio" name="ssoCategory" value="Inisiatif Kerajaan" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-red-700 peer-checked:border-red-400 peer-checked:bg-red-50 text-center transition-all flex items-center justify-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                <span class="text-[9px] font-bold uppercase">Kerajaan</span>
+              </div>
+            </label>
+            <label class="relative cursor-pointer group col-span-2">
+              <input type="radio" name="ssoCategory" value="Pembelajaran Sepanjang Hayat" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-blue-700 peer-checked:border-blue-400 peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                <span class="text-[9px] font-bold uppercase">Pembelajaran</span>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div id="ssoSubContainer" class="hidden">
+          <select id="announcementSSOSub" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi">
+            <option value="">Select subcategory...</option>
+          </select>
+        </div>
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <div class="flex gap-0.5 p-1.5 bg-slate-100 border-b border-slate-200">
+            <button type="button" onclick="annExecFormat('bold')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Bold"><i class="fa-solid fa-bold text-[10px]"></i></button>
+            <button type="button" onclick="annExecFormat('italic')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Italic"><i class="fa-solid fa-italic text-[10px]"></i></button>
+            <button type="button" onclick="annExecFormat('underline')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Underline"><i class="fa-solid fa-underline text-[10px]"></i></button>
+            <select onchange="annChangeFontSize(this.value)" class="px-1.5 h-7 bg-white border border-slate-200 rounded text-[10px] font-semibold outline-none cursor-pointer text-slate-600">
+              <option value="" disabled selected>Size</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+            </select>
+            <button type="button" onclick="annInsertLink()" class="w-7 h-7 rounded hover:bg-slate-200 text-blue-600 flex items-center justify-center transition-colors" title="Link"><i class="fa-solid fa-link text-[10px]"></i></button>
+          </div>
+          <div id="announcementEditor" contenteditable="true" class="w-full min-h-[80px] p-2 bg-white text-xs text-slate-700 outline-none" placeholder="Details..."></div>
+        </div>
+        <input type="date" id="announcementDueDate" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" />
+        <div class="flex gap-2">
+          <button onclick="annSaveAnnouncement()" class="flex-1 py-2 bg-nadi hover:bg-[#1b1d8a] text-white text-xs font-bold rounded-lg shadow transition-colors">Save</button>
+          <button onclick="annHideAddForm()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-bold rounded-lg transition-colors">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs font-bold px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2">
+      <i class="fa-solid fa-check-circle text-green-400"></i>
+      <span id="toastMessage">Saved successfully!</span>
+    </div>
+
+    <div id="urlInputModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="annCloseUrlInputModal()"></div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
+            <h3 class="text-base font-bold text-slate-900">Insert Link</h3>
+            <button onclick="annCloseUrlInputModal()" class="w-7 h-7 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500"><i class="fa-solid fa-xmark text-xs"></i></button>
+          </div>
+          <div class="p-4 space-y-3">
+            <div>
+              <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Display Text</label>
+              <input type="text" id="annLinkTextField" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" placeholder="Click here" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-500 uppercase block mb-1">URL <span class="text-red-500">*</span></label>
+              <input type="url" id="annUrlInputField" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" placeholder="https://example.com" onkeydown="if(event.key==='Enter') annConfirmInsertLink()" />
+            </div>
+          </div>
+          <div class="px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
+            <button onclick="annCloseUrlInputModal()" class="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800">Cancel</button>
+            <button onclick="annConfirmInsertLink()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-lg shadow">Insert</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ['"Plus Jakarta Sans"', "sans-serif"] },
+            colors: { nadi: "#2228a4" },
+            boxShadow: { card: "0 2px 10px -2px rgba(0, 0, 0, 0.05)" },
+          },
+        },
+      };
+    </script>
+    <script src="config.js"></script>
+    <script>
+      let announcements = [];
+      let siteSettings = {
+        title: "NADI SCSB",
+        subtitle: "PULAU PINANG",
+        sections: [],
+        managerOffdays: [],
+        assistantManagerOffdays: [],
+        managerReplacements: [],
+        assistantManagerReplacements: [],
+        publicHolidays: {},
+        schoolHolidays: {},
+        calendarFilters: { showCategories: true, showHolidays: true, showSchoolHolidays: true, showOffdays: true },
+        announcements: [],
+      };
+      currentAnnouncementFilter = "all";
+      annEditingId = null;
+
+      function annShowAddForm() {
+        document.getElementById("addForm").classList.remove("hidden");
+        document.getElementById("announcementTitle").focus();
+        document.getElementById("announcementEditor").style.fontSize = "11px";
+        
+        const filter = currentAnnouncementFilter;
+        if (filter && filter !== "all") {
+          const catRadio = document.querySelector(`input[name="annCategory"][value="${filter}"]`);
+          if (catRadio) catRadio.checked = true;
+          annCategoryChanged();
+        } else {
+          document.querySelectorAll('input[name="annCategory"]').forEach(r => r.checked = false);
+          document.getElementById("ssoMainContainer").classList.add("hidden");
+          document.getElementById("ssoSubContainer").classList.add("hidden");
+        }
+      }
+
+      function annHideAddForm() {
+        document.getElementById("addForm").classList.add("hidden");
+        document.getElementById("announcementTitle").value = "";
+        document.getElementById("announcementEditor").innerHTML = "";
+        document.getElementById("announcementEditor").style.fontSize = "11px";
+        const allRadio = document.querySelector('input[name="annCategory"][value="Urgent"]');
+        if (allRadio) allRadio.checked = true;
+        document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
+        document.getElementById("announcementSSOSub").value = "";
+        document.getElementById("announcementDueDate").value = "";
+        document.getElementById("ssoMainContainer").classList.add("hidden");
+        document.getElementById("ssoSubContainer").classList.add("hidden");
+        annEditingId = null;
+      }
+
+      function annCategoryChanged() {
+        const category = document.querySelector('input[name="annCategory"]:checked')?.value || "all";
+        const ssoMainContainer = document.getElementById("ssoMainContainer");
+        const ssoSubContainer = document.getElementById("ssoSubContainer");
+        if (category === "SSO") {
+          ssoMainContainer.classList.remove("hidden");
+          ssoSubContainer.classList.add("hidden");
+          document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
+          document.getElementById("announcementSSOSub").value = "";
+        } else {
+          ssoMainContainer.classList.add("hidden");
+          ssoSubContainer.classList.add("hidden");
+          document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
+          document.getElementById("announcementSSOSub").value = "";
+        }
+      }
+
+      function showToast(message) {
+        const toast = document.getElementById("toast");
+        const toastMessage = document.getElementById("toastMessage");
+        toastMessage.textContent = message;
+        toast.classList.remove("translate-y-20", "opacity-0");
+        setTimeout(() => {
+          toast.classList.add("translate-y-20", "opacity-0");
+        }, 3000);
+      }
+
+      function annSSOMainChanged() {
+        const mainCategory = document.querySelector('input[name="ssoCategory"]:checked')?.value;
+        const ssoSubContainer = document.getElementById("ssoSubContainer");
+        const ssoSubSelect = document.getElementById("announcementSSOSub");
+        const subMap = {
+          "Usahawan": ["eKelas Keusahawanan (Maxis)", "Preneur/EmpowHER", "Kidventure"],
+          "Kesejahteraan Kendiri": ["Care"],
+          "Keseddar an": ["Safe & Shield"],
+          "Inisiatif Kerajaan": [],
+          "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
+        };
+        if (mainCategory && subMap[mainCategory] && subMap[mainCategory].length > 0) {
+          ssoSubContainer.classList.remove("hidden");
+          ssoSubSelect.innerHTML = '<option value="">Select...</option>';
+          subMap[mainCategory].forEach((sub) => {
+            const opt = document.createElement("option");
+            opt.value = sub;
+            opt.textContent = sub;
+            ssoSubSelect.appendChild(opt);
+          });
+        } else {
+          ssoSubContainer.classList.add("hidden");
+          ssoSubSelect.value = "";
+        }
+      }
+
+      function annExecFormat(command) {
+        document.execCommand(command, false, null);
+        document.getElementById("announcementEditor").focus();
+      }
+
+      function annChangeFontSize(size) {
+        if (size) {
+          const selectedSize = size + "px";
+          document.execCommand("fontSize", false, "7");
+          setTimeout(() => {
+            const editor = document.getElementById("announcementEditor");
+            const fontTags = editor.querySelectorAll('font[size="7"]');
+            fontTags.forEach((fontTag) => {
+              fontTag.style.fontSize = selectedSize;
+              fontTag.removeAttribute("size");
+            });
+          }, 10);
+        }
+        document.getElementById("announcementEditor").focus();
+      }
+
+      function annClearFormatting() {
+        document.execCommand("removeFormat", false, null);
+        document.getElementById("announcementEditor").focus();
+      }
+
+      function annInsertLink() {
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        document.getElementById("annLinkTextField").value = selectedText;
+        document.getElementById("annUrlInputField").value = "https://";
+        document.getElementById("urlInputModal").classList.remove("hidden");
+        setTimeout(() => document.getElementById("annUrlInputField").focus(), 100);
+      }
+
+      function annConfirmInsertLink() {
+        const url = document.getElementById("annUrlInputField").value.trim();
+        if (!url) { alert("Please enter a URL."); return; }
+        const text = document.getElementById("annLinkTextField").value.trim();
+        const linkText = text || url;
+        document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" class="text-blue-600 underline">${linkText}</a>`);
+        annCloseUrlInputModal();
+      }
+
+      function annCloseUrlInputModal() {
+        document.getElementById("urlInputModal").classList.add("hidden");
+      }
+
+      function formatDateStr(dateInput) {
+        if (!dateInput) return "";
+        try {
+          let date;
+          if (typeof dateInput === "string" && dateInput.includes("T")) {
+            date = new Date(dateInput);
+          } else if (typeof dateInput === "string") {
+            date = new Date(dateInput + "T00:00:00");
+          } else {
+            date = new Date(dateInput);
+          }
+          if (isNaN(date.getTime())) return "";
+          return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+        } catch (e) { return ""; }
+      }
+
+      function formatDueDate(dateStr, timeStr) {
+        if (!dateStr) return "";
+        let result = formatDateStr(dateStr);
+        if (timeStr) {
+          const [h, m] = timeStr.split(":");
+          const hour = parseInt(h);
+          const ampm = hour >= 12 ? "PM" : "AM";
+          const hour12 = hour % 12 || 12;
+          result += `, ${hour12}:${m} ${ampm}`;
+        }
+        return result;
+      }
+
+      function sanitizeHTML(html) {
+        if (typeof DOMPurify !== "undefined") return DOMPurify.sanitize(html);
+        const temp = document.createElement("div");
+        temp.textContent = html;
+        return temp.innerHTML;
+      }
+
+      function setAnnouncementFilter(filter) {
+        currentAnnouncementFilter = filter;
+        document.querySelectorAll('[data-ann-filter]').forEach((btn) => {
+          const btnFilter = btn.dataset.annFilter;
+          if (btnFilter === filter) {
+            btn.className = `px-4 py-2 text-xs font-bold rounded-lg transition-colors ${filter === "Urgent" ? "bg-red-500 text-white" : "bg-nadi text-white"}`;
+          } else {
+            btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200";
+          }
+        });
+        renderAnnouncementList();
+      }
+
+      function renderAnnouncementList() {
+        const container = document.getElementById("announcementListContainer");
+        if (!container) return;
+        const filter = currentAnnouncementFilter;
+        let filtered = announcements;
+        if (filter === "Urgent") filtered = announcements.filter((a) => a.isUrgent);
+        else if (filter !== "all") filtered = announcements.filter((a) => a.category === filter);
+        filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        if (!filtered || filtered.length === 0) {
+          container.innerHTML = '<div class="text-center py-12"><div class="text-slate-300 text-4xl mb-3"><i class="fa-regular fa-calendar-xmark"></i></div><p class="text-slate-500 text-sm">No announcements yet</p></div>';
+          return;
+        }
+          container.innerHTML = filtered.map((ann) => {
+          const createdDate = formatDateStr(ann.createdAt);
+          const isUrgent = ann.isUrgent || ann.category === "Urgent";
+          const dueDisplay = ann.dueDate ? `<span class="inline-flex items-center gap-1 text-red-600 font-bold text-[9px] bg-red-50 px-2 py-1 rounded"><i class="fa-regular fa-clock"></i> Due: ${formatDueDate(ann.dueDate, ann.dueTime)}</span>` : "";
+          const urgentBadge = isUrgent ? '<span class="inline-block bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded">URGENT</span>' : "";
+          
+          let topLeftLabel = "";
+          let bottomLeftLabel = "";
+          
+          if (ann.category === "SSO") {
+            const catColors = {
+              "Usahawan": { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" },
+              "Kesejahteraan Kendiri": { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" },
+              "Keseddar an": { bg: "bg-violet-100", text: "text-violet-700", border: "border-violet-200" },
+              "Inisiatif Kerajaan": { bg: "bg-red-100", text: "text-red-700", border: "border-red-200" },
+              "Pembelajaran Sepanjang Hayat": { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" },
+            };
+            const colors = catColors[ann.ssoMain] || catColors["Usahawan"];
+            const ssoLabel = `<span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded text-left ${colors.bg} ${colors.text} border ${colors.border}">${ann.ssoMain}</span>`;
+            const ssoSubLabel = ann.ssoSub ? `<span class="text-[8px] ${colors.text} font-semibold ml-1">${ann.ssoSub}</span>` : "";
+            topLeftLabel = `<div class="mb-0.5 flex items-center gap-1 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #2228a4; color: white;">SSO</span>${ssoLabel}${ssoSubLabel}</div>`;
+            bottomLeftLabel = ``;
+          } else if (ann.category === "Urgent") {
+            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #dc2626; color: white;">Urgent</span></div>`;
+            bottomLeftLabel = ``;
+          } else if (ann.category === "Maxis") {
+            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #46c910; color: white;">Maxis</span></div>`;
+          } else if (ann.category === "Samudra") {
+            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94237a; color: white;">Samudra</span></div>`;
+          } else if (ann.category === "TP") {
+            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #f97316; color: white;">TP</span></div>`;
+          } else {
+            topLeftLabel = `<span class="text-[8px] font-bold text-slate-400 uppercase block mb-0.5">${ann.category}</span>`;
+          }
+          
+          return `
+            <div class="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+              <div class="flex justify-between items-start">
+                <div class="flex-1 pr-2">
+                  ${topLeftLabel}
+                  <h3 class="text-sm font-bold text-slate-800 leading-tight">${sanitizeHTML(ann.title)}</h3>
+                  ${bottomLeftLabel}
+                </div>
+                <div class="flex gap-1.5">
+                  <button onclick="annEditAnnouncement('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-pen text-[10px]"></i></button>
+                  <button onclick="annDeleteAnnouncement('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
+                </div>
+              </div>
+              <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTML(ann.content) : ""}</div>
+              <div class="flex items-center justify-between pt-2 border-t border-slate-100 mt-3">
+                ${dueDisplay}
+                <span class="text-[8px] text-slate-400 ml-auto">Created on: ${createdDate}</span>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function annSaveAnnouncement() {
+        const title = document.getElementById("announcementTitle").value.trim();
+        const content = document.getElementById("announcementEditor").innerHTML;
+        const category = document.querySelector('input[name="annCategory"]:checked')?.value || "all";
+        const ssoMain = document.querySelector('input[name="ssoCategory"]:checked')?.value || "";
+        const ssoSub = document.getElementById("announcementSSOSub").value;
+        const dueDate = document.getElementById("announcementDueDate").value;
+        if (!title) { showToast("Please enter a title."); return; }
+        if (category === "SSO" && !ssoMain) { showToast("Please select SSO category."); return; }
+        const isUrgent = category === "Urgent";
+        const saveCategory = isUrgent ? "Urgent" : category;
+        const saveSSOMain = category === "SSO" ? ssoMain : "";
+        const saveSSOSub = category === "SSO" ? ssoSub : "";
+        if (annEditingId) {
+          const idx = announcements.findIndex((a) => a.id === annEditingId);
+          if (idx !== -1) {
+            announcements[idx] = { ...announcements[idx], title, content, category: saveCategory, ssoMain: saveSSOMain, ssoSub: saveSSOSub, dueDate, isUrgent, updatedAt: new Date().toISOString() };
+          }
+        } else {
+          announcements.push({ id: Date.now().toString(), title, content, category: saveCategory, ssoMain: saveSSOMain, ssoSub: saveSSOSub, dueDate, isUrgent, createdAt: new Date().toISOString() });
+        }
+        siteSettings.announcements = announcements;
+        database.ref("siteSettings").set(siteSettings);
+        annHideAddForm();
+        renderAnnouncementList();
+        showToast("Announcement saved!");
+      }
+
+      function annDeleteAnnouncement(id) {
+        if (!confirm("Delete this announcement?")) return;
+        announcements = announcements.filter((a) => a.id !== id);
+        siteSettings.announcements = announcements;
+        database.ref("siteSettings").set(siteSettings);
+        renderAnnouncementList();
+      }
+
+      function annEditAnnouncement(id) {
+        const ann = announcements.find((a) => a.id === id);
+        if (!ann) return;
+        annShowAddForm();
+        annEditingId = id;
+        document.getElementById("announcementTitle").value = ann.title;
+        document.getElementById("announcementEditor").innerHTML = ann.content || "";
+        document.getElementById("announcementEditor").style.fontSize = "11px";
+        const categoryToSelect = ann.category === "Urgent" ? "Urgent" : ann.category || "all";
+        const catRadio = document.querySelector(`input[name="annCategory"][value="${categoryToSelect}"]`);
+        if (catRadio) catRadio.checked = true;
+        annCategoryChanged();
+        if (ann.ssoMain) {
+          const radio = document.querySelector(`input[name="ssoCategory"][value="${ann.ssoMain}"]`);
+          if (radio) radio.checked = true;
+          annSSOMainChanged();
+          document.getElementById("announcementSSOSub").value = ann.ssoSub || "";
+        }
+        document.getElementById("announcementDueDate").value = ann.dueDate || "";
+      }
+
+      document.addEventListener("DOMContentLoaded", function() {
+        database.ref("siteSettings").once("value", (snapshot) => {
+          const settings = snapshot.val() || {};
+          if (settings.announcements) announcements = settings.announcements;
+          renderAnnouncementList();
+        });
+      });
+    </script>
+  </body>
+</html>
