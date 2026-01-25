@@ -25,6 +25,59 @@ addRange("Cuti Pertengahan Tahun", "2026-05-22", "2026-06-06");
 addRange("Cuti Penggal 2", "2026-08-28", "2026-09-05");
 addRange("Cuti Akhir Tahun", "2026-12-04", "2026-12-31");
 
+function sanitizeHTML(html) {
+  if (typeof DOMPurify !== "undefined") {
+    return DOMPurify.sanitize(html);
+  }
+  const temp = document.createElement("div");
+  temp.textContent = html;
+  return temp.innerHTML;
+}
+
+function formatDate(dateStr, options = { weekday: "short", day: "numeric", month: "short", year: "numeric" }) {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-GB", options);
+}
+
+function showModal(modalId, panelId, focusId = null) {
+  const modal = document.getElementById(modalId);
+  const panel = document.getElementById(panelId);
+  if (!modal || !panel) return;
+
+  modal.classList.remove("hidden");
+
+  setTimeout(() => {
+    panel.style.transform = "scale(1)";
+    panel.style.opacity = "1";
+  }, 10);
+
+  if (focusId) {
+    setTimeout(() => {
+      const focusEl = document.getElementById(focusId);
+      if (focusEl) focusEl.focus();
+    }, 100);
+  }
+}
+
+function hideModal(modalId, panelId, callback = null) {
+  const modal = document.getElementById(modalId);
+  const panel = document.getElementById(panelId);
+  if (!modal || !panel) return;
+
+  panel.style.transform = "scale(0.95)";
+  panel.style.opacity = "0";
+
+  setTimeout(() => {
+    modal.classList.add("hidden");
+    if (callback) callback();
+  }, 200);
+}
+
+function toggleChevron(icon, isOpen) {
+  if (!icon) return;
+  icon.classList.toggle("fa-chevron-up", isOpen);
+  icon.classList.toggle("fa-chevron-down", !isOpen);
+}
+
 let today = new Date();
 let currentMonth = today.getMonth();
 let currentYear = today.getFullYear();
@@ -60,13 +113,10 @@ let tempPublicHolidays = {};
 let tempSchoolHolidays = {};
 
 function loadFromFirebase() {
-  console.log("Loading data from Firebase...");
-
   database.ref("events").once(
     "value",
     (snapshot) => {
       events = snapshot.val() || [];
-      console.log("Events loaded:", events.length);
       renderCalendar();
       renderEventList();
     },
@@ -92,7 +142,6 @@ function loadFromFirebase() {
         publicHolidays: loadedSettings.publicHolidays || {},
         schoolHolidays: loadedSettings.schoolHolidays || {},
       };
-      console.log("Settings loaded:", siteSettings);
       updateUIFromSettings();
       renderCustomLinks();
       renderCalendar();
@@ -109,10 +158,8 @@ function loadFromFirebase() {
 
 function saveToFirebase() {
   if (!isDataLoaded) return;
-  console.log("Saving to Firebase...");
   database.ref("events").set(events);
   database.ref("siteSettings").set(siteSettings);
-  console.log("Data saved!");
 }
 
 function updateUIFromSettings() {
@@ -121,7 +168,6 @@ function updateUIFromSettings() {
 }
 
 (function init() {
-  console.log("Init function starting...");
   const dayName = today.toLocaleDateString("en-MY", { weekday: "long" });
   const dateFull = today.toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
   document.getElementById("current-date-header").innerHTML = `
@@ -154,16 +200,13 @@ function updateUIFromSettings() {
     endTime2HourSelect.appendChild(opt4);
   }
 
-  console.log("Calling renderCalendar and renderEventList...");
   renderCalendar();
   renderEventList();
 
   loadFromFirebase();
   loadCalendarFilters();
 
-  console.log("Setting up event listeners...");
   document.getElementById("prevMonth").addEventListener("click", () => {
-    console.log("Prev month clicked");
     currentMonth--;
     if (currentMonth < 0) {
       currentMonth = 11;
@@ -174,7 +217,6 @@ function updateUIFromSettings() {
   });
 
   document.getElementById("nextMonth").addEventListener("click", () => {
-    console.log("Next month clicked");
     currentMonth++;
     if (currentMonth > 11) {
       currentMonth = 0;
@@ -289,12 +331,7 @@ function renderOffdayLists() {
     const div = document.createElement("div");
     div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
     div.innerHTML = `
-      <span class="text-[10px] font-semibold text-slate-600">${new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })}</span>
+      <span class="text-[10px] font-semibold text-slate-600">${formatDate(date)}</span>
       <button onclick="removeOffday('manager', ${idx})" class="text-red-400 hover:text-red-600 transition-colors">
         <i class="fa-solid fa-times text-[10px]"></i>
       </button>
@@ -312,12 +349,7 @@ function renderOffdayLists() {
     const div = document.createElement("div");
     div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
     div.innerHTML = `
-      <span class="text-[10px] font-semibold text-slate-600">${new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })}</span>
+      <span class="text-[10px] font-semibold text-slate-600">${formatDate(date)}</span>
       <button onclick="removeOffday('am', ${idx})" class="text-red-400 hover:text-red-600 transition-colors">
         <i class="fa-solid fa-times text-[10px]"></i>
       </button>
@@ -412,12 +444,7 @@ function renderReplacementLists() {
       const div = document.createElement("div");
       div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
       div.innerHTML = `
-        <span class="text-[10px] font-semibold text-slate-600">${new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })}</span>
+        <span class="text-[10px] font-semibold text-slate-600">${formatDate(date)}</span>
         <button onclick="removeReplacementDate('manager', '${date}')" class="text-red-400 hover:text-red-600 transition-colors">
           <i class="fa-solid fa-times text-[10px]"></i>
         </button>
@@ -437,12 +464,7 @@ function renderReplacementLists() {
       const div = document.createElement("div");
       div.className = "flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-200";
       div.innerHTML = `
-        <span class="text-[10px] font-semibold text-slate-600">${new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })}</span>
+        <span class="text-[10px] font-semibold text-slate-600">${formatDate(date)}</span>
         <button onclick="removeReplacementDate('am', '${date}')" class="text-red-400 hover:text-red-600 transition-colors">
           <i class="fa-solid fa-times text-[10px]"></i>
         </button>
@@ -1170,14 +1192,12 @@ function renderCategoryCounts() {
 }
 
 function renderEventList() {
-  console.log("renderEventList called, events length:", events.length);
   renderCategoryCounts();
   const container = document.getElementById("eventListContainer");
   if (!container) {
     console.error("eventListContainer not found!");
     return;
   }
-  console.log("Container found, setting innerHTML");
   container.innerHTML = "";
 
   let displayEvents = [];
@@ -1283,7 +1303,7 @@ function renderEventList() {
               <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]" style="color: #cb233b;"></i>
             </button>
           </div>
-          <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content">${ev.info}</div>
+          <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content">${sanitizeHTML(ev.info)}</div>
         ` : ""}
         ${linksHtml}
         <div class="absolute top-0 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
@@ -1330,14 +1350,7 @@ function removeLinkRow(id) {
 }
 
 function openModal(id = null, dateHint = null) {
-  const modal = document.getElementById("eventModal");
-  const panel = document.getElementById("modalPanel");
-  modal.classList.remove("hidden");
-
-  setTimeout(() => {
-    panel.style.transform = "scale(1)";
-    panel.style.opacity = "1";
-  }, 10);
+  showModal("eventModal", "modalPanel", "eventTitle");
 
   if (id) {
     const ev = events.find((e) => e.id === id);
@@ -1352,15 +1365,16 @@ function openModal(id = null, dateHint = null) {
 
     programInfoContent = ev.info || "";
     updateProgramInfoPreview();
-    if (ev.info) {
-      document.getElementById("programInfoContainer").classList.remove("hidden");
-      document.getElementById("infoToggleIcon").classList.add("fa-chevron-up");
-      document.getElementById("infoToggleIcon").classList.remove("fa-chevron-down");
+    const hasInfo = !!ev.info;
+    const infoContainer = document.getElementById("programInfoContainer");
+    const infoIcon = document.getElementById("infoToggleIcon");
+
+    if (hasInfo) {
+      infoContainer.classList.remove("hidden");
     } else {
-      document.getElementById("programInfoContainer").classList.add("hidden");
-      document.getElementById("infoToggleIcon").classList.remove("fa-chevron-up");
-      document.getElementById("infoToggleIcon").classList.add("fa-chevron-down");
+      infoContainer.classList.add("hidden");
     }
+    toggleChevron(infoIcon, hasInfo);
 
     const catRadio = document.querySelector(`input[name="category"][value="${ev.category}"]`);
     if (catRadio) {
@@ -1525,16 +1539,14 @@ function updateEndTime2() {
 function toggleProgramInfo() {
   const container = document.getElementById("programInfoContainer");
   const icon = document.getElementById("infoToggleIcon");
+  const isOpen = !container.classList.contains("hidden");
 
-  if (container.classList.contains("hidden")) {
-    container.classList.remove("hidden");
-    icon.classList.remove("fa-chevron-down");
-    icon.classList.add("fa-chevron-up");
-  } else {
+  if (isOpen) {
     container.classList.add("hidden");
-    icon.classList.remove("fa-chevron-up");
-    icon.classList.add("fa-chevron-down");
+  } else {
+    container.classList.remove("hidden");
   }
+  toggleChevron(icon, !isOpen);
 }
 
 function openRichTextEditor() {
@@ -1550,14 +1562,7 @@ function openRichTextEditor() {
     }, 0);
   };
 
-  modal.classList.remove("hidden");
-
-  setTimeout(() => {
-    panel.style.transform = "scale(1)";
-    panel.style.opacity = "1";
-  }, 10);
-
-  setTimeout(() => editor.focus(), 100);
+  showModal("richTextModal", "richTextPanel", "richTextEditor");
 }
 
 function autoConvertUrlsToLinks(editor) {
@@ -1606,15 +1611,7 @@ function autoConvertUrlsToLinks(editor) {
 }
 
 function closeRichTextModal() {
-  const modal = document.getElementById("richTextModal");
-  const panel = document.getElementById("richTextPanel");
-
-  panel.style.transform = "scale(0.95)";
-  panel.style.opacity = "0";
-
-  setTimeout(() => {
-    modal.classList.add("hidden");
-  }, 200);
+  hideModal("richTextModal", "richTextPanel");
 }
 
 function execFormat(command) {
@@ -1703,15 +1700,7 @@ function confirmInsertLink() {
 }
 
 function closeUrlInputModal() {
-  const modal = document.getElementById("urlInputModal");
-  const panel = document.getElementById("urlInputPanel");
-
-  panel.style.transform = "scale(0.95)";
-  panel.style.opacity = "0";
-
-  setTimeout(() => {
-    modal.classList.add("hidden");
-  }, 200);
+  hideModal("urlInputModal", "urlInputPanel");
 }
 
 function clearFormatting() {
@@ -1752,15 +1741,7 @@ function updateProgramInfoPreview() {
 }
 
 function closeConfirmModal() {
-  const modal = document.getElementById("confirmModal");
-  const panel = document.getElementById("confirmModalPanel");
-
-  panel.style.transform = "scale(0.95)";
-  panel.style.opacity = "0";
-
-  setTimeout(() => {
-    modal.classList.add("hidden");
-  }, 200);
+  hideModal("confirmModal", "confirmModalPanel");
 }
 
 function updateSubcategories(categoryValue) {
@@ -1787,16 +1768,14 @@ function updateSubcategories(categoryValue) {
 function toggleEventInfo(eventId) {
   const container = document.getElementById("event-info-" + eventId);
   const icon = document.getElementById("info-icon-" + eventId);
+  const isOpen = !container.classList.contains("hidden");
 
-  if (container.classList.contains("hidden")) {
-    container.classList.remove("hidden");
-    icon.classList.remove("fa-chevron-down");
-    icon.classList.add("fa-chevron-up");
-  } else {
+  if (isOpen) {
     container.classList.add("hidden");
-    icon.classList.remove("fa-chevron-up");
-    icon.classList.add("fa-chevron-down");
+  } else {
+    container.classList.remove("hidden");
   }
+  toggleChevron(icon, !isOpen);
 }
 
 function toggleSecondSession() {
@@ -1816,13 +1795,7 @@ function toggleSecondSession() {
 }
 
 function closeModal() {
-  const modal = document.getElementById("eventModal");
-  const panel = document.getElementById("modalPanel");
-
-  panel.classList.remove("scale-100", "opacity-100");
-  panel.classList.add("scale-95", "opacity-0");
-
-  setTimeout(() => modal.classList.add("hidden"), 300);
+  hideModal("eventModal", "modalPanel");
 }
 
 function saveEvent() {
