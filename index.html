@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <link rel="stylesheet" href="styles.css" />
-
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   </head>
@@ -33,9 +32,17 @@
             </p>
           </div>
         </div>
-        <div class="flex items-center gap-3">
-          <div id="current-date-header" class="hidden sm:flex flex-col items-end border-l border-white/20 pl-3"></div>
-        </div>
+          <div class="flex items-center gap-3">
+            <a
+              href="announcements.html"
+              id="announcementBtn"
+              class="text-[10px] font-bold text-white bg-nadi hover:bg-[#1b1d8a] px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors relative"
+            >
+              <i class="fa-solid fa-bullhorn"></i> Announcements
+              <span id="newAnnouncementDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#2228a4]"></span>
+            </a>
+            <div id="current-date-header" class="hidden sm:flex flex-col items-end border-l border-white/20 pl-3"></div>
+          </div>
       </div>
     </header>
 
