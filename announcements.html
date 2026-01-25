@@ -361,7 +361,7 @@
       }
 
       function formatDateStr(dateInput) {
-        if (!dateInput) return "";
+        if (!dateInput) return { date: "", time: "" };
         try {
           let date;
           if (typeof dateInput === "string" && dateInput.includes("T")) {
@@ -371,14 +371,16 @@
           } else {
             date = new Date(dateInput);
           }
-          if (isNaN(date.getTime())) return "";
-          return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-        } catch (e) { return ""; }
+          if (isNaN(date.getTime())) return { date: "", time: "" };
+          const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+          const timeStr = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+          return { date: dateStr, time: timeStr };
+        } catch (e) { return { date: "", time: "" }; }
       }
 
       function formatDueDate(dateStr, timeStr) {
         if (!dateStr) return "";
-        let result = formatDateStr(dateStr);
+        let result = formatDateStr(dateStr).date;
         if (timeStr) {
           const [h, m] = timeStr.split(":");
           const hour = parseInt(h);
@@ -422,7 +424,7 @@
           return;
         }
           container.innerHTML = filtered.map((ann) => {
-          const createdDate = formatDateStr(ann.createdAt);
+          const { date: createdDateStr, time: createdTimeStr } = formatDateStr(ann.createdAt);
           const isUrgent = ann.isUrgent || ann.category === "Urgent";
           const dueDisplay = ann.dueDate ? `<span class="inline-flex items-center gap-1 text-red-600 font-bold text-[9px] bg-red-50 px-2 py-1 rounded"><i class="fa-regular fa-clock"></i> Due: ${formatDueDate(ann.dueDate, ann.dueTime)}</span>` : "";
           const urgentBadge = isUrgent ? '<span class="inline-block bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded">URGENT</span>' : "";
@@ -470,9 +472,14 @@
                 </div>
               </div>
               <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTML(ann.content) : ""}</div>
-              <div class="flex items-center justify-between pt-2 border-t border-slate-100 mt-3">
-                ${dueDisplay}
-                <span class="text-[8px] text-slate-400 ml-auto">Created on: ${createdDate}</span>
+              <div class="pt-2 border-t border-slate-100 mt-3">
+                <div class="flex justify-between items-end">
+                  ${dueDisplay ? `<div>${dueDisplay}</div>` : '<div></div>'}
+                  <div class="flex flex-col items-end">
+                    <span class="text-[7px] text-slate-400 uppercase font-bold">Created at:</span>
+                    <span class="text-[8px] text-slate-400">${createdTimeStr}, ${createdDateStr}</span>
+                  </div>
+                </div>
               </div>
             </div>
           `;
@@ -537,6 +544,7 @@
       }
 
       document.addEventListener("DOMContentLoaded", function() {
+        setAnnouncementFilter("all");
         database.ref("siteSettings").once("value", (snapshot) => {
           const settings = snapshot.val() || {};
           if (settings.announcements) announcements = settings.announcements;
