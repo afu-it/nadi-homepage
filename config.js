@@ -65,6 +65,14 @@ const defaultSchoolHolidays = {
 
 const platformOptions = ["NES", "Gmeet", "Zoom", "Gform", "Gdrive", "Youtube", "Website", "Jotform"];
 
+const announcementSubcategories = {
+  Usahawan: ["eKelas Keusahawanan (Maxis)", "Preneur/EmpowHER", "Kidventure"],
+  "Kesejahteraan Kendiri": ["Care"],
+  "Keseddar an": ["Safe & Shield"],
+  "Inisiatif Kerajaan": [],
+  "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
+};
+
 const firebaseConfig = {
   apiKey: "AIzaSyBul5HXNuQh8QKExhzYvuVqin7EUrQXBkw",
   authDomain: "nadiscsb-homepage.firebaseapp.com",
