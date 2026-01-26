@@ -188,6 +188,13 @@
               <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
               <div class="flex gap-2">
                 <button
+                  onclick="syncEventsFromFirebase()"
+                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-green-600 hover:border-green-300 shadow-sm"
+                  title="Sync Events from Firebase"
+                >
+                  <i class="fa-solid fa-rotate text-[10px]"></i>
+                </button>
+                <button
                   onclick="toggleFilter()"
                   class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm"
                 >
@@ -313,7 +320,10 @@
                   <h4 class="text-sm font-bold text-slate-800">Manage Custom Links</h4>
                   <p class="text-[10px] text-slate-500">Add sections, buttons & columns</p>
                 </div>
-                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+                <div class="flex items-center gap-2">
+                  <span id="sectionCountBadge" class="hidden text-[9px] font-bold text-white bg-nadi px-2 py-0.5 rounded-full">0</span>
+                  <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+                </div>
               </button>
 
               <button
@@ -400,12 +410,21 @@
                 </div>
               </div>
 
-              <button
-                onclick="openSectionEditor()"
-                class="text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-4 py-2 rounded-lg shadow-md flex items-center gap-2"
-              >
-                <i class="fa-solid fa-plus"></i> New Section
-              </button>
+              <div class="flex gap-2">
+                <button
+                  onclick="syncSectionsFromFirebase()"
+                  class="text-xs font-bold text-nadi bg-white hover:bg-slate-50 border border-nadi px-3 py-2 rounded-lg shadow-md flex items-center gap-2"
+                  title="Sync sections from Firebase"
+                >
+                  <i class="fa-solid fa-rotate"></i> Sync
+                </button>
+                <button
+                  onclick="openSectionEditor()"
+                  class="text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-4 py-2 rounded-lg shadow-md flex items-center gap-2"
+                >
+                  <i class="fa-solid fa-plus"></i> New Section
+                </button>
+              </div>
             </div>
 
             <div class="p-5 flex-1 overflow-y-auto bg-slate-50">

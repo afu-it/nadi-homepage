@@ -103,6 +103,15 @@ let selectedFilterDate = toLocalISOString(today);
 let rangeFilter = { start: null, end: null };
 
 let events = [];
+
+// Ensure events is always an array
+function ensureEventsArray() {
+  if (!Array.isArray(events)) {
+    console.warn("Events is not an array, resetting to empty array");
+    events = [];
+  }
+}
+
 let siteSettings = {
   title: "NADI SCSB",
   subtitle: "PULAU PINANG",
@@ -134,6 +143,55 @@ let showEditDeleteButtons = false;
 let programsListClicks = 0;
 let programsListTimer = null;
 
+function saveToFirebase() {
+  if (!isDataLoaded) return;
+  siteSettings.calendarFilters = siteSettings.calendarFilters || {
+    showCategories: true,
+    showHolidays: true,
+    showSchoolHolidays: true,
+    showOffdays: true,
+  };
+  siteSettings.announcements = announcements;
+
+  // Save events
+  database.ref("events").set(events).catch(err => {
+    console.error("Failed to save events:", err);
+  });
+
+  // Save site settings (includes sections)
+  database.ref("siteSettings").set(siteSettings).then(() => {
+    console.log("Settings saved successfully to Firebase");
+  }).catch(err => {
+    console.error("Failed to save settings:", err);
+  });
+}
+
+function refreshEventsFromFirebase() {
+  return new Promise((resolve, reject) => {
+    database.ref("events").once(
+      "value",
+      (snapshot) => {
+        const newEvents = snapshot.val() || [];
+        if (!Array.isArray(newEvents)) {
+          console.warn("Events from Firebase is not an array, resetting...");
+          newEvents = [];
+        }
+        if (JSON.stringify(events) !== JSON.stringify(newEvents)) {
+          events = newEvents;
+          console.log("✓ Refreshed events from Firebase:", events.length, "events");
+          renderCalendar();
+          renderEventList();
+        }
+        resolve(events);
+      },
+      (error) => {
+        console.error("Error refreshing events:", error);
+        reject(error);
+      }
+    );
+  });
+}
+
 function loadFromFirebase() {
   const loadTimeout = setTimeout(() => {
     if (!firebaseLoaded) {
@@ -149,11 +207,17 @@ function loadFromFirebase() {
     "value",
     (snapshot) => {
       events = snapshot.val() || [];
+      if (!Array.isArray(events)) {
+        console.warn("Events is not an array, converting...");
+        events = [];
+      }
+      console.log("✓ Loaded", events.length, "events from Firebase");
       renderCalendar();
       renderEventList();
     },
     (error) => {
       console.error("Error loading events:", error);
+      events = [];
       renderCalendar();
       renderEventList();
     }
@@ -189,6 +253,22 @@ function loadFromFirebase() {
       renderCalendar();
       renderEventList();
       checkNewAnnouncements();
+
+      // Verify sections in Firebase after loading
+      if (siteSettings.sections && siteSettings.sections.length > 0) {
+        console.log("✓ Loaded", siteSettings.sections.length, "sections from Firebase");
+        verifySectionsInFirebase();
+        updateSectionCountBadge();
+      }
+
+      // Verify events in Firebase after loading
+      if (events && events.length > 0) {
+        console.log("✓ Loaded", events.length, "events from Firebase");
+        verifyEventsInFirebase();
+      } else {
+        console.log("⚠ No events found in Firebase");
+      }
+
       isDataLoaded = true;
       firebaseLoaded = true;
       clearTimeout(loadTimeout);
@@ -206,44 +286,6 @@ function loadFromFirebase() {
       clearTimeout(loadTimeout);
     }
   );
-}
-
-function saveToFirebase() {
-  if (!isDataLoaded) return;
-  siteSettings.calendarFilters = siteSettings.calendarFilters || {
-    showCategories: true,
-    showHolidays: true,
-    showSchoolHolidays: true,
-    showOffdays: true,
-  };
-  siteSettings.announcements = announcements;
-  database.ref("events").set(events).catch(err => {
-    console.error("Failed to save events:", err);
-  });
-  database.ref("siteSettings").set(siteSettings).catch(err => {
-    console.error("Failed to save settings:", err);
-  });
-}
-
-function refreshEventsFromFirebase() {
-  return new Promise((resolve, reject) => {
-    database.ref("events").once(
-      "value",
-      (snapshot) => {
-        const newEvents = snapshot.val() || [];
-        if (JSON.stringify(events) !== JSON.stringify(newEvents)) {
-          events = newEvents;
-          renderCalendar();
-          renderEventList();
-        }
-        resolve(events);
-      },
-      (error) => {
-        console.error("Error refreshing events:", error);
-        reject(error);
-      }
-    );
-  });
 }
 
 function updateUIFromSettings() {
@@ -814,7 +856,21 @@ function saveOffdaySettings() {
 
 function openSectionList() {
   renderSettingsSectionList();
+  updateSectionCountBadge();
   showView("sectionsListView");
+}
+
+function updateSectionCountBadge() {
+  const badge = document.getElementById("sectionCountBadge");
+  if (!badge) return;
+
+  const count = siteSettings.sections ? siteSettings.sections.length : 0;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
 }
 
 function backToSectionList() {
@@ -950,13 +1006,39 @@ function saveSectionLocal() {
 
   if (idx === -1) {
     siteSettings.sections.push(newSection);
+    console.log("Adding new section:", newSection);
   } else {
     siteSettings.sections[idx] = newSection;
+    console.log("Updating section at index", idx, ":", newSection);
   }
 
-  saveToFirebase();
-  renderCustomLinks();
-  openSectionList();
+  console.log("Total sections to save:", siteSettings.sections.length);
+
+  // Save to Firebase with confirmation
+  database.ref("siteSettings").set(siteSettings).then(() => {
+    console.log("✓ Sections saved successfully to Firebase");
+    renderCustomLinks();
+    updateSectionCountBadge();
+    openSectionList();
+    showSectionSaveSuccess();
+  }).catch(err => {
+    console.error("✗ Failed to save sections:", err);
+    alert("Failed to save section. Please try again.");
+  });
+}
+
+function showSectionSaveSuccess() {
+  const saveBtn = document.querySelector('#sectionEditorView button[onclick="saveSectionLocal()"]');
+  const originalText = saveBtn.innerHTML;
+  saveBtn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Saved!';
+  saveBtn.classList.remove('bg-slate-800', 'hover:bg-slate-700');
+  saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+  setTimeout(() => {
+    saveBtn.innerHTML = originalText;
+    saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+    saveBtn.classList.add('bg-slate-800', 'hover:bg-slate-700');
+  }, 2000);
 }
 
 function renderSettingsSectionList() {
@@ -992,6 +1074,9 @@ function renderSettingsSectionList() {
     `;
     container.appendChild(div);
   });
+
+  // Log section count for verification
+  console.log(`✓ Rendering ${siteSettings.sections.length} sections in list`);
 }
 
 function deleteSection() {
@@ -1013,27 +1098,135 @@ function deleteSection() {
   }, 10);
 }
 
+function syncSectionsFromFirebase() {
+  database.ref("siteSettings/sections").once("value", (snapshot) => {
+    const sections = snapshot.val();
+    if (sections && Array.isArray(sections)) {
+      siteSettings.sections = sections;
+      renderCustomLinks();
+      renderSettingsSectionList();
+      console.log("✓ Sections synced from Firebase:", sections.length, "sections loaded");
+    } else {
+      console.log("⚠ No sections found in Firebase");
+    }
+  }, (error) => {
+    console.error("✗ Error syncing sections:", error);
+  });
+}
+
+function syncEventsFromFirebase() {
+  console.log("🔄 Syncing events from Firebase...");
+  database.ref("events").once("value", (snapshot) => {
+    const loadedEvents = snapshot.val();
+    if (Array.isArray(loadedEvents)) {
+      events = loadedEvents;
+      console.log("✓ Events synced from Firebase:", events.length, "events");
+      renderCalendar();
+      renderEventList();
+    } else {
+      console.warn("⚠ Events in Firebase is not an array:", typeof loadedEvents);
+      events = [];
+      renderCalendar();
+      renderEventList();
+    }
+  }, (error) => {
+    console.error("✗ Error syncing events:", error);
+  });
+}
+
+function verifySectionsInFirebase() {
+  database.ref("siteSettings/sections").once("value", (snapshot) => {
+    const sections = snapshot.val();
+    if (sections && sections.length > 0) {
+      console.log("✓ Firebase verification:", sections.length, "sections stored");
+      sections.forEach((sec, i) => {
+        console.log(`  Section ${i + 1}:`, sec.header, `(${sec.buttons ? sec.buttons.length : 0} buttons)`);
+      });
+    } else {
+      console.log("⚠ Firebase verification: No sections stored yet");
+    }
+  });
+}
+
+function verifyEventsInFirebase() {
+  database.ref("events").once("value", (snapshot) => {
+    const events = snapshot.val();
+    if (Array.isArray(events) && events.length > 0) {
+      console.log("✓ Firebase verification:", events.length, "events stored");
+      events.forEach((ev, i) => {
+        const isValid = ev.id && ev.title && ev.start && ev.end;
+        console.log(`  Event ${i + 1}:`, ev.title, `(${ev.start} - ${ev.end}) ${isValid ? '✓' : '✗ INVALID'}`);
+      });
+    } else {
+      console.log("⚠ Firebase verification: No events stored yet");
+    }
+  });
+}
+
+function diagnoseEventIssues() {
+  console.log("=== EVENT DIAGNOSTIC ===");
+  console.log("1. Events array type:", Array.isArray(events) ? "Array ✓" : typeof events);
+  console.log("2. Events length:", events ? events.length : "events is null/undefined");
+  console.log("3. Sample events:");
+  if (Array.isArray(events)) {
+    events.slice(0, 3).forEach((ev, i) => {
+      console.log(`   Event ${i + 1}:`, {
+        id: ev.id,
+        title: ev.title,
+        start: ev.start,
+        end: ev.end,
+        category: ev.category
+      });
+    });
+  }
+  console.log("4. Today's date:", toLocalISOString(today));
+  console.log("5. Selected filter date:", selectedFilterDate || "None");
+  console.log("6. Range filter:", rangeFilter);
+  console.log("7. Current sort:", currentSort);
+  console.log("======================");
+}
+
+// Auto-diagnose on page load
+setTimeout(() => {
+  console.log("Running automatic event diagnostic...");
+  diagnoseEventIssues();
+}, 2000);
+
 function confirmDelete() {
   if (deleteEventId) {
     events = events.filter((e) => e.id !== deleteEventId);
-    saveToFirebase();
-    renderEventList();
-    renderCalendar();
-    closeDeleteModal();
+    database.ref("events").set(events).then(() => {
+      renderEventList();
+      renderCalendar();
+      closeDeleteModal();
+    }).catch(err => {
+      console.error("Failed to delete event:", err);
+    });
   } else if (deleteSectionIdx !== null) {
+    const deletedSection = siteSettings.sections[deleteSectionIdx];
     siteSettings.sections.splice(deleteSectionIdx, 1);
-    saveToFirebase();
-    renderCustomLinks();
-    openSectionList();
+    console.log("Deleting section:", deletedSection);
 
-    setTimeout(() => {
-      document.querySelector("#deleteModal h3").textContent = "Delete Program?";
-      document.querySelector("#deleteModal p").textContent = "This action cannot be undone.";
-    }, 300);
+    database.ref("siteSettings").set(siteSettings).then(() => {
+      console.log("✓ Section deleted successfully");
+      renderCustomLinks();
+      updateSectionCountBadge();
+      openSectionList();
+      closeDeleteModal();
 
-    deleteSectionIdx = null;
+      setTimeout(() => {
+        document.querySelector("#deleteModal h3").textContent = "Delete Program?";
+        document.querySelector("#deleteModal p").textContent = "This action cannot be undone.";
+      }, 300);
+
+      deleteSectionIdx = null;
+    }).catch(err => {
+      console.error("✗ Failed to delete section:", err);
+      alert("Failed to delete section. Please try again.");
+    });
+  } else {
+    closeDeleteModal();
   }
-  closeDeleteModal();
 }
 
 function closeDeleteModal() {
@@ -1511,6 +1704,10 @@ function renderCategoryCounts() {
 
 function renderEventList() {
   renderCategoryCounts();
+
+  // Ensure events is an array
+  ensureEventsArray();
+
   const container = document.getElementById("eventListContainer");
   if (!container) {
     console.error("eventListContainer not found!");
@@ -1518,15 +1715,23 @@ function renderEventList() {
   }
   container.innerHTML = "";
 
+  console.log("renderEventList called - Total events:", events.length);
+
   let displayEvents = [];
 
   if (selectedFilterDate) {
-    displayEvents = events.filter((e) => selectedFilterDate >= e.start && selectedFilterDate <= e.end);
+    displayEvents = events.filter((e) => {
+      const isValid = selectedFilterDate >= e.start && selectedFilterDate <= e.end;
+      return isValid;
+    });
+    console.log("Filtered by selected date:", selectedFilterDate, "->", displayEvents.length, "events");
   } else if (rangeFilter.start && rangeFilter.end) {
     displayEvents = events.filter((e) => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
+    console.log("Filtered by range:", rangeFilter, "->", displayEvents.length, "events");
   } else {
     const todayStr = toLocalISOString(today);
     displayEvents = events.filter((e) => e.end >= todayStr);
+    console.log("Showing upcoming events (from", todayStr, "):", displayEvents.length, "events");
   }
 
   if (currentSort === "category") {
@@ -1558,6 +1763,7 @@ function renderEventList() {
   }
 
   if (displayEvents.length === 0) {
+    console.log("⚠ No events to display");
     container.innerHTML = `
       <div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 text-slate-500 text-xs mt-2">
         <i class="fa-regular fa-calendar-xmark text-2xl text-slate-300 mb-2"></i>
@@ -1568,15 +1774,40 @@ function renderEventList() {
     return;
   }
 
+  console.log("✓ Rendering", displayEvents.length, "event cards");
+
   displayEvents.forEach((ev) => {
+    // Validate event data
+    if (!ev || !ev.id || !ev.start || !ev.end) {
+      console.warn("Invalid event data:", ev);
+      return;
+    }
+
     const cat = categories[ev.category];
+    if (!cat) {
+      console.warn("Invalid category for event:", ev.category, ev);
+      return;
+    }
+
     const card = document.createElement("div");
     card.className = "event-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative";
 
     const startParts = ev.start.split("-");
     const endParts = ev.end.split("-");
+
+    // Validate date parts
+    if (startParts.length !== 3 || endParts.length !== 3) {
+      console.warn("Invalid date format for event:", ev.id, ev.start, ev.end);
+      return;
+    }
+
     const d1 = new Date(startParts[0], startParts[1] - 1, startParts[2]);
     const d2 = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+
+    if (isNaN(d1.getTime()) || isNaN(d2.getTime())) {
+      console.warn("Invalid date for event:", ev.id, d1, d2);
+      return;
+    }
 
     let dateDisplay = d1.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
     if (ev.start !== ev.end) {
