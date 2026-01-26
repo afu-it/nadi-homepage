@@ -27,11 +27,29 @@ addRange("Cuti Akhir Tahun", "2026-12-04", "2026-12-31");
 
 function sanitizeHTML(html) {
   if (typeof DOMPurify !== "undefined") {
-    return DOMPurify.sanitize(html);
+    return DOMPurify.sanitize(html, {
+      ADD_TAGS: ["iframe"],
+      ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "target"],
+      FORBID_TAGS: ["script", "style", "form"],
+    });
   }
   const temp = document.createElement("div");
   temp.textContent = html;
   return temp.innerHTML;
+}
+
+function sanitizeHTMLWithLinks(html) {
+  let sanitized = sanitizeHTML(html);
+  if (typeof document !== "undefined") {
+    const temp = document.createElement("div");
+    temp.innerHTML = sanitized;
+    temp.querySelectorAll("a").forEach((a) => {
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener noreferrer");
+    });
+    return temp.innerHTML;
+  }
+  return sanitized.replace(/<a\s+/gi, '<a target="_blank" rel="noopener noreferrer" ');
 }
 
 function formatDate(dateStr, options = { weekday: "short", day: "numeric", month: "short", year: "numeric" }) {
@@ -112,12 +130,9 @@ let tempPublicHolidays = {};
 let tempSchoolHolidays = {};
 let firebaseLoaded = false;
 let isDataLoaded = false;
-let calendarFilters = {
-  showCategories: true,
-  showHolidays: true,
-  showSchoolHolidays: true,
-  showOffdays: true,
-};
+let showEditDeleteButtons = false;
+let programsListClicks = 0;
+let programsListTimer = null;
 
 function loadFromFirebase() {
   const loadTimeout = setTimeout(() => {
@@ -151,13 +166,13 @@ function loadFromFirebase() {
       siteSettings = {
         title: loadedSettings.title || "NADI SCSB",
         subtitle: loadedSettings.subtitle || "PULAU PINANG",
-        sections: loadedSettings.sections || [],
-        managerOffdays: loadedSettings.managerOffdays || [],
-        assistantManagerOffdays: loadedSettings.assistantManagerOffdays || [],
-        managerReplacements: loadedSettings.managerReplacements || [],
-        assistantManagerReplacements: loadedSettings.assistantManagerReplacements || [],
-        publicHolidays: loadedSettings.publicHolidays || {},
-        schoolHolidays: loadedSettings.schoolHolidays || {},
+        sections: loadedSettings.sections !== undefined ? loadedSettings.sections : [],
+        managerOffdays: loadedSettings.managerOffdays !== undefined ? loadedSettings.managerOffdays : [],
+        assistantManagerOffdays: loadedSettings.assistantManagerOffdays !== undefined ? loadedSettings.assistantManagerOffdays : [],
+        managerReplacements: loadedSettings.managerReplacements !== undefined ? loadedSettings.managerReplacements : [],
+        assistantManagerReplacements: loadedSettings.assistantManagerReplacements !== undefined ? loadedSettings.assistantManagerReplacements : [],
+        publicHolidays: loadedSettings.publicHolidays !== undefined ? loadedSettings.publicHolidays : {},
+        schoolHolidays: loadedSettings.schoolHolidays !== undefined ? loadedSettings.schoolHolidays : {},
         calendarFilters: loadedSettings.calendarFilters || {
           showCategories: true,
           showHolidays: true,
@@ -195,10 +210,40 @@ function loadFromFirebase() {
 
 function saveToFirebase() {
   if (!isDataLoaded) return;
-  siteSettings.calendarFilters = calendarFilters;
+  siteSettings.calendarFilters = siteSettings.calendarFilters || {
+    showCategories: true,
+    showHolidays: true,
+    showSchoolHolidays: true,
+    showOffdays: true,
+  };
   siteSettings.announcements = announcements;
-  database.ref("events").set(events);
-  database.ref("siteSettings").set(siteSettings);
+  database.ref("events").set(events).catch(err => {
+    console.error("Failed to save events:", err);
+  });
+  database.ref("siteSettings").set(siteSettings).catch(err => {
+    console.error("Failed to save settings:", err);
+  });
+}
+
+function refreshEventsFromFirebase() {
+  return new Promise((resolve, reject) => {
+    database.ref("events").once(
+      "value",
+      (snapshot) => {
+        const newEvents = snapshot.val() || [];
+        if (JSON.stringify(events) !== JSON.stringify(newEvents)) {
+          events = newEvents;
+          renderCalendar();
+          renderEventList();
+        }
+        resolve(events);
+      },
+      (error) => {
+        console.error("Error refreshing events:", error);
+        reject(error);
+      }
+    );
+  });
 }
 
 function updateUIFromSettings() {
@@ -335,6 +380,17 @@ function markAnnouncementsAsRead() {
   });
 
   document.getElementById("announcementBtn").addEventListener("click", markAnnouncementsAsRead);
+
+  document.getElementById("programsListHeader").addEventListener("click", () => {
+    programsListClicks++;
+    clearTimeout(programsListTimer);
+    programsListTimer = setTimeout(() => (programsListClicks = 0), 500);
+    if (programsListClicks === 3) {
+      showEditDeleteButtons = !showEditDeleteButtons;
+      programsListClicks = 0;
+      renderEventList();
+    }
+  });
 })();
 
 function showView(viewId) {
@@ -398,9 +454,167 @@ function saveHeaderSettings() {
 }
 
 function openOffdaySettings() {
-  renderOffdayLists();
-  renderReplacementLists();
+  offdayCalendarMonth = new Date().getMonth();
+  offdayCalendarYear = new Date().getFullYear();
+  renderOffdayCalendars();
   showView("offdaySettingsView");
+}
+
+let offdayCalendarMonth = new Date().getMonth();
+let offdayCalendarYear = new Date().getFullYear();
+
+function changeOffdayMonth(delta) {
+  offdayCalendarMonth += delta;
+  if (offdayCalendarMonth > 11) {
+    offdayCalendarMonth = 0;
+    offdayCalendarYear++;
+  } else if (offdayCalendarMonth < 0) {
+    offdayCalendarMonth = 11;
+    offdayCalendarYear--;
+  }
+  renderOffdayCalendars();
+}
+
+function renderOffdayCalendars() {
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  document.getElementById("offdayMonthLabel").textContent = `${monthNames[offdayCalendarMonth]} ${offdayCalendarYear}`;
+
+  const daysInMonth = new Date(offdayCalendarYear, offdayCalendarMonth + 1, 0).getDate();
+  const firstDay = new Date(offdayCalendarYear, offdayCalendarMonth, 1).getDay();
+
+  const mOffdays = siteSettings.managerOffdays || [];
+  const amOffdays = siteSettings.assistantManagerOffdays || [];
+  const mReplacements = siteSettings.managerReplacements || [];
+  const amReplacements = siteSettings.assistantManagerReplacements || [];
+
+  document.getElementById("managerOffdayCount").textContent = `${mOffdays.length} dates`;
+  document.getElementById("amOffdayCount").textContent = `${amOffdays.length} dates`;
+  document.getElementById("managerReplacementCount").textContent = `${mReplacements.length} dates`;
+  document.getElementById("amReplacementCount").textContent = `${amReplacements.length} dates`;
+
+  const renderCalendar = (containerId, type, array, color) => {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+
+    const dayHeaders = ["S", "M", "T", "W", "T", "F", "S"];
+    dayHeaders.forEach(day => {
+      const dayHeader = document.createElement("div");
+      dayHeader.className = "text-[8px] font-bold text-slate-400 uppercase py-1";
+      dayHeader.textContent = day;
+      container.appendChild(dayHeader);
+    });
+
+    for (let i = 0; i < firstDay; i++) {
+      const emptyCell = document.createElement("div");
+      container.appendChild(emptyCell);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(offdayCalendarYear, offdayCalendarMonth, day);
+      const dateStr = toLocalISOString(date);
+
+      const isSelected = array.includes(dateStr);
+
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "h-7 rounded text-[10px] font-medium transition-colors relative hover:bg-slate-100 text-slate-700";
+      cell.textContent = day;
+
+      if (isSelected) {
+        cell.classList.add("text-white");
+        cell.classList.remove("hover:bg-slate-100", "text-slate-700");
+        cell.style.backgroundColor = color;
+      }
+
+      if (type === "replacement") {
+        cell.style.boxShadow = `0 0 3px ${color}`;
+        if (!isSelected) {
+          cell.style.border = `2px solid ${color}`;
+          cell.style.padding = "2px";
+        }
+      }
+
+      if (type === "manager-offday") {
+        cell.onclick = () => toggleOffdayDate("manager", dateStr);
+      } else if (type === "am-offday") {
+        cell.onclick = () => toggleOffdayDate("am", dateStr);
+      } else if (type === "manager-replacement") {
+        cell.onclick = () => toggleReplacementDate("manager", dateStr);
+      } else if (type === "am-replacement") {
+        cell.onclick = () => toggleReplacementDate("am", dateStr);
+      }
+
+      container.appendChild(cell);
+    }
+  };
+
+  renderCalendar("offdayManagerCalendar", "manager-offday", mOffdays, "#00aff0");
+  renderCalendar("offdayAMCalendar", "am-offday", amOffdays, "#90cf53");
+  renderCalendar("offdayManagerReplacementCalendar", "manager-replacement", mReplacements, "#00aff0");
+  renderCalendar("offdayAMReplacementCalendar", "am-replacement", amReplacements, "#90cf53");
+}
+
+function toggleOffdayDate(type, dateStr) {
+  const date = new Date(dateStr);
+  const nextDate = new Date(date);
+  nextDate.setDate(date.getDate() + 1);
+  const nextDateStr = toLocalISOString(nextDate);
+
+  if (type === "manager") {
+    const arr = siteSettings.managerOffdays;
+    const index = arr.indexOf(dateStr);
+    const nextIndex = arr.indexOf(nextDateStr);
+    
+    if (index > -1) {
+      arr.splice(index, 1);
+    } else {
+      arr.push(dateStr);
+    }
+    
+    if (nextIndex > -1) {
+      arr.splice(nextIndex, 1);
+    } else if (index === -1) {
+      arr.push(nextDateStr);
+    }
+  } else {
+    const arr = siteSettings.assistantManagerOffdays;
+    const index = arr.indexOf(dateStr);
+    const nextIndex = arr.indexOf(nextDateStr);
+    
+    if (index > -1) {
+      arr.splice(index, 1);
+    } else {
+      arr.push(dateStr);
+    }
+    
+    if (nextIndex > -1) {
+      arr.splice(nextIndex, 1);
+    } else if (index === -1) {
+      arr.push(nextDateStr);
+    }
+  }
+  renderOffdayCalendars();
+}
+
+function toggleReplacementDate(type, dateStr) {
+  if (type === "manager") {
+    const arr = siteSettings.managerReplacements;
+    const index = arr.indexOf(dateStr);
+    if (index > -1) {
+      arr.splice(index, 1);
+    } else {
+      arr.push(dateStr);
+    }
+  } else {
+    const arr = siteSettings.assistantManagerReplacements;
+    const index = arr.indexOf(dateStr);
+    if (index > -1) {
+      arr.splice(index, 1);
+    } else {
+      arr.push(dateStr);
+    }
+  }
+  renderOffdayCalendars();
 }
 
 function renderOffdayLists() {
@@ -912,6 +1126,7 @@ function renderCustomLinks() {
             const a = document.createElement("a");
             a.href = btnData.url;
             a.target = "_blank";
+            a.rel = "noopener noreferrer";
             a.className =
               "flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-nadi hover:text-nadi hover:shadow text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg transition-all";
             a.innerHTML = `<span>${btnData.label}</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>`;
@@ -942,34 +1157,39 @@ function toggleSort() {
 
 function loadCalendarFilters() {
   if (siteSettings.calendarFilters) {
-    calendarFilters = siteSettings.calendarFilters;
+    siteSettings.calendarFilters = siteSettings.calendarFilters || {
+      showCategories: true,
+      showHolidays: true,
+      showSchoolHolidays: true,
+      showOffdays: true,
+    };
   }
   if (document.getElementById("filterShowCategories")) {
-    document.getElementById("filterShowCategories").checked = calendarFilters.showCategories;
+    document.getElementById("filterShowCategories").checked = siteSettings.calendarFilters.showCategories;
   }
   if (document.getElementById("filterShowHolidays")) {
-    document.getElementById("filterShowHolidays").checked = calendarFilters.showHolidays;
+    document.getElementById("filterShowHolidays").checked = siteSettings.calendarFilters.showHolidays;
   }
   if (document.getElementById("filterShowSchoolHolidays")) {
-    document.getElementById("filterShowSchoolHolidays").checked = calendarFilters.showSchoolHolidays;
+    document.getElementById("filterShowSchoolHolidays").checked = siteSettings.calendarFilters.showSchoolHolidays;
   }
   if (document.getElementById("filterShowOffdays")) {
-    document.getElementById("filterShowOffdays").checked = calendarFilters.showOffdays;
+    document.getElementById("filterShowOffdays").checked = siteSettings.calendarFilters.showOffdays;
   }
 }
 
 function saveCalendarFilters() {
-  calendarFilters.showCategories = document.getElementById("filterShowCategories").checked;
-  calendarFilters.showHolidays = document.getElementById("filterShowHolidays").checked;
-  calendarFilters.showSchoolHolidays = document.getElementById("filterShowSchoolHolidays").checked;
-  calendarFilters.showOffdays = document.getElementById("filterShowOffdays").checked;
-  siteSettings.calendarFilters = calendarFilters;
+  siteSettings.calendarFilters = siteSettings.calendarFilters || {};
+  siteSettings.calendarFilters.showCategories = document.getElementById("filterShowCategories").checked;
+  siteSettings.calendarFilters.showHolidays = document.getElementById("filterShowHolidays").checked;
+  siteSettings.calendarFilters.showSchoolHolidays = document.getElementById("filterShowSchoolHolidays").checked;
+  siteSettings.calendarFilters.showOffdays = document.getElementById("filterShowOffdays").checked;
   saveToFirebase();
   renderCalendar();
 }
 
 function resetCalendarFilters() {
-  calendarFilters = {
+  siteSettings.calendarFilters = {
     showCategories: true,
     showHolidays: true,
     showSchoolHolidays: true,
@@ -1086,48 +1306,41 @@ function renderCalendar() {
     numSpan.style.textShadow = "0 0 2px white";
 
     if (isToday) {
-      numSpan.className += " w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-bold";
+      numSpan.className += " w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-bold z-[5]";
     }
 
-    if (calendarFilters.showHolidays && isHoliday && calendarFilters.showSchoolHolidays && isSchoolHoliday) {
+    if (siteSettings.calendarFilters.showHolidays && isHoliday && siteSettings.calendarFilters.showSchoolHolidays && isSchoolHoliday) {
       const circle = document.createElement("span");
       circle.className = "absolute inset-0 rounded-full border-2 border-slate-300 bg-[#fff59c] z-0";
       numWrapper.appendChild(circle);
-    } else if (calendarFilters.showHolidays && isHoliday) {
+    } else if (siteSettings.calendarFilters.showHolidays && isHoliday) {
       const circle = document.createElement("span");
       circle.className = "absolute inset-0 rounded-full bg-slate-300 z-0";
       numWrapper.appendChild(circle);
-    } else if (calendarFilters.showSchoolHolidays && isSchoolHoliday) {
+    } else if (siteSettings.calendarFilters.showSchoolHolidays && isSchoolHoliday) {
       const circle = document.createElement("span");
       circle.className = "absolute inset-0 rounded-full bg-[#fff59c] z-0";
       numWrapper.appendChild(circle);
     }
 
     numWrapper.appendChild(numSpan);
-
-    const annBtn = document.createElement("button");
-    annBtn.className = "absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-slate-200 rounded z-30";
-    annBtn.innerHTML = '<i class="fa-solid fa-bullhorn text-[8px] text-amber-500"></i>';
-    annBtn.onclick = (e) => {
-      e.stopPropagation();
-      openAnnouncementModal(dateStr);
-    };
-    annBtn.title = "Announcements";
-    cell.appendChild(annBtn);
-
-    if (calendarFilters.showOffdays && isManagerOffday) {
-      const line = document.createElement("span");
-      line.className = "absolute rounded-sm z-10";
-      line.style.cssText = "bottom: 2px; left: 4px; right: 4px; height: 2px; background-color: #00aff0;";
-      numWrapper.appendChild(line);
+    if (siteSettings.calendarFilters.showOffdays && isManagerOffday) {
+      const existingLines = numWrapper.querySelectorAll(".offday-line-m");
+      if (existingLines.length === 0) {
+        const line = document.createElement("span");
+        line.className = "offday-line-m z-10";
+        numWrapper.appendChild(line);
+      }
     }
-    if (calendarFilters.showOffdays && isAMOffday) {
-      const line = document.createElement("span");
-      line.className = "absolute rounded-sm z-10";
-      line.style.cssText = "bottom: 2px; left: 4px; right: 4px; height: 2px; background-color: #90cf53;";
-      numWrapper.appendChild(line);
+    if (siteSettings.calendarFilters.showOffdays && isAMOffday) {
+      const existingLines = numWrapper.querySelectorAll(".offday-line-am");
+      if (existingLines.length === 0) {
+        const line = document.createElement("span");
+        line.className = "offday-line-am z-10";
+        numWrapper.appendChild(line);
+      }
     }
-    if (calendarFilters.showOffdays && isManagerReplacement) {
+    if (siteSettings.calendarFilters.showOffdays && isManagerReplacement) {
       const line1 = document.createElement("span");
       line1.className = "absolute rounded-sm z-10";
       line1.style.cssText = "bottom: 2px; left: 4px; width: calc(50% - 6px); height: 2px; background-color: #00aff0; box-shadow: 0 0 3px #00aff0;";
@@ -1137,7 +1350,7 @@ function renderCalendar() {
       line2.style.cssText = "bottom: 2px; right: 4px; width: calc(50% - 6px); height: 2px; background-color: #00aff0; box-shadow: 0 0 3px #00aff0;";
       numWrapper.appendChild(line2);
     }
-    if (calendarFilters.showOffdays && isAMReplacement) {
+    if (siteSettings.calendarFilters.showOffdays && isAMReplacement) {
       const line1 = document.createElement("span");
       line1.className = "absolute rounded-sm z-10";
       line1.style.cssText = "bottom: 2px; left: 4px; width: calc(50% - 6px); height: 2px; background-color: #90cf53; box-shadow: 0 0 3px #90cf53;";
@@ -1150,19 +1363,19 @@ function renderCalendar() {
 
     cell.appendChild(numWrapper);
 
-    if (calendarFilters.showHolidays && isHoliday) {
+    if (siteSettings.calendarFilters.showHolidays && isHoliday) {
       const hText = document.createElement("span");
       hText.className = "text-[6px] leading-tight text-center text-slate-500 font-bold mt-0.5 px-0.5 line-clamp-1 w-full";
       hText.textContent = isHoliday;
       cell.appendChild(hText);
-    } else if (calendarFilters.showSchoolHolidays && sHoliday && (isSchoolHolidayStart || isSchoolHolidayEnd)) {
+    } else if (siteSettings.calendarFilters.showSchoolHolidays && sHoliday && (isSchoolHolidayStart || isSchoolHolidayEnd)) {
       const sText = document.createElement("span");
       sText.className = "text-[6px] leading-tight text-center text-yellow-600 font-bold mt-0.5 px-0.5 line-clamp-1 w-full";
       sText.textContent = sHoliday.name;
       cell.appendChild(sText);
     }
 
-    if (calendarFilters.showCategories && daysEvents.length > 0) {
+    if (siteSettings.calendarFilters.showCategories && daysEvents.length > 0) {
       const dotsDiv = document.createElement("div");
       dotsDiv.className = "flex gap-0.5 mt-0.5";
 
@@ -1179,10 +1392,14 @@ function renderCalendar() {
       clearRangeFilter(false);
       if (selectedFilterDate === dateStr) {
         selectedFilterDate = null;
-        renderEventList();
+        refreshEventsFromFirebase().then(() => {
+          renderEventList();
+        });
       } else {
         selectedFilterDate = dateStr;
-        renderEventList();
+        refreshEventsFromFirebase().then(() => {
+          renderEventList();
+        });
       }
       renderCalendar();
     };
@@ -1354,7 +1571,7 @@ function renderEventList() {
   displayEvents.forEach((ev) => {
     const cat = categories[ev.category];
     const card = document.createElement("div");
-    card.className = "event-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative overflow-hidden";
+    card.className = "event-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative";
 
     const startParts = ev.start.split("-");
     const endParts = ev.end.split("-");
@@ -1372,9 +1589,9 @@ function renderEventList() {
       ev.links.forEach((l) => {
         if (l.url) {
           linksHtml += `
-            <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100">
-              <span class="font-bold text-slate-600 w-12 truncate">${l.platform}</span>
-              <a href="${l.url}" target="_blank" class="text-blue-600 hover:underline truncate flex-1 block">${l.url}</a>
+            <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
+              <span class="font-bold text-slate-600 w-12 truncate shrink-0">${l.platform}</span>
+              <a href="${l.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline truncate flex-1 block">${l.url}</a>
             </div>`;
         }
       });
@@ -1404,10 +1621,10 @@ function renderEventList() {
               <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]" style="color: #cb233b;"></i>
             </button>
           </div>
-          <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content">${sanitizeHTML(ev.info)}</div>
+          <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content overflow-hidden">${sanitizeHTMLWithLinks(ev.info)}</div>
         ` : ""}
         ${linksHtml}
-        <div class="absolute top-0 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
+        <div class="absolute top-0 right-0 flex gap-2 ${showEditDeleteButtons ? "opacity-100" : "opacity-0"} transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
           <button onclick="openModal('${ev.id}')" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
             <i class="fa-solid fa-pen text-xs"></i>
           </button>

@@ -4,7 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Announcements - NADI SCSB</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      /* eslint-disable-next-line tailwindcss/no-custom-classname */
+      @theme {
+        --color-nadi: #2228a4;
+        --font-family-sans: "Plus Jakarta Sans", sans-serif;
+        --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+      }
+    </style>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -117,10 +125,10 @@
               </div>
             </label>
             <label class="relative cursor-pointer group">
-              <input type="radio" name="ssoCategory" value="Keseddar an" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <input type="radio" name="ssoCategory" value="Kesedaran" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-violet-700 peer-checked:border-violet-400 peer-checked:bg-violet-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
-                <span class="text-[9px] font-bold uppercase">Keseddar an</span>
+                <span class="text-[9px] font-bold uppercase">Kesedaran</span>
               </div>
             </label>
             <label class="relative cursor-pointer group">
@@ -197,17 +205,6 @@
       </div>
     </div>
 
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: { sans: ['"Plus Jakarta Sans"', "sans-serif"] },
-            colors: { nadi: "#2228a4" },
-            boxShadow: { card: "0 2px 10px -2px rgba(0, 0, 0, 0.05)" },
-          },
-        },
-      };
-    </script>
     <script src="config.js"></script>
     <script>
       let announcements = [];
@@ -224,8 +221,8 @@
         calendarFilters: { showCategories: true, showHolidays: true, showSchoolHolidays: true, showOffdays: true },
         announcements: [],
       };
-      currentAnnouncementFilter = "all";
-      annEditingId = null;
+      let currentAnnouncementFilter = "all";
+      let annEditingId = null;
 
       function annShowAddForm() {
         document.getElementById("addForm").classList.remove("hidden");
@@ -293,7 +290,7 @@
         const subMap = {
           "Usahawan": ["eKelas Keusahawanan (Maxis)", "Preneur/EmpowHER", "Kidventure"],
           "Kesejahteraan Kendiri": ["Care"],
-          "Keseddar an": ["Safe & Shield"],
+          "Kesedaran": ["Safe & Shield"],
           "Inisiatif Kerajaan": [],
           "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
         };
@@ -352,7 +349,7 @@
         if (!url) { alert("Please enter a URL."); return; }
         const text = document.getElementById("annLinkTextField").value.trim();
         const linkText = text || url;
-        document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" class="text-blue-600 underline">${linkText}</a>`);
+        document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">${linkText}</a>`);
         annCloseUrlInputModal();
       }
 
@@ -392,9 +389,24 @@
       }
 
       function sanitizeHTML(html) {
-        if (typeof DOMPurify !== "undefined") return DOMPurify.sanitize(html);
+        if (typeof DOMPurify !== "undefined") return DOMPurify.sanitize(html, {
+          ADD_TAGS: ["iframe"],
+          ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "target"],
+          FORBID_TAGS: ["script", "style", "form"],
+        });
         const temp = document.createElement("div");
         temp.textContent = html;
+        return temp.innerHTML;
+      }
+
+      function sanitizeHTMLWithLinks(html) {
+        let sanitized = sanitizeHTML(html);
+        const temp = document.createElement("div");
+        temp.innerHTML = sanitized;
+        temp.querySelectorAll("a").forEach((a) => {
+          a.setAttribute("target", "_blank");
+          a.setAttribute("rel", "noopener noreferrer");
+        });
         return temp.innerHTML;
       }
 
@@ -436,7 +448,7 @@
             const catColors = {
               "Usahawan": { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" },
               "Kesejahteraan Kendiri": { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" },
-              "Keseddar an": { bg: "bg-violet-100", text: "text-violet-700", border: "border-violet-200" },
+              "Kesedaran": { bg: "bg-violet-100", text: "text-violet-700", border: "border-violet-200" },
               "Inisiatif Kerajaan": { bg: "bg-red-100", text: "text-red-700", border: "border-red-200" },
               "Pembelajaran Sepanjang Hayat": { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" },
             };
@@ -471,7 +483,7 @@
                   <button onclick="annDeleteAnnouncement('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
                 </div>
               </div>
-              <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTML(ann.content) : ""}</div>
+              <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(ann.content) : ""}</div>
               <div class="pt-2 border-t border-slate-100 mt-3">
                 <div class="flex justify-between items-end">
                   ${dueDisplay ? `<div>${dueDisplay}</div>` : '<div></div>'}
@@ -508,7 +520,9 @@
           announcements.push({ id: Date.now().toString(), title, content, category: saveCategory, ssoMain: saveSSOMain, ssoSub: saveSSOSub, dueDate, isUrgent, createdAt: new Date().toISOString() });
         }
         siteSettings.announcements = announcements;
-        database.ref("siteSettings").set(siteSettings);
+        database.ref("siteSettings").set(siteSettings).catch(err => {
+          console.error("Failed to save announcement:", err);
+        });
         annHideAddForm();
         renderAnnouncementList();
         showToast("Announcement saved!");
@@ -518,7 +532,9 @@
         if (!confirm("Delete this announcement?")) return;
         announcements = announcements.filter((a) => a.id !== id);
         siteSettings.announcements = announcements;
-        database.ref("siteSettings").set(siteSettings);
+        database.ref("siteSettings").set(siteSettings).catch(err => {
+          console.error("Failed to delete announcement:", err);
+        });
         renderAnnouncementList();
       }
 
@@ -549,6 +565,8 @@
           const settings = snapshot.val() || {};
           if (settings.announcements) announcements = settings.announcements;
           renderAnnouncementList();
+        }, (error) => {
+          console.error("Error loading announcements:", error);
         });
       });
     </script>

@@ -68,7 +68,7 @@ const platformOptions = ["NES", "Gmeet", "Zoom", "Gform", "Gdrive", "Youtube", "
 const announcementSubcategories = {
   Usahawan: ["eKelas Keusahawanan (Maxis)", "Preneur/EmpowHER", "Kidventure"],
   "Kesejahteraan Kendiri": ["Care"],
-  "Keseddar an": ["Safe & Shield"],
+  "Kesedaran": ["Safe & Shield"],
   "Inisiatif Kerajaan": [],
   "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
 };
