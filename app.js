@@ -129,6 +129,101 @@ let siteSettings = {
     showOffdays: true,
   },
 };
+
+// Backup for data protection
+let siteSettingsBackup = null;
+
+function backupSiteSettings() {
+  siteSettingsBackup = JSON.parse(JSON.stringify(siteSettings));
+  // Also save to localStorage as secondary backup
+  try {
+    localStorage.setItem("nadi_siteSettings_backup", JSON.stringify(siteSettings));
+  } catch (e) {
+    console.warn("Could not save backup to localStorage:", e);
+  }
+  // Save backup to Firebase as tertiary backup
+  try {
+    database.ref("siteSettingsBackup").set(siteSettingsBackup).catch(() => {
+      // Backup Firebase path might not exist, ignore
+    });
+  } catch (e) {
+    // Ignore Firebase backup errors
+  }
+  console.log("✓ Site settings backed up");
+}
+
+function restoreSiteSettings() {
+  // Try Firebase backup first
+  database.ref("siteSettingsBackup").once("value", (snapshot) => {
+    const fbBackup = snapshot.val();
+    if (fbBackup && (fbBackup.sections?.length > 0 || fbBackup.managerOffdays?.length > 0)) {
+      siteSettings = fbBackup;
+      siteSettingsBackup = fbBackup;
+      try {
+        localStorage.setItem("nadi_siteSettings_backup", JSON.stringify(fbBackup));
+      } catch (e) {}
+      console.log("✓ Site settings restored from Firebase backup");
+      renderCustomLinks();
+      renderCalendar();
+      updateSectionCountBadge();
+      saveToFirebase();
+      return true;
+    }
+  }).catch(() => {});
+  
+  // Try memory backup first
+  if (siteSettingsBackup && (siteSettingsBackup.sections?.length > 0 || siteSettingsBackup.managerOffdays?.length > 0)) {
+    siteSettings = JSON.parse(JSON.stringify(siteSettingsBackup));
+    console.log("✓ Site settings restored from memory backup");
+    renderCustomLinks();
+    renderCalendar();
+    updateSectionCountBadge();
+    saveToFirebase();
+    return true;
+  }
+  // Try localStorage backup
+  try {
+    const localBackup = localStorage.getItem("nadi_siteSettings_backup");
+    if (localBackup) {
+      const parsed = JSON.parse(localBackup);
+      if (parsed.sections?.length > 0 || parsed.managerOffdays?.length > 0) {
+        siteSettings = parsed;
+        siteSettingsBackup = parsed;
+        console.log("✓ Site settings restored from localStorage backup");
+        renderCustomLinks();
+        renderCalendar();
+        updateSectionCountBadge();
+        saveToFirebase();
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not restore from localStorage:", e);
+  }
+  return false;
+}
+
+// Backup will be created after data loads from Firebase
+
+// Make restoreData available globally
+window.restoreData = function() {
+  console.log("Attempting to restore data from backup...");
+  if (restoreSiteSettings()) {
+    console.log("✓ Data restored successfully!");
+    console.log("  - Sections:", siteSettings.sections?.length || 0);
+    console.log("  - Manager Offdays:", siteSettings.managerOffdays?.length || 0);
+    console.log("  - AM Offdays:", siteSettings.assistantManagerOffdays?.length || 0);
+    return true;
+  } else {
+    console.log("⚠ No backup available to restore");
+    console.log("  Try re-entering your data manually.");
+    return false;
+  }
+};
+
+console.log("=== DATA PROTECTION AVAILABLE ===");
+console.log("Type restoreData() to recover lost data");
+console.log("==================================");
 let announcements = [];
 let programInfoContent = "";
 let currentSort = "startTime";
@@ -144,7 +239,12 @@ let programsListClicks = 0;
 let programsListTimer = null;
 
 function saveToFirebase() {
-  if (!isDataLoaded) return;
+  if (!isDataLoaded) {
+    console.warn("saveToFirebase called but data not loaded yet");
+    return Promise.reject(new Error("Data not loaded yet"));
+  }
+
+  // Ensure all required fields exist
   siteSettings.calendarFilters = siteSettings.calendarFilters || {
     showCategories: true,
     showHolidays: true,
@@ -153,17 +253,30 @@ function saveToFirebase() {
   };
   siteSettings.announcements = announcements;
 
-  // Save events
-  database.ref("events").set(events).catch(err => {
-    console.error("Failed to save events:", err);
-  });
+  // Log what we're saving for debugging
+  console.log("Saving to Firebase:");
+  console.log("  - Events:", events.length);
+  console.log("  - Sections:", siteSettings.sections ? siteSettings.sections.length : 0);
+  console.log("  - Manager Offdays:", siteSettings.managerOffdays ? siteSettings.managerOffdays.length : 0);
+  console.log("  - AM Offdays:", siteSettings.assistantManagerOffdays ? siteSettings.assistantManagerOffdays.length : 0);
+  console.log("  - Manager Replacements:", siteSettings.managerReplacements ? siteSettings.managerReplacements.length : 0);
+  console.log("  - AM Replacements:", siteSettings.assistantManagerReplacements ? siteSettings.assistantManagerReplacements.length : 0);
 
-  // Save site settings (includes sections)
-  database.ref("siteSettings").set(siteSettings).then(() => {
-    console.log("Settings saved successfully to Firebase");
-  }).catch(err => {
-    console.error("Failed to save settings:", err);
-  });
+  // Save both events and settings
+  const eventsPromise = database.ref("events").set(events);
+  const settingsPromise = database.ref("siteSettings").set(siteSettings);
+
+  return Promise.all([eventsPromise, settingsPromise])
+    .then(() => {
+      console.log("✓ All data saved successfully to Firebase");
+      // Update backup after successful save
+      backupSiteSettings();
+      return true;
+    })
+    .catch(err => {
+      console.error("✗ Failed to save to Firebase:", err);
+      throw err;
+    });
 }
 
 function refreshEventsFromFirebase() {
@@ -193,99 +306,116 @@ function refreshEventsFromFirebase() {
 }
 
 function loadFromFirebase() {
-  const loadTimeout = setTimeout(() => {
-    if (!firebaseLoaded) {
-      console.log("Firebase load timeout - rendering with empty data");
-      renderCalendar();
-      renderEventList();
-      renderCustomLinks();
-      updateUIFromSettings();
-    }
-  }, 3000);
+  return new Promise((resolve, reject) => {
+    let eventsLoaded = false;
+    let settingsLoaded = false;
+    let loadError = null;
 
-  database.ref("events").once(
-    "value",
-    (snapshot) => {
-      events = snapshot.val() || [];
-      if (!Array.isArray(events)) {
-        console.warn("Events is not an array, converting...");
-        events = [];
+    const checkComplete = () => {
+      if (eventsLoaded && settingsLoaded) {
+        if (loadError) {
+          reject(loadError);
+        } else {
+          resolve();
+        }
       }
-      console.log("✓ Loaded", events.length, "events from Firebase");
-      renderCalendar();
-      renderEventList();
-    },
-    (error) => {
-      console.error("Error loading events:", error);
-      events = [];
-      renderCalendar();
-      renderEventList();
-    }
-  );
+    };
 
-  database.ref("siteSettings").once(
-    "value",
-    (snapshot) => {
-      const loadedSettings = snapshot.val() || {};
-      siteSettings = {
-        title: loadedSettings.title || "NADI SCSB",
-        subtitle: loadedSettings.subtitle || "PULAU PINANG",
-        sections: loadedSettings.sections !== undefined ? loadedSettings.sections : [],
-        managerOffdays: loadedSettings.managerOffdays !== undefined ? loadedSettings.managerOffdays : [],
-        assistantManagerOffdays: loadedSettings.assistantManagerOffdays !== undefined ? loadedSettings.assistantManagerOffdays : [],
-        managerReplacements: loadedSettings.managerReplacements !== undefined ? loadedSettings.managerReplacements : [],
-        assistantManagerReplacements: loadedSettings.assistantManagerReplacements !== undefined ? loadedSettings.assistantManagerReplacements : [],
-        publicHolidays: loadedSettings.publicHolidays !== undefined ? loadedSettings.publicHolidays : {},
-        schoolHolidays: loadedSettings.schoolHolidays !== undefined ? loadedSettings.schoolHolidays : {},
-        calendarFilters: loadedSettings.calendarFilters || {
-          showCategories: true,
-          showHolidays: true,
-          showSchoolHolidays: true,
-          showOffdays: true,
-        },
-      };
-      if (loadedSettings.announcements) {
-        announcements = loadedSettings.announcements;
-      }
-      updateUIFromSettings();
-      loadCalendarFilters();
-      renderCustomLinks();
-      renderCalendar();
-      renderEventList();
-      checkNewAnnouncements();
-
-      // Verify sections in Firebase after loading
-      if (siteSettings.sections && siteSettings.sections.length > 0) {
-        console.log("✓ Loaded", siteSettings.sections.length, "sections from Firebase");
-        verifySectionsInFirebase();
-        updateSectionCountBadge();
-      }
-
-      // Verify events in Firebase after loading
-      if (events && events.length > 0) {
+    // Load events
+    database.ref("events").once(
+      "value",
+      (snapshot) => {
+        events = snapshot.val() || [];
+        if (!Array.isArray(events)) {
+          console.warn("Events is not an array, converting...");
+          events = [];
+        }
         console.log("✓ Loaded", events.length, "events from Firebase");
-        verifyEventsInFirebase();
-      } else {
-        console.log("⚠ No events found in Firebase");
+        eventsLoaded = true;
+        checkComplete();
+      },
+      (error) => {
+        console.error("Error loading events:", error);
+        events = [];
+        eventsLoaded = true;
+        loadError = error;
+        checkComplete();
       }
+    );
 
-      isDataLoaded = true;
-      firebaseLoaded = true;
-      clearTimeout(loadTimeout);
-    },
-    (error) => {
-      console.error("Error loading settings:", error);
-      updateUIFromSettings();
-      loadCalendarFilters();
-      renderCustomLinks();
-      renderCalendar();
-      renderEventList();
-      checkNewAnnouncements();
-      isDataLoaded = true;
-      firebaseLoaded = true;
-      clearTimeout(loadTimeout);
-    }
-  );
+    // Load settings
+    database.ref("siteSettings").once(
+      "value",
+      (snapshot) => {
+        const loadedSettings = snapshot.val() || {};
+
+        console.log("Loading from Firebase:");
+        console.log("  - Found sections:", loadedSettings.sections ? loadedSettings.sections.length : 0);
+        console.log("  - Found managerOffdays:", loadedSettings.managerOffdays ? loadedSettings.managerOffdays.length : 0);
+
+        // Preserve current data structure and only update from Firebase
+        siteSettings = {
+          title: loadedSettings.title || siteSettings.title || "NADI SCSB",
+          subtitle: loadedSettings.subtitle || siteSettings.subtitle || "PULAU PINANG",
+          sections: loadedSettings.sections !== undefined ? loadedSettings.sections : (siteSettings.sections || []),
+          managerOffdays: loadedSettings.managerOffdays !== undefined ? loadedSettings.managerOffdays : (siteSettings.managerOffdays || []),
+          assistantManagerOffdays: loadedSettings.assistantManagerOffdays !== undefined ? loadedSettings.assistantManagerOffdays : (siteSettings.assistantManagerOffdays || []),
+          managerReplacements: loadedSettings.managerReplacements !== undefined ? loadedSettings.managerReplacements : (siteSettings.managerReplacements || []),
+          assistantManagerReplacements: loadedSettings.assistantManagerReplacements !== undefined ? loadedSettings.assistantManagerReplacements : (siteSettings.assistantManagerReplacements || []),
+          publicHolidays: loadedSettings.publicHolidays !== undefined ? loadedSettings.publicHolidays : (siteSettings.publicHolidays || {}),
+          schoolHolidays: loadedSettings.schoolHolidays !== undefined ? loadedSettings.schoolHolidays : (siteSettings.schoolHolidays || {}),
+          calendarFilters: loadedSettings.calendarFilters || siteSettings.calendarFilters || {
+            showCategories: true,
+            showHolidays: true,
+            showSchoolHolidays: true,
+            showOffdays: true,
+          },
+        };
+
+        if (loadedSettings.announcements) {
+          announcements = loadedSettings.announcements;
+        }
+
+        console.log("Loaded successfully:");
+        console.log("  - Sections:", siteSettings.sections?.length || 0);
+        console.log("  - Manager Offdays:", siteSettings.managerOffdays?.length || 0);
+
+        // Update backup with loaded data
+        backupSiteSettings();
+
+        updateUIFromSettings();
+        loadCalendarFilters();
+        renderCustomLinks();
+        renderCalendar();
+        renderEventList();
+        checkNewAnnouncements();
+
+        // Mark data as loaded
+        isDataLoaded = true;
+        firebaseLoaded = true;
+
+        settingsLoaded = true;
+        checkComplete();
+      },
+      (error) => {
+        console.error("Error loading settings:", error);
+        updateUIFromSettings();
+        loadCalendarFilters();
+        renderCustomLinks();
+        renderCalendar();
+        renderEventList();
+        checkNewAnnouncements();
+
+        // Mark data as loaded even on error
+        isDataLoaded = true;
+        firebaseLoaded = true;
+
+        settingsLoaded = true;
+        loadError = error;
+        checkComplete();
+      }
+    );
+  });
 }
 
 function updateUIFromSettings() {
@@ -371,8 +501,13 @@ function markAnnouncementsAsRead() {
       endTime2HourSelect.appendChild(opt4);
     }
 
-    loadFromFirebase();
-    loadCalendarFilters();
+    loadFromFirebase()
+      .then(() => {
+        console.log("✓ All data loaded successfully");
+      })
+      .catch((error) => {
+        console.error("✗ Failed to load data:", error);
+      });
 
   document.getElementById("prevMonth").addEventListener("click", () => {
     currentMonth--;
@@ -491,8 +626,11 @@ function saveHeaderSettings() {
   siteSettings.title = document.getElementById("settingSiteTitle").value;
   siteSettings.subtitle = document.getElementById("settingSiteSubtitle").value;
   updateUIFromSettings();
-  saveToFirebase();
-  backToMenu();
+  saveToFirebase().then(() => {
+    backToMenu();
+  }).catch(err => {
+    alert("Failed to save header settings. Please try again.");
+  });
 }
 
 function openOffdaySettings() {
@@ -849,9 +987,12 @@ function removeReplacementDate(type, dateStr) {
 }
 
 function saveOffdaySettings() {
-  saveToFirebase();
-  backToMenu();
-  renderCalendar();
+  saveToFirebase().then(() => {
+    backToMenu();
+    renderCalendar();
+  }).catch(err => {
+    alert("Failed to save offday settings. Please try again.");
+  });
 }
 
 function openSectionList() {
@@ -1014,17 +1155,40 @@ function saveSectionLocal() {
 
   console.log("Total sections to save:", siteSettings.sections.length);
 
-  // Save to Firebase with confirmation
-  database.ref("siteSettings").set(siteSettings).then(() => {
-    console.log("✓ Sections saved successfully to Firebase");
-    renderCustomLinks();
-    updateSectionCountBadge();
-    openSectionList();
-    showSectionSaveSuccess();
-  }).catch(err => {
-    console.error("✗ Failed to save sections:", err);
-    alert("Failed to save section. Please try again.");
-  });
+  // Show saving indicator
+  const saveBtn = document.querySelector('#sectionEditorView button[onclick="saveSectionLocal()"]');
+  const originalText = saveBtn.innerHTML;
+  saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
+  saveBtn.disabled = true;
+
+  // Save to Firebase with verification
+  saveToFirebase()
+    .then(() => {
+      console.log("✓ Section save completed, verifying...");
+
+      // Verify by reading back
+      return database.ref("siteSettings/sections").once("value");
+    })
+    .then((snapshot) => {
+      const savedSections = snapshot.val();
+      console.log("✓ Verification: Found", savedSections ? savedSections.length : 0, "sections in Firebase");
+
+      if (savedSections && savedSections.length === siteSettings.sections.length) {
+        console.log("✓ Section save verified successfully!");
+        renderCustomLinks();
+        updateSectionCountBadge();
+        openSectionList();
+        showSectionSaveSuccess();
+      } else {
+        throw new Error("Verification failed: Section count mismatch");
+      }
+    })
+    .catch(err => {
+      console.error("✗ Failed to save sections:", err);
+      saveBtn.innerHTML = originalText;
+      saveBtn.disabled = false;
+      alert("Failed to save section. Please try again. Error: " + err.message);
+    });
 }
 
 function showSectionSaveSuccess() {
@@ -1099,18 +1263,50 @@ function deleteSection() {
 }
 
 function syncSectionsFromFirebase() {
+  console.log("🔄 Syncing sections from Firebase...");
+
   database.ref("siteSettings/sections").once("value", (snapshot) => {
     const sections = snapshot.val();
-    if (sections && Array.isArray(sections)) {
-      siteSettings.sections = sections;
-      renderCustomLinks();
-      renderSettingsSectionList();
-      console.log("✓ Sections synced from Firebase:", sections.length, "sections loaded");
+
+    if (sections && Array.isArray(sections) && sections.length > 0) {
+      // Verify sections have valid data
+      const validSections = sections.filter(sec =>
+        sec && typeof sec === 'object' && sec.header && sec.buttons
+      );
+
+      if (validSections.length > 0) {
+        siteSettings.sections = validSections;
+        // Update backup after syncing
+        backupSiteSettings();
+        renderCustomLinks();
+        renderSettingsSectionList();
+        updateSectionCountBadge();
+        console.log("✓ Sections synced from Firebase:", validSections.length, "valid sections loaded");
+      } else {
+        console.log("⚠ No valid sections found in Firebase (empty or malformed data)");
+      }
     } else {
-      console.log("⚠ No sections found in Firebase");
+      console.log("⚠ No sections found in Firebase - data might have been lost");
+      console.log("  Attempting to restore from backup...");
+      if (siteSettingsBackup && siteSettingsBackup.sections && siteSettingsBackup.sections.length > 0) {
+        // Restore from backup
+        siteSettings.sections = siteSettingsBackup.sections;
+        // Push backup to Firebase
+        database.ref("siteSettings/sections").set(siteSettings.sections).then(() => {
+          console.log("✓ Restored", siteSettings.sections.length, "sections from backup to Firebase");
+          renderCustomLinks();
+          renderSettingsSectionList();
+          updateSectionCountBadge();
+        }).catch(err => {
+          console.error("Failed to restore from backup:", err);
+        });
+      } else {
+        console.log("⚠ No backup available to restore");
+      }
     }
   }, (error) => {
     console.error("✗ Error syncing sections:", error);
+    alert("Failed to sync sections. Please check your connection.");
   });
 }
 
@@ -1162,6 +1358,106 @@ function verifyEventsInFirebase() {
     }
   });
 }
+
+// Recovery function for sections
+window.recoverSections = function() {
+  console.log("=== SECTION RECOVERY ===");
+
+  // Restore from backup
+  if (siteSettingsBackup && siteSettingsBackup.sections && siteSettingsBackup.sections.length > 0) {
+    console.log("✓ Found backup with", siteSettingsBackup.sections.length, "sections");
+    siteSettings.sections = siteSettingsBackup.sections;
+
+    // Save backup to Firebase
+    database.ref("siteSettings/sections").set(siteSettings.sections).then(() => {
+      console.log("✓ Recovered sections saved to Firebase");
+      renderCustomLinks();
+      renderSettingsSectionList();
+      updateSectionCountBadge();
+      alert(`Recovered ${siteSettings.sections.length} sections from backup!`);
+    }).catch(err => {
+      console.error("Failed to save recovered sections:", err);
+      alert("Failed to save recovered sections. Check console for details.");
+    });
+    return true;
+  }
+
+  console.log("⚠ No backup found to recover from");
+  alert("No backup found. Cannot recover sections.");
+  return false;
+};
+
+// Status check function
+window.sectionsStatus = function() {
+  console.log("=== SECTIONS STATUS ===");
+  console.log("1. Current sections in memory:", siteSettings.sections ? siteSettings.sections.length : 0);
+  console.log("2. Backup sections:", siteSettingsBackup && siteSettingsBackup.sections ? siteSettingsBackup.sections.length : 0);
+
+  // Check Firebase
+  database.ref("siteSettings/sections").once("value", (snapshot) => {
+    const sections = snapshot.val();
+    console.log("3. Firebase sections:", sections ? sections.length : 0);
+    console.log("======================");
+  });
+};
+
+console.log("=== CUSTOM LINKS DATA PROTECTION ===");
+console.log("Available commands:");
+console.log("  recoverSections() - Restore sections from backup");
+console.log("  sectionsStatus() - Check current sections status");
+console.log("  forceBackup() - Force create a backup");
+console.log("  restoreData() - Restore all settings from backup");
+console.log("  checkAllBackups() - Check all backup sources");
+console.log("======================================");
+
+// Force backup function
+window.forceBackup = function() {
+  console.log("=== FORCING BACKUP ===");
+  backupSiteSettings();
+  console.log("Backup complete!");
+  console.log("  - Memory backup: " + (siteSettingsBackup?.sections?.length || 0) + " sections");
+  console.log("  - localStorage backup: " + (localStorage.getItem("nadi_siteSettings_backup") ? "saved" : "failed"));
+};
+
+// Check all backups
+window.checkAllBackups = function() {
+  console.log("=== CHECKING ALL BACKUPS ===");
+  
+  // Memory backup
+  console.log("1. Memory backup:", siteSettingsBackup ? "exists" : "none");
+  if (siteSettingsBackup) {
+    console.log("   - Sections:", siteSettingsBackup.sections?.length || 0);
+    console.log("   - Manager Offdays:", siteSettingsBackup.managerOffdays?.length || 0);
+  }
+  
+  // localStorage backup
+  try {
+    const local = localStorage.getItem("nadi_siteSettings_backup");
+    if (local) {
+      const parsed = JSON.parse(local);
+      console.log("2. localStorage backup: exists");
+      console.log("   - Sections:", parsed.sections?.length || 0);
+      console.log("   - Manager Offdays:", parsed.managerOffdays?.length || 0);
+    } else {
+      console.log("2. localStorage backup: none");
+    }
+  } catch (e) {
+    console.log("2. localStorage backup: error -", e.message);
+  }
+  
+  // Firebase backup
+  database.ref("siteSettingsBackup").once("value", (snapshot) => {
+    const fb = snapshot.val();
+    if (fb) {
+      console.log("3. Firebase backup: exists");
+      console.log("   - Sections:", fb.sections?.length || 0);
+      console.log("   - Manager Offdays:", fb.managerOffdays?.length || 0);
+    } else {
+      console.log("3. Firebase backup: none");
+    }
+    console.log("===========================");
+  });
+};
 
 function diagnoseEventIssues() {
   console.log("=== EVENT DIAGNOSTIC ===");
@@ -2779,3 +3075,4 @@ function saveSchoolHolidaySettings() {
   closeSettings();
   renderCalendar();
 }
+

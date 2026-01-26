@@ -13,6 +13,8 @@
         --font-family-sans: "Plus Jakarta Sans", sans-serif;
         --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
       }
+      #ssoSubFilter { display: none; }
+      #ssoSubFilter:not(.hidden) { display: block; }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -48,7 +50,51 @@
               <button data-ann-filter="TP" onclick="setAnnouncementFilter('TP')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">TP</button>
               <button data-ann-filter="Samudra" onclick="setAnnouncementFilter('Samudra')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">Samudra</button>
               <button data-ann-filter="Maxis" onclick="setAnnouncementFilter('Maxis')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">Maxis</button>
-              <button data-ann-filter="SSO" onclick="setAnnouncementFilter('SSO')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">SSO</button>
+              <button data-ann-filter="SSO" onclick="setAnnouncementFilter('SSO')" id="btnFilterSSO" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">SSO</button>
+            </div>
+            <!-- SSO Subcategory Filter -->
+            <div id="ssoSubFilter" class="hidden mt-3 pt-3 border-t border-slate-100">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Category</label>
+                  <div class="grid grid-cols-1 gap-1">
+                    <label class="relative cursor-pointer group">
+                      <input type="radio" name="ssoSubFilter" value="Usahawan" onchange="setSSOSubFilter('Usahawan')" class="peer sr-only" />
+                      <div class="px-2 py-1 rounded border border-slate-200 hover:bg-yellow-100 text-center transition-all flex items-center justify-center bg-yellow-50 text-yellow-700 border-yellow-200">
+                        <span class="text-[9px] font-bold uppercase">Usahawan</span>
+                      </div>
+                    </label>
+                    <label class="relative cursor-pointer group">
+                      <input type="radio" name="ssoSubFilter" value="Kesejahteraan Kendiri" onchange="setSSOSubFilter('Kesejahteraan Kendiri')" class="peer sr-only" />
+                      <div class="px-2 py-1 rounded border border-slate-200 hover:bg-emerald-50 text-center transition-all flex items-center justify-center bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <span class="text-[9px] font-bold uppercase">Kesejahteraan</span>
+                      </div>
+                    </label>
+                    <label class="relative cursor-pointer group">
+                      <input type="radio" name="ssoSubFilter" value="Kesedaran" onchange="setSSOSubFilter('Kesedaran')" class="peer sr-only" />
+                      <div class="px-2 py-1 rounded border border-slate-200 hover:bg-violet-50 text-center transition-all flex items-center justify-center bg-violet-50 text-violet-700 border-violet-200">
+                        <span class="text-[9px] font-bold uppercase">Kesedaran</span>
+                      </div>
+                    </label>
+                    <label class="relative cursor-pointer group">
+                      <input type="radio" name="ssoSubFilter" value="Inisiatif Kerajaan" onchange="setSSOSubFilter('Inisiatif Kerajaan')" class="peer sr-only" />
+                      <div class="px-2 py-1 rounded border border-slate-200 hover:bg-red-50 text-center transition-all flex items-center justify-center bg-red-50 text-red-700 border-red-200">
+                        <span class="text-[9px] font-bold uppercase">Kerajaan</span>
+                      </div>
+                    </label>
+                    <label class="relative cursor-pointer group">
+                      <input type="radio" name="ssoSubFilter" value="Pembelajaran Sepanjang Hayat" onchange="setSSOSubFilter('Pembelajaran Sepanjang Hayat')" class="peer sr-only" />
+                      <div class="px-2 py-1 rounded border border-slate-200 hover:bg-blue-50 text-center transition-all flex items-center justify-center bg-blue-50 text-blue-700 border-blue-200">
+                        <span class="text-[9px] font-bold uppercase">Pembelajaran Sepanjang Hayat</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                <div id="ssoSubSubFilter" class="hidden">
+                  <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Subcategory</label>
+                  <div id="ssoSubSubFilterContainer" class="grid grid-cols-2 gap-1"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -143,15 +189,14 @@
               <input type="radio" name="ssoCategory" value="Pembelajaran Sepanjang Hayat" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-blue-700 peer-checked:border-blue-400 peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                <span class="text-[9px] font-bold uppercase">Pembelajaran</span>
+                <span class="text-[9px] font-bold uppercase">Pembelajaran Sepanjang Hayat</span>
               </div>
             </label>
           </div>
         </div>
         <div id="ssoSubContainer" class="hidden">
-          <select id="announcementSSOSub" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi">
-            <option value="">Select subcategory...</option>
-          </select>
+          <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Subcategory</label>
+          <div id="ssoSubRadioContainer" class="grid grid-cols-2 gap-1.5"></div>
         </div>
         <div class="border border-slate-200 rounded-lg overflow-hidden">
           <div class="flex gap-0.5 p-1.5 bg-slate-100 border-b border-slate-200">
@@ -223,6 +268,8 @@
         announcements: [],
       };
       let currentAnnouncementFilter = "all";
+      let currentSSOSubFilter = "";
+      let currentSSOSubSubFilter = "";
       let annEditingId = null;
 
       function annShowAddForm() {
@@ -239,6 +286,7 @@
           document.querySelectorAll('input[name="annCategory"]').forEach(r => r.checked = false);
           document.getElementById("ssoMainContainer").classList.add("hidden");
           document.getElementById("ssoSubContainer").classList.add("hidden");
+          document.getElementById("ssoSubRadioContainer").innerHTML = "";
         }
       }
 
@@ -250,7 +298,7 @@
         const allRadio = document.querySelector('input[name="annCategory"][value="Urgent"]');
         if (allRadio) allRadio.checked = true;
         document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
-        document.getElementById("announcementSSOSub").value = "";
+        document.querySelectorAll('input[name="ssoSubCategory"]').forEach(r => r.checked = false);
         document.getElementById("announcementDueDate").value = "";
         document.getElementById("ssoMainContainer").classList.add("hidden");
         document.getElementById("ssoSubContainer").classList.add("hidden");
@@ -265,12 +313,12 @@
           ssoMainContainer.classList.remove("hidden");
           ssoSubContainer.classList.add("hidden");
           document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
-          document.getElementById("announcementSSOSub").value = "";
+          document.querySelectorAll('input[name="ssoSubCategory"]').forEach(r => r.checked = false);
         } else {
           ssoMainContainer.classList.add("hidden");
           ssoSubContainer.classList.add("hidden");
           document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
-          document.getElementById("announcementSSOSub").value = "";
+          document.querySelectorAll('input[name="ssoSubCategory"]').forEach(r => r.checked = false);
         }
       }
 
@@ -287,7 +335,7 @@
       function annSSOMainChanged() {
         const mainCategory = document.querySelector('input[name="ssoCategory"]:checked')?.value;
         const ssoSubContainer = document.getElementById("ssoSubContainer");
-        const ssoSubSelect = document.getElementById("announcementSSOSub");
+        const ssoSubRadioContainer = document.getElementById("ssoSubRadioContainer");
         const subMap = {
           "Usahawan": ["eKelas Keusahawanan (Maxis)", "Preneur/EmpowHER", "Kidventure"],
           "Kesejahteraan Kendiri": ["Care"],
@@ -297,16 +345,16 @@
         };
         if (mainCategory && subMap[mainCategory] && subMap[mainCategory].length > 0) {
           ssoSubContainer.classList.remove("hidden");
-          ssoSubSelect.innerHTML = '<option value="">Select...</option>';
-          subMap[mainCategory].forEach((sub) => {
-            const opt = document.createElement("option");
-            opt.value = sub;
-            opt.textContent = sub;
-            ssoSubSelect.appendChild(opt);
-          });
+          ssoSubRadioContainer.innerHTML = subMap[mainCategory].map((sub) => `
+            <label class="relative cursor-pointer group">
+              <input type="radio" name="ssoSubCategory" value="${sub}" class="peer sr-only" />
+              <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-nadi peer-checked:border-nadi peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center">
+                <span class="text-[9px] font-bold uppercase">${sub}</span>
+              </div>
+            </label>
+          `).join("");
         } else {
           ssoSubContainer.classList.add("hidden");
-          ssoSubSelect.value = "";
         }
       }
 
@@ -411,8 +459,21 @@
         return temp.innerHTML;
       }
 
+      function convertBoldSyntax(text) {
+        if (!text) return text;
+        text = text.replace(/_\*([^*]+)\*_/g, '<strong><em>$1</em></strong>');
+        text = text.replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
+        text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+        return text;
+      }
+
       function setAnnouncementFilter(filter) {
         currentAnnouncementFilter = filter;
+        currentSSOSubFilter = "";
+        currentSSOSubSubFilter = "";
+        document.getElementById("ssoSubFilter").classList.add("hidden");
+        document.getElementById("ssoSubSubFilter").classList.add("hidden");
+        
         document.querySelectorAll('[data-ann-filter]').forEach((btn) => {
           const btnFilter = btn.dataset.annFilter;
           if (btnFilter === filter) {
@@ -421,6 +482,69 @@
             btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200";
           }
         });
+        
+        // Reset SSO subfilter radio buttons
+        document.querySelectorAll('input[name="ssoSubFilter"]').forEach((radio) => {
+          radio.checked = false;
+        });
+        
+        // Show SSO subfilter if SSO is selected
+        if (filter === "SSO") {
+          document.getElementById("ssoSubFilter").classList.remove("hidden");
+          renderAnnouncementList();
+        } else {
+          renderAnnouncementList();
+        }
+      }
+
+      function setSSOSubFilter(subFilter) {
+        currentSSOSubFilter = subFilter;
+        
+        document.querySelectorAll('input[name="ssoSubFilter"]').forEach((radio) => {
+          if (radio.value === subFilter) {
+            radio.checked = true;
+          }
+        });
+        
+        const ssoSubSubFilter = document.getElementById("ssoSubSubFilter");
+        const ssoSubSubFilterContainer = document.getElementById("ssoSubSubFilterContainer");
+        const subMap = {
+          "Usahawan": ["eKelas Keusahawanan (Maxis)", "Preneur/EmpowHER", "Kidventure"],
+          "Kesejahteraan Kendiri": ["Care"],
+          "Kesedaran": ["Safe & Shield"],
+          "Inisiatif Kerajaan": [],
+          "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
+        };
+        
+        if (subFilter && subMap[subFilter] && subMap[subFilter].length > 0) {
+          ssoSubSubFilter.classList.remove("hidden");
+          ssoSubSubFilterContainer.innerHTML = subMap[subFilter].map((sub) => `
+            <label class="relative cursor-pointer group">
+              <input type="radio" name="ssoSubSubFilter" value="${sub}" onchange="setSSOSubSubFilter('${sub}')" class="peer sr-only" />
+              <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-nadi peer-checked:border-nadi peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center">
+                <span class="text-[9px] font-bold uppercase">${sub}</span>
+              </div>
+            </label>
+          `).join("");
+          currentSSOSubSubFilter = subMap[subFilter][0] || "";
+          document.querySelector('input[name="ssoSubSubFilter"]')?.click();
+        } else {
+          ssoSubSubFilter.classList.add("hidden");
+          currentSSOSubSubFilter = "";
+        }
+        
+        renderAnnouncementList();
+      }
+      
+      function setSSOSubSubFilter(subSubFilter) {
+        currentSSOSubSubFilter = subSubFilter;
+        
+        document.querySelectorAll('input[name="ssoSubSubFilter"]').forEach((radio) => {
+          if (radio.value === subSubFilter) {
+            radio.checked = true;
+          }
+        });
+        
         renderAnnouncementList();
       }
 
@@ -429,8 +553,21 @@
         if (!container) return;
         const filter = currentAnnouncementFilter;
         let filtered = announcements;
-        if (filter === "Urgent") filtered = announcements.filter((a) => a.isUrgent);
-        else if (filter !== "all") filtered = announcements.filter((a) => a.category === filter);
+        
+        if (filter === "Urgent") {
+          filtered = announcements.filter((a) => a.isUrgent);
+        } else if (filter === "SSO") {
+          filtered = announcements.filter((a) => a.category === "SSO");
+          if (currentSSOSubFilter) {
+            filtered = filtered.filter((a) => a.ssoMain === currentSSOSubFilter);
+            if (currentSSOSubSubFilter) {
+              filtered = filtered.filter((a) => a.ssoSub === currentSSOSubSubFilter);
+            }
+          }
+        } else if (filter !== "all") {
+          filtered = announcements.filter((a) => a.category === filter);
+        }
+        
         filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         if (!filtered || filtered.length === 0) {
           container.innerHTML = '<div class="text-center py-12"><div class="text-slate-300 text-4xl mb-3"><i class="fa-regular fa-calendar-xmark"></i></div><p class="text-slate-500 text-sm">No announcements yet</p></div>';
@@ -484,7 +621,7 @@
                   <button onclick="annDeleteAnnouncement('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
                 </div>
               </div>
-              <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(ann.content) : ""}</div>
+              <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(convertBoldSyntax(ann.content)) : ""}</div>
               <div class="pt-2 border-t border-slate-100 mt-3">
                 <div class="flex justify-between items-end">
                   ${dueDisplay ? `<div>${dueDisplay}</div>` : '<div></div>'}
@@ -504,7 +641,7 @@
         const content = document.getElementById("announcementEditor").innerHTML;
         const category = document.querySelector('input[name="annCategory"]:checked')?.value || "all";
         const ssoMain = document.querySelector('input[name="ssoCategory"]:checked')?.value || "";
-        const ssoSub = document.getElementById("announcementSSOSub").value;
+        const ssoSub = document.querySelector('input[name="ssoSubCategory"]:checked')?.value || "";
         const dueDate = document.getElementById("announcementDueDate").value;
         if (!title) { showToast("Please enter a title."); return; }
         if (category === "SSO" && !ssoMain) { showToast("Please select SSO category."); return; }
@@ -555,13 +692,89 @@
           const radio = document.querySelector(`input[name="ssoCategory"][value="${ann.ssoMain}"]`);
           if (radio) radio.checked = true;
           annSSOMainChanged();
-          document.getElementById("announcementSSOSub").value = ann.ssoSub || "";
+          const subRadio = document.querySelector(`input[name="ssoSubCategory"][value="${ann.ssoSub}"]`);
+          if (subRadio) subRadio.checked = true;
         }
         document.getElementById("announcementDueDate").value = ann.dueDate || "";
       }
 
       document.addEventListener("DOMContentLoaded", function() {
         setAnnouncementFilter("all");
+        
+        // Auto-convert pasted URLs to clickable links while preserving formatting
+        const editor = document.getElementById("announcementEditor");
+        if (editor) {
+          editor.addEventListener("paste", function(e) {
+            e.preventDefault();
+            
+            // Get both HTML and plain text from clipboard
+            const html = e.clipboardData.getData("text/html");
+            const text = e.clipboardData.getData("text/plain");
+            
+            if (html) {
+              // Parse the HTML
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(html, "text/html");
+              
+              // Function to convert URLs in text nodes
+              const convertUrls = (node) => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                  const urlRegex = /(https?:\/\/[^\s<"]+)|(www\.[^\s<"]+)/gi;
+                  const newHtml = node.textContent.replace(urlRegex, function(url) {
+                    if (!url.startsWith("http")) {
+                      url = "https://" + url;
+                    }
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">${url}</a>`;
+                  });
+                  if (newHtml !== node.textContent) {
+                    const span = document.createElement("span");
+                    span.innerHTML = newHtml;
+                    node.parentNode.replaceChild(span, node);
+                  }
+                } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== "A") {
+                  // Recursively process child nodes
+                  Array.from(node.childNodes).forEach(child => convertUrls(child));
+                }
+              };
+              
+              // Process the body content
+              convertUrls(doc.body);
+              
+              // Get the processed HTML
+              let processedHtml = doc.body.innerHTML;
+              
+              // Clean up empty paragraphs and fix spacing
+              processedHtml = processedHtml
+                .replace(/<p>\s*<\/p>/g, "")
+                .replace(/<p>\s*/g, "<p>")
+                .replace(/\s*<\/p>/g, "</p>")
+                .replace(/<br>\s*/g, "<br>")
+                .replace(/\s*<br>/g, "<br>");
+              
+              // Insert the HTML
+              document.execCommand("insertHTML", false, processedHtml);
+            } else if (text) {
+              // Plain text - preserve line breaks
+              const urlRegex = /(https?:\/\/[^\s<"]+)|(www\.[^\s<"]+)/gi;
+              let processedText = text.replace(urlRegex, function(url) {
+                if (!url.startsWith("http")) {
+                  url = "https://" + url;
+                }
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">${url}</a>`;
+              });
+              
+              // Convert line breaks to <br> or <p> tags
+              const paragraphs = processedText.split(/\n\n+/);
+              const htmlParagraphs = paragraphs.map(p => {
+                const lines = p.split(/\n/);
+                return "<p>" + lines.map(line => line.trim()).join("<br>") + "</p>";
+              }).join("");
+              
+              document.execCommand("insertHTML", false, htmlParagraphs);
+            }
+          });
+        }
+        
         database.ref("siteSettings").once("value", (snapshot) => {
           const settings = snapshot.val() || {};
           if (settings.announcements) announcements = settings.announcements;
