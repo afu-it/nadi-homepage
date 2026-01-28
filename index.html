@@ -7,16 +7,18 @@
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
     <style type="text/tailwindcss">
-      /* eslint-disable-next-line tailwindcss/no-custom-classname */
-      @theme {
-        --color-nadi: #2228a4;
-        --color-cat-entrepreneur: #facc15;
-        --color-cat-learning: #3b82f6;
-        --color-cat-wellbeing: #10b981;
-        --color-cat-awareness: #8b5cf6;
-        --color-cat-gov: #ef4444;
-        --font-family-sans: "Plus Jakarta Sans", sans-serif;
-        --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+      /* Tailwind CSS v4 theme configuration */
+      @layer base {
+        :root {
+          --color-nadi: #2228a4;
+          --color-cat-entrepreneur: #facc15;
+          --color-cat-learning: #3b82f6;
+          --color-cat-wellbeing: #10b981;
+          --color-cat-awareness: #8b5cf6;
+          --color-cat-gov: #ef4444;
+          --font-family-sans: "Plus Jakarta Sans", sans-serif;
+          --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+        }
       }
       .offday-line-m { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); width: 16px; height: 2.5px; background-color: #00aff0; border-radius: 2px; }
       .offday-line-am { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); width: 16px; height: 2.5px; background-color: #90cf53; border-radius: 2px; }
@@ -28,8 +30,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body class="min-h-screen flex flex-col text-slate-800 font-sans">
     <header class="sticky top-0 z-40 header-bg shadow-md">
@@ -155,25 +156,25 @@
                       <div class="flex justify-between items-center mb-1.5 pb-1 border-b border-slate-100">
                         <span class="text-[9px] font-bold text-slate-500 uppercase">Show/Hide</span>
                         <button onclick="resetCalendarFilters()" class="text-[8px] text-blue-600 hover:underline">Reset</button>
-                      </div>
-                      <div class="space-y-1 text-[9px]">
-                        <label class="flex items-center gap-1.5 cursor-pointer">
-                          <input type="checkbox" id="filterShowCategories" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
-                          <span>Categories</span>
-                        </label>
-                        <label class="flex items-center gap-1.5 cursor-pointer">
-                          <input type="checkbox" id="filterShowHolidays" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
-                          <span>Cuti Umum</span>
-                        </label>
-                        <label class="flex items-center gap-1.5 cursor-pointer">
-                          <input type="checkbox" id="filterShowSchoolHolidays" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
-                          <span>Cuti Sekolah</span>
-                        </label>
-                        <label class="flex items-center gap-1.5 cursor-pointer">
-                          <input type="checkbox" id="filterShowOffdays" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
-                          <span>Off Days</span>
-                        </label>
-                      </div>
+                       </div>
+                        <div class="space-y-1 text-[9px]">
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowCategories" name="filterShowCategories" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Categories</span>
+                          </label>
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowHolidays" name="filterShowHolidays" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Cuti Umum</span>
+                          </label>
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowSchoolHolidays" name="filterShowSchoolHolidays" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Cuti Sekolah</span>
+                          </label>
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowOffdays" name="filterShowOffdays" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Off Days</span>
+                          </label>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -188,11 +189,18 @@
               <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
               <div class="flex gap-2">
                 <button
-                  onclick="syncEventsFromFirebase()"
+                  onclick="syncEventsFromSupabase()"
                   class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-green-600 hover:border-green-300 shadow-sm"
-                  title="Sync Events from Firebase"
+                  title="Sync Events from Supabase"
                 >
                   <i class="fa-solid fa-rotate text-[10px]"></i>
+                </button>
+                <button
+                  onclick="forceRefreshEvents()"
+                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-orange-600 hover:border-orange-300 shadow-sm"
+                  title="Force Refresh from Supabase"
+                >
+                  <i class="fa-solid fa-arrow-rotate-right text-[10px]"></i>
                 </button>
                 <button
                   onclick="toggleFilter()"
@@ -245,16 +253,22 @@
                 </button>
               </div>
               <div class="flex gap-2 items-center">
+                <label for="filterStart" class="sr-only">Start Date</label>
                 <input
                   type="date"
                   id="filterStart"
+                  name="filterStart"
+                  autocomplete="off"
                   onchange="applyRangeFilter()"
                   class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-blue-400 text-slate-600"
                 />
                 <span class="text-slate-300 text-[10px]"><i class="fa-solid fa-arrow-right"></i></span>
+                <label for="filterEnd" class="sr-only">End Date</label>
                 <input
                   type="date"
                   id="filterEnd"
+                  name="filterEnd"
+                  autocomplete="off"
                   onchange="applyRangeFilter()"
                   class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-blue-400 text-slate-600"
                 />
@@ -362,21 +376,25 @@
 
             <div class="p-6 space-y-4">
               <div>
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                <label for="settingSiteTitle" class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
                   >Main Title</label
                 >
                 <input
                   type="text"
                   id="settingSiteTitle"
+                  name="settingSiteTitle"
+                  autocomplete="off"
                   class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm outline-none focus:border-nadi"
                   placeholder="NADI SCSB"
                 />
               </div>
               <div>
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Subtitle</label>
+                <label for="settingSiteSubtitle" class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Subtitle</label>
                 <input
                   type="text"
                   id="settingSiteSubtitle"
+                  name="settingSiteSubtitle"
+                  autocomplete="off"
                   class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm outline-none focus:border-nadi"
                   placeholder="PULAU PINANG"
                 />
@@ -412,9 +430,9 @@
 
               <div class="flex gap-2">
                 <button
-                  onclick="syncSectionsFromFirebase()"
+                  onclick="syncSectionsFromSupabase()"
                   class="text-xs font-bold text-nadi bg-white hover:bg-slate-50 border border-nadi px-3 py-2 rounded-lg shadow-md flex items-center gap-2"
-                  title="Sync sections from Firebase"
+                  title="Sync sections from Supabase"
                 >
                   <i class="fa-solid fa-rotate"></i> Sync
                 </button>
@@ -455,18 +473,21 @@
               <div class="bg-slate-50 rounded-lg border border-slate-200 p-3 mb-3">
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Section Title</label>
+                    <label for="editSectionHeader" class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Section Title</label>
                     <input
                       type="text"
                       id="editSectionHeader"
+                      name="editSectionHeader"
+                      autocomplete="off"
                       class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm font-semibold outline-none focus:border-blue-400"
                       placeholder="e.g. Quick Links"
                     />
                   </div>
                   <div>
-                    <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Columns</label>
+                    <label for="editSectionCols" class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Columns</label>
                     <select
                       id="editSectionCols"
+                      name="editSectionCols"
                       onchange="renderColumnEditors()"
                       class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm font-semibold outline-none focus:border-blue-400 cursor-pointer"
                     >
@@ -632,20 +653,24 @@
                 </div>
                 <div class="p-3 space-y-2">
                   <div>
-                    <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
+                    <label for="holidayName" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
                     <input
                       type="text"
                       id="holidayName"
+                      name="holidayName"
+                      autocomplete="off"
                       class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
                       placeholder="e.g. Hari Raya Puasa"
                     />
                   </div>
                   <div class="grid grid-cols-2 gap-2 items-end">
                     <div>
-                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Date</label>
+                      <label for="holidayDate" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Date</label>
                       <input
                         type="date"
                         id="holidayDate"
+                        name="holidayDate"
+                        autocomplete="off"
                         class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
                       />
                     </div>
@@ -705,28 +730,34 @@
                 </div>
                 <div class="p-3 space-y-2">
                   <div>
-                    <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
+                    <label for="schoolHolidayName" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
                     <input
                       type="text"
                       id="schoolHolidayName"
+                      name="schoolHolidayName"
+                      autocomplete="off"
                       class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
                       placeholder="e.g. Cuti Penggal 1"
                     />
                   </div>
                   <div class="grid grid-cols-2 gap-2">
                     <div>
-                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Start Date</label>
+                      <label for="schoolHolidayStart" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Start Date</label>
                       <input
                         type="date"
                         id="schoolHolidayStart"
+                        name="schoolHolidayStart"
+                        autocomplete="off"
                         class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
                       />
                     </div>
                     <div>
-                      <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">End Date</label>
+                      <label for="schoolHolidayEnd" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">End Date</label>
                       <input
                         type="date"
                         id="schoolHolidayEnd"
+                        name="schoolHolidayEnd"
+                        autocomplete="off"
                         class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
                       />
                     </div>
@@ -788,12 +819,12 @@
           </div>
           <div class="p-4 space-y-3">
             <form id="eventForm" class="space-y-3">
-              <input type="hidden" id="eventId" />
+              <input type="hidden" id="eventId" name="eventId" />
               <div>
-                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1.5">Category</label>
+                <label aria-label="Program Category" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1.5">Category</label>
                 <div class="grid grid-cols-2 gap-1.5">
                   <label class="relative cursor-pointer group block">
-                    <input type="radio" name="category" value="entrepreneur" class="peer sr-only cat-radio" />
+                    <input type="radio" id="categoryEntrepreneur" name="category" value="entrepreneur" class="peer sr-only cat-radio" />
                     <div
                       class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-yellow-700 peer-checked:border-yellow-400 peer-checked:bg-yellow-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
                     >
@@ -808,7 +839,7 @@
                     </div>
                   </label>
                   <label class="relative cursor-pointer group block">
-                    <input type="radio" name="category" value="wellbeing" class="peer sr-only cat-radio" />
+                    <input type="radio" id="categoryWellbeing" name="category" value="wellbeing" class="peer sr-only cat-radio" />
                     <div
                       class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-emerald-600 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
                     >
@@ -823,7 +854,7 @@
                     </div>
                   </label>
                   <label class="relative cursor-pointer group block">
-                    <input type="radio" name="category" value="awareness" class="peer sr-only cat-radio" />
+                    <input type="radio" id="categoryAwareness" name="category" value="awareness" class="peer sr-only cat-radio" />
                     <div
                       class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-violet-600 peer-checked:border-violet-400 peer-checked:bg-violet-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
                     >
@@ -838,7 +869,7 @@
                     </div>
                   </label>
                   <label class="relative cursor-pointer group block">
-                    <input type="radio" name="category" value="gov" class="peer sr-only cat-radio" />
+                    <input type="radio" id="categoryGov" name="category" value="gov" class="peer sr-only cat-radio" />
                     <div
                       class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-red-600 peer-checked:border-red-400 peer-checked:bg-red-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
                     >
@@ -853,7 +884,7 @@
                     </div>
                   </label>
                   <label class="relative cursor-pointer group block col-span-2 flex justify-center">
-                    <input type="radio" name="category" value="learning" class="peer sr-only cat-radio" />
+                    <input type="radio" id="categoryLearning" name="category" value="learning" class="peer sr-only cat-radio" />
                     <div
                       class="w-[220px] px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-blue-600 peer-checked:border-blue-400 peer-checked:bg-blue-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
                     >
@@ -872,24 +903,27 @@
                 </div>
               </div>
               <div id="subcategorySection" class="mt-2 hidden col-span-2">
-                <label class="text-[8px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                <label for="subcategory" class="text-[8px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
                   >Sub-Category</label
                 >
                 <select
                   id="subcategory"
+                  name="subcategory"
                   class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-semibold text-slate-600 focus:border-slate-400 outline-none"
                 >
                   <option value="">-- Select Sub-Category --</option>
                 </select>
               </div>
               <div>
-                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                <label for="eventTitle" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
                   >Title <span class="text-red-500">*</span></label
                 >
                 <input
                   type="text"
                   id="eventTitle"
+                  name="eventTitle"
                   required
+                  autocomplete="off"
                   class="w-full px-3 py-2 bg-[#eff6ff] border border-slate-200 rounded text-sm font-semibold text-slate-800 focus:border-slate-400 focus:ring-0 outline-none"
                   placeholder="Nama Program"
                 />
@@ -921,38 +955,46 @@
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div>
-                  <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                  <label for="startDate" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
                     >Start Date</label
                   >
                   <input
                     type="date"
                     id="startDate"
+                    name="startDate"
+                    autocomplete="off"
                     class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:border-slate-400 outline-none"
                   />
                 </div>
                 <div>
-                  <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">End Date</label>
+                  <label for="endDate" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">End Date</label>
                   <input
                     type="date"
                     id="endDate"
+                    name="endDate"
+                    autocomplete="off"
                     class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:border-slate-400 outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Time</label>
+                <label aria-label="Time Selection" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Time</label>
                 <div class="flex flex-col gap-2">
                   <div class="flex items-center gap-1.5">
                     <span class="text-[9px] text-slate-500 font-semibold w-10">Start</span>
+                    <label for="timeHour" class="sr-only">Start Hour</label>
                     <select
                       id="timeHour"
+                      name="timeHour"
                       onchange="updateEndTime()"
                       class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     ></select>
                     <span class="text-slate-400 text-xs">:</span>
+                    <label for="timeMinute" class="sr-only">Start Minute</label>
                     <select
                       id="timeMinute"
+                      name="timeMinute"
                       onchange="updateEndTime()"
                       class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     >
@@ -961,8 +1003,10 @@
                       <option value="30">30</option>
                       <option value="45">45</option>
                     </select>
+                    <label for="timeAMPM" class="sr-only">AM/PM</label>
                     <select
                       id="timeAMPM"
+                      name="timeAMPM"
                       onchange="updateEndTime()"
                       class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
                     >
@@ -972,15 +1016,19 @@
                   </div>
                   <div class="flex items-center gap-1.5">
                     <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
+                    <label for="endTimeHour" class="sr-only">End Hour</label>
                     <select
                       id="endTimeHour"
+                      name="endTimeHour"
                       class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     >
                       <option value="" selected>-</option>
                     </select>
                     <span class="text-slate-400 text-xs">:</span>
+                    <label for="endTimeMinute" class="sr-only">End Minute</label>
                     <select
                       id="endTimeMinute"
+                      name="endTimeMinute"
                       class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     >
                       <option value="00">00</option>
@@ -988,8 +1036,10 @@
                       <option value="30">30</option>
                       <option value="45">45</option>
                     </select>
+                    <label for="endTimeAMPM" class="sr-only">AM/PM</label>
                     <select
                       id="endTimeAMPM"
+                      name="endTimeAMPM"
                       class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
                     >
                       <option value="" selected>-</option>
@@ -1003,6 +1053,7 @@
                       <input
                         type="checkbox"
                         id="hasSecondSession"
+                        name="hasSecondSession"
                         onchange="toggleSecondSession()"
                         class="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
@@ -1011,16 +1062,20 @@
                     <div id="secondSessionContainer" class="flex flex-col gap-2 pl-4 hidden">
                       <div class="flex items-center gap-1.5">
                         <span class="text-[9px] text-slate-500 font-semibold w-10">Start</span>
+                        <label for="time2Hour" class="sr-only">Session 2 Start Hour</label>
                         <select
                           id="time2Hour"
+                          name="time2Hour"
                           onchange="updateEndTime2()"
                           class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                         >
                           <option value="" selected>-</option>
                         </select>
                         <span class="text-slate-400 text-xs">:</span>
+                        <label for="time2Minute" class="sr-only">Session 2 Start Minute</label>
                         <select
                           id="time2Minute"
+                          name="time2Minute"
                           onchange="updateEndTime2()"
                           class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                         >
@@ -1029,8 +1084,10 @@
                           <option value="30">30</option>
                           <option value="45">45</option>
                         </select>
+                        <label for="time2AMPM" class="sr-only">Session 2 AM/PM</label>
                         <select
                           id="time2AMPM"
+                          name="time2AMPM"
                           onchange="updateEndTime2()"
                           class="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
                         >
@@ -1040,15 +1097,19 @@
                       </div>
                       <div class="flex items-center gap-1.5">
                         <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
+                        <label for="endTime2Hour" class="sr-only">Session 2 End Hour</label>
                         <select
                           id="endTime2Hour"
+                          name="endTime2Hour"
                           class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                         >
                           <option value="" selected>-</option>
                         </select>
                         <span class="text-slate-400 text-xs">:</span>
+                        <label for="endTime2Minute" class="sr-only">Session 2 End Minute</label>
                         <select
                           id="endTime2Minute"
+                          name="endTime2Minute"
                           class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                         >
                           <option value="00">00</option>
@@ -1056,8 +1117,10 @@
                           <option value="30">30</option>
                           <option value="45">45</option>
                         </select>
+                        <label for="endTime2AMPM" class="sr-only">Session 2 End AM/PM</label>
                         <select
                           id="endTime2AMPM"
+                          name="endTime2AMPM"
                           class="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
                         >
                           <option value="AM">AM</option>
@@ -1070,7 +1133,7 @@
               </div>
 
               <div class="mt-3">
-                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Links</label>
+                <label aria-label="Links Section" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Links</label>
                 <div id="linksContainer" class="space-y-1.5 mb-2"></div>
                 <button
                   type="button"
@@ -1156,6 +1219,7 @@
               <div class="w-px h-6 bg-slate-200 mx-1"></div>
               <div class="relative">
                 <select
+                  id="programInfoFontSize"
                   onchange="changeFontSize(this.value)"
                   class="px-2 py-1 h-7 bg-white border border-slate-200 rounded text-[10px] font-semibold outline-none cursor-pointer text-slate-600"
                 >
@@ -1333,19 +1397,23 @@
           </div>
           <div class="p-4 space-y-3">
             <div>
-              <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Display Text</label>
+              <label for="linkTextField" class="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Display Text</label>
               <input
                 type="text"
                 id="linkTextField"
+                name="linkTextField"
+                autocomplete="off"
                 class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-blue-400"
                 placeholder="Click here (leave empty to use URL)"
               />
             </div>
             <div>
-              <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">URL <span class="text-red-500">*</span></label>
+              <label for="urlInputField" class="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">URL <span class="text-red-500">*</span></label>
               <input
                 type="url"
                 id="urlInputField"
+                name="urlInputField"
+                autocomplete="off"
                 class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-blue-400"
                 placeholder="https://example.com"
                 onkeydown="if(event.key==='Enter') confirmInsertLink()"

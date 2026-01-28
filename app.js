@@ -1,4 +1,5 @@
 const schoolHolidays = {};
+window.DEBUG_MODE = false;
 
 function toLocalISOString(date) {
   const y = date.getFullYear();
@@ -107,7 +108,7 @@ let events = [];
 // Ensure events is always an array
 function ensureEventsArray() {
   if (!Array.isArray(events)) {
-    console.warn("Events is not an array, resetting to empty array");
+    if (window.DEBUG_MODE) console.warn("Events is not an array, resetting to empty array");
     events = [];
   }
 }
@@ -133,52 +134,191 @@ let siteSettings = {
 // Backup for data protection
 let siteSettingsBackup = null;
 
-function backupSiteSettings() {
+// =====================================================
+// OPTIMIZATION: Caching variables
+// =====================================================
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+let eventsCache = {
+  data: null,
+  timestamp: null,
+  monthKey: null  // Store which month this cache is for
+};
+
+// =====================================================
+// OPTIMIZATION: Load events for specific month
+// =====================================================
+async function loadEventsForMonth(year, month) {
+  const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+  const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+  
+  // Check cache first
+  if (eventsCache.monthKey === monthKey && 
+      eventsCache.data && 
+      eventsCache.timestamp && 
+      (Date.now() - eventsCache.timestamp) < CACHE_DURATION) {
+    if (window.DEBUG_MODE) console.log('✅ Using cached events for', monthKey);
+    return eventsCache.data;
+  }
+  
+  if (window.DEBUG_MODE) console.log('📥 Loading events for', monthKey, '...');
+  
+  const { data, error } = await supabaseClient
+    .from('events')
+    .select('*')
+    .gte('start', firstDay)
+    .lte('end', lastDay)
+    .order('start', { ascending: true });
+  
+  if (error) {
+    console.error('❌ Error loading events for month:', error);
+    return [];
+  }
+  
+  const eventsArray = data || [];
+  
+  // Update cache
+  eventsCache = {
+    data: eventsArray,
+    timestamp: Date.now(),
+    monthKey: monthKey
+  };
+  
+  // Also save to localStorage for persistence across sessions
+  try {
+    localStorage.setItem('events_cache', JSON.stringify({
+      data: eventsArray,
+      timestamp: Date.now(),
+      monthKey: monthKey
+    }));
+  } catch (e) {
+    if (window.DEBUG_MODE) console.warn('Could not save events to localStorage cache:', e);
+  }
+  
+  if (window.DEBUG_MODE) console.log(`✅ Loaded ${eventsArray.length} events for ${monthKey}`);
+  return eventsArray;
+}
+
+// =====================================================
+// OPTIMIZATION: Force refresh events from Supabase
+// =====================================================
+async function forceRefreshEvents() {
+  if (window.DEBUG_MODE) console.log('🔄 Force refreshing events from Supabase...');
+  
+  // Clear cache
+  eventsCache = {
+    data: null,
+    timestamp: null,
+    monthKey: null
+  };
+  localStorage.removeItem('events_cache');
+  
+  // Load events for current month
+  const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
+  events = monthEvents;
+  
+  renderCalendar();
+  renderEventList();
+  
+  if (window.DEBUG_MODE) console.log('✅ Events force refreshed!');
+}
+
+// =====================================================
+// OPTIMIZATION: Load from cache or Supabase
+// =====================================================
+async function loadEventsWithCache() {
+  // Try to load from localStorage cache first
+  try {
+    const cached = localStorage.getItem('events_cache');
+    if (cached) {
+      const cache = JSON.parse(cached);
+      const cacheAge = Date.now() - (cache.timestamp || 0);
+      
+      // Check if cache is for current month and less than 5 minutes old
+      const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+      
+      if (cacheAge < CACHE_DURATION && 
+          cache.monthKey === currentMonthKey && 
+          Array.isArray(cache.data)) {
+        if (window.DEBUG_MODE) console.log('✅ Using cached events (age:', Math.round(cacheAge/1000), 'seconds)');
+        events = cache.data;
+        
+        // Update in-memory cache
+        eventsCache = {
+          data: cache.data,
+          timestamp: cache.timestamp,
+          monthKey: cache.monthKey
+        };
+        
+        renderCalendar();
+        renderEventList();
+        return; // Skip Supabase loading
+      }
+    }
+  } catch (e) {
+    if (window.DEBUG_MODE) console.warn('Could not read events cache:', e);
+  }
+  
+  // Load from Supabase if no valid cache
+  const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
+  events = monthEvents;
+  renderCalendar();
+  renderEventList();
+}
+
+async function backupSiteSettings() {
   siteSettingsBackup = JSON.parse(JSON.stringify(siteSettings));
   // Also save to localStorage as secondary backup
   try {
     localStorage.setItem("nadi_siteSettings_backup", JSON.stringify(siteSettings));
   } catch (e) {
-    console.warn("Could not save backup to localStorage:", e);
+    if (window.DEBUG_MODE) console.warn("Could not save backup to localStorage:", e);
   }
-  // Save backup to Firebase as tertiary backup
+  // Save backup to Supabase as tertiary backup - use ID 2 for backup
   try {
-    database.ref("siteSettingsBackup").set(siteSettingsBackup).catch(() => {
-      // Backup Firebase path might not exist, ignore
+    await supabaseClient.from('site_settings').upsert({
+      id: 2,
+      settings: siteSettingsBackup
+    }, { onConflict: 'id' }).catch(() => {
+      // Backup might fail, ignore
     });
   } catch (e) {
-    // Ignore Firebase backup errors
+    // Ignore Supabase backup errors
   }
-  console.log("✓ Site settings backed up");
 }
 
-function restoreSiteSettings() {
-  // Try Firebase backup first
-  database.ref("siteSettingsBackup").once("value", (snapshot) => {
-    const fbBackup = snapshot.val();
-    if (fbBackup && (fbBackup.sections?.length > 0 || fbBackup.managerOffdays?.length > 0)) {
-      siteSettings = fbBackup;
-      siteSettingsBackup = fbBackup;
+async function restoreSiteSettings() {
+  // Try Supabase backup first - use ID 2 for backup
+  try {
+    const { data: backupData, error } = await supabaseClient
+      .from('site_settings')
+      .select('settings')
+      .eq('id', 2)
+      .single();
+    
+    if (!error && backupData?.settings && (backupData.settings.sections?.length > 0 || backupData.settings.managerOffdays?.length > 0)) {
+      siteSettings = backupData.settings;
+      siteSettingsBackup = backupData.settings;
       try {
-        localStorage.setItem("nadi_siteSettings_backup", JSON.stringify(fbBackup));
+        localStorage.setItem("nadi_siteSettings_backup", JSON.stringify(backupData.settings));
       } catch (e) {}
-      console.log("✓ Site settings restored from Firebase backup");
       renderCustomLinks();
       renderCalendar();
       updateSectionCountBadge();
-      saveToFirebase();
+      await saveToSupabase();
       return true;
     }
-  }).catch(() => {});
+  } catch (e) {
+    if (window.DEBUG_MODE) console.warn("Could not restore from Supabase:", e);
+  }
   
   // Try memory backup first
   if (siteSettingsBackup && (siteSettingsBackup.sections?.length > 0 || siteSettingsBackup.managerOffdays?.length > 0)) {
     siteSettings = JSON.parse(JSON.stringify(siteSettingsBackup));
-    console.log("✓ Site settings restored from memory backup");
     renderCustomLinks();
     renderCalendar();
     updateSectionCountBadge();
-    saveToFirebase();
+    await saveToSupabase();
     return true;
   }
   // Try localStorage backup
@@ -189,41 +329,33 @@ function restoreSiteSettings() {
       if (parsed.sections?.length > 0 || parsed.managerOffdays?.length > 0) {
         siteSettings = parsed;
         siteSettingsBackup = parsed;
-        console.log("✓ Site settings restored from localStorage backup");
         renderCustomLinks();
         renderCalendar();
         updateSectionCountBadge();
-        saveToFirebase();
+        await saveToSupabase();
         return true;
       }
     }
   } catch (e) {
-    console.warn("Could not restore from localStorage:", e);
+    if (window.DEBUG_MODE) console.warn("Could not restore from localStorage:", e);
   }
   return false;
 }
 
-// Backup will be created after data loads from Firebase
+// Backup will be created after data loads from Supabase
 
 // Make restoreData available globally
 window.restoreData = function() {
-  console.log("Attempting to restore data from backup...");
+  if (window.DEBUG_MODE) console.log("Attempting to restore data from backup...");
   if (restoreSiteSettings()) {
-    console.log("✓ Data restored successfully!");
-    console.log("  - Sections:", siteSettings.sections?.length || 0);
-    console.log("  - Manager Offdays:", siteSettings.managerOffdays?.length || 0);
-    console.log("  - AM Offdays:", siteSettings.assistantManagerOffdays?.length || 0);
+    if (window.DEBUG_MODE) console.log("✓ Data restored successfully!");
     return true;
   } else {
-    console.log("⚠ No backup available to restore");
-    console.log("  Try re-entering your data manually.");
+    if (window.DEBUG_MODE) console.log("⚠ No backup available to restore");
     return false;
   }
 };
 
-console.log("=== DATA PROTECTION AVAILABLE ===");
-console.log("Type restoreData() to recover lost data");
-console.log("==================================");
 let announcements = [];
 let programInfoContent = "";
 let currentSort = "startTime";
@@ -232,190 +364,344 @@ let deleteSectionIdx = null;
 let savedSelectionRange = null;
 let tempPublicHolidays = {};
 let tempSchoolHolidays = {};
-let firebaseLoaded = false;
+let supabaseClientLoaded = false;
 let isDataLoaded = false;
 let showEditDeleteButtons = false;
 let programsListClicks = 0;
 let programsListTimer = null;
 
-function saveToFirebase() {
+// =====================================================
+// Specialized Save Functions (Split Structure)
+// =====================================================
+
+async function saveBasicConfig() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 1,
+    settings: {
+      title: siteSettings.title,
+      subtitle: siteSettings.subtitle,
+      calendarFilters: siteSettings.calendarFilters
+    }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save basic config (ID 1):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved basic config to ID 1');
+}
+
+async function saveManagerOffdays() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 10,
+    settings: { managerOffdays: siteSettings.managerOffdays }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save manager offdays (ID 10):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved manager offdays to ID 10');
+  
+  await updateFullBackup();
+}
+
+async function saveAssistantManagerOffdays() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 11,
+    settings: { assistantManagerOffdays: siteSettings.assistantManagerOffdays }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save assistant manager offdays (ID 11):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved assistant manager offdays to ID 11');
+  
+  await updateFullBackup();
+}
+
+async function saveManagerReplacements() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 12,
+    settings: { managerReplacements: siteSettings.managerReplacements }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save manager replacements (ID 12):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved manager replacements to ID 12');
+  
+  await updateFullBackup();
+}
+
+async function saveAssistantManagerReplacements() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 13,
+    settings: { assistantManagerReplacements: siteSettings.assistantManagerReplacements }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save assistant manager replacements (ID 13):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved assistant manager replacements to ID 13');
+  
+  await updateFullBackup();
+}
+
+async function savePublicHolidays() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 20,
+    settings: { publicHolidays: siteSettings.publicHolidays }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save public holidays (ID 20):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved public holidays to ID 20');
+  
+  await updateFullBackup();
+}
+
+async function saveSchoolHolidays() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 21,
+    settings: { schoolHolidays: siteSettings.schoolHolidays }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save school holidays (ID 21):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved school holidays to ID 21');
+  
+  await updateFullBackup();
+}
+
+async function saveCustomSections() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 30,
+    settings: { sections: siteSettings.sections }
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save custom sections (ID 30):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved custom sections to ID 30');
+  
+  await updateFullBackup();
+}
+
+async function updateFullBackup() {
+  const { error } = await supabaseClient.from('site_settings').upsert({
+    id: 99,
+    settings: siteSettings
+  }, { onConflict: 'id' });
+  
+  if (error) {
+    console.error('❌ Failed to save backup (ID 99):', error);
+    throw error;
+  }
+  if (window.DEBUG_MODE) console.log('✅ Saved backup to ID 99');
+}
+
+// Fallback: Save all settings at once
+async function saveAllSettings() {
   if (!isDataLoaded) {
-    console.warn("saveToFirebase called but data not loaded yet");
+    if (window.DEBUG_MODE) console.warn("saveAllSettings called but data not loaded yet");
     return Promise.reject(new Error("Data not loaded yet"));
   }
 
-  // Ensure all required fields exist
-  siteSettings.calendarFilters = siteSettings.calendarFilters || {
-    showCategories: true,
-    showHolidays: true,
-    showSchoolHolidays: true,
-    showOffdays: true,
-  };
-  siteSettings.announcements = announcements;
+  if (window.DEBUG_MODE) console.log("💾 Saving all settings to Supabase...");
+  
+  try {
+    // Save events to separate events table
+    if (events && events.length > 0) {
+      const { error: deleteError } = await supabaseClient.from('events').delete().neq('id', 0);
+      if (deleteError && window.DEBUG_MODE) console.warn("Warning deleting events:", deleteError);
+      const { error: insertError } = await supabaseClient.from('events').insert(events);
+      if (insertError) throw insertError;
+    } else {
+      await supabaseClient.from('events').delete().neq('id', 0);
+    }
 
-  // Log what we're saving for debugging
-  console.log("Saving to Firebase:");
-  console.log("  - Events:", events.length);
-  console.log("  - Sections:", siteSettings.sections ? siteSettings.sections.length : 0);
-  console.log("  - Manager Offdays:", siteSettings.managerOffdays ? siteSettings.managerOffdays.length : 0);
-  console.log("  - AM Offdays:", siteSettings.assistantManagerOffdays ? siteSettings.assistantManagerOffdays.length : 0);
-  console.log("  - Manager Replacements:", siteSettings.managerReplacements ? siteSettings.managerReplacements.length : 0);
-  console.log("  - AM Replacements:", siteSettings.assistantManagerReplacements ? siteSettings.assistantManagerReplacements.length : 0);
+    // Save announcements to separate announcements table
+    if (announcements && announcements.length > 0) {
+      const { error: deleteAnnError } = await supabaseClient.from('announcements').delete().neq('id', 0);
+      if (deleteAnnError && window.DEBUG_MODE) console.warn("Warning deleting announcements:", deleteAnnError);
+      const { error: insertAnnError } = await supabaseClient.from('announcements').insert(announcements);
+      if (insertAnnError) throw insertAnnError;
+    } else {
+      await supabaseClient.from('announcements').delete().neq('id', 0);
+    }
 
-  // Save both events and settings
-  const eventsPromise = database.ref("events").set(events);
-  const settingsPromise = database.ref("siteSettings").set(siteSettings);
+    // Save all settings using specialized functions
+    await saveBasicConfig();
+    await saveManagerOffdays();
+    await saveAssistantManagerOffdays();
+    await saveManagerReplacements();
+    await saveAssistantManagerReplacements();
+    await savePublicHolidays();
+    await saveSchoolHolidays();
+    await saveCustomSections();
 
-  return Promise.all([eventsPromise, settingsPromise])
-    .then(() => {
-      console.log("✓ All data saved successfully to Firebase");
-      // Update backup after successful save
-      backupSiteSettings();
-      return true;
-    })
-    .catch(err => {
-      console.error("✗ Failed to save to Firebase:", err);
-      throw err;
-    });
+    if (window.DEBUG_MODE) console.log("✅ All settings saved successfully");
+    await backupSiteSettings();
+    return true;
+  } catch (err) {
+    console.error("❌ Failed to save to Supabase:", err.message);
+    alert("Unable to save changes. Please check your connection and try again.");
+    throw err;
+  }
 }
 
-function refreshEventsFromFirebase() {
-  return new Promise((resolve, reject) => {
-    database.ref("events").once(
-      "value",
-      (snapshot) => {
-        const newEvents = snapshot.val() || [];
-        if (!Array.isArray(newEvents)) {
-          console.warn("Events from Firebase is not an array, resetting...");
-          newEvents = [];
-        }
-        if (JSON.stringify(events) !== JSON.stringify(newEvents)) {
-          events = newEvents;
-          console.log("✓ Refreshed events from Firebase:", events.length, "events");
-          renderCalendar();
-          renderEventList();
-        }
-        resolve(events);
-      },
-      (error) => {
-        console.error("Error refreshing events:", error);
-        reject(error);
-      }
-    );
-  });
+// Keep old function name as alias for backward compatibility
+const saveToSupabase = saveAllSettings;
+
+async function refreshEventsFromSupabase() {
+  try {
+    // CRITICAL FIX: Refresh from separate events table
+    const { data: eventsData, error } = await supabaseClient
+      .from('events')
+      .select('*');
+    
+    if (error) throw error;
+
+    const newEvents = eventsData || [];
+    if (JSON.stringify(events) !== JSON.stringify(newEvents)) {
+      events = newEvents;
+      if (window.DEBUG_MODE) console.log("✓ Refreshed events from Supabase:", events.length, "events");
+      renderCalendar();
+      renderEventList();
+    }
+    return events;
+  } catch (error) {
+    console.error("Error refreshing events:", error);
+    throw error;
+  }
 }
 
-function loadFromFirebase() {
-  return new Promise((resolve, reject) => {
-    let eventsLoaded = false;
-    let settingsLoaded = false;
-    let loadError = null;
-
-    const checkComplete = () => {
-      if (eventsLoaded && settingsLoaded) {
-        if (loadError) {
-          reject(loadError);
-        } else {
-          resolve();
-        }
+async function loadFromSupabase() {
+  if (window.DEBUG_MODE) console.log("🔄 Loading data from Supabase...");
+  
+  try {
+    // Load basic config (ID 1)
+    const { data: config } = await supabaseClient.from('site_settings').select('settings').eq('id', 1).single();
+    siteSettings = {
+      title: config?.settings?.title || 'NADI SCSB',
+      subtitle: config?.settings?.subtitle || 'PULAU PINANG',
+      calendarFilters: config?.settings?.calendarFilters || {
+        showCategories: true,
+        showHolidays: true,
+        showSchoolHolidays: true,
+        showOffdays: true,
       }
     };
 
-    // Load events
-    database.ref("events").once(
-      "value",
-      (snapshot) => {
-        events = snapshot.val() || [];
-        if (!Array.isArray(events)) {
-          console.warn("Events is not an array, converting...");
-          events = [];
+    // Load manager offdays (ID 10)
+    const { data: offdays10 } = await supabaseClient.from('site_settings').select('settings').eq('id', 10).single();
+    siteSettings.managerOffdays = offdays10?.settings?.managerOffdays || [];
+
+    // Load assistant manager offdays (ID 11)
+    const { data: offdays11 } = await supabaseClient.from('site_settings').select('settings').eq('id', 11).single();
+    siteSettings.assistantManagerOffdays = offdays11?.settings?.assistantManagerOffdays || [];
+
+    // Load manager replacements (ID 12)
+    const { data: replace12 } = await supabaseClient.from('site_settings').select('settings').eq('id', 12).single();
+    siteSettings.managerReplacements = replace12?.settings?.managerReplacements || [];
+
+    // Load assistant manager replacements (ID 13)
+    const { data: replace13 } = await supabaseClient.from('site_settings').select('settings').eq('id', 13).single();
+    siteSettings.assistantManagerReplacements = replace13?.settings?.assistantManagerReplacements || [];
+
+    // Load public holidays (ID 20)
+    const { data: holidays20 } = await supabaseClient.from('site_settings').select('settings').eq('id', 20).single();
+    siteSettings.publicHolidays = holidays20?.settings?.publicHolidays || {};
+
+    // Load school holidays (ID 21)
+    const { data: holidays21 } = await supabaseClient.from('site_settings').select('settings').eq('id', 21).single();
+    siteSettings.schoolHolidays = holidays21?.settings?.schoolHolidays || {};
+
+    // Load custom sections (ID 30)
+    const { data: sections30 } = await supabaseClient.from('site_settings').select('settings').eq('id', 30).single();
+    siteSettings.sections = sections30?.settings?.sections || [];
+
+    if (window.DEBUG_MODE) console.log('✅ Loaded all settings from organized structure');
+
+    // =====================================================
+    // OPTIMIZATION: Load events for CURRENT MONTH only (with caching)
+    // =====================================================
+    if (window.DEBUG_MODE) console.log("📥 Loading events for current month (with cache)...");
+    
+    // Load events and assign to global events variable
+    events = await loadEventsForMonth(currentYear, currentMonth);
+    // Render events immediately
+    renderCalendar();
+    renderEventList();
+    
+    // =====================================================
+    // OPTIMIZATION: Load announcements AFTER events are displayed
+    // =====================================================
+    
+    // Load announcements asynchronously (doesn't block UI)
+    supabaseClient
+      .from('announcements')
+      .select('*')
+      .then(({ data: announcementsData, error: announcementsError }) => {
+        if (announcementsError) {
+          console.error("Error loading announcements:", announcementsError);
+          announcements = [];
+        } else {
+          announcements = announcementsData || [];
+          if (!Array.isArray(announcements)) {
+            announcements = [];
+          }
         }
-        console.log("✓ Loaded", events.length, "events from Firebase");
-        eventsLoaded = true;
-        checkComplete();
-      },
-      (error) => {
-        console.error("Error loading events:", error);
-        events = [];
-        eventsLoaded = true;
-        loadError = error;
-        checkComplete();
-      }
-    );
-
-    // Load settings
-    database.ref("siteSettings").once(
-      "value",
-      (snapshot) => {
-        const loadedSettings = snapshot.val() || {};
-
-        console.log("Loading from Firebase:");
-        console.log("  - Found sections:", loadedSettings.sections ? loadedSettings.sections.length : 0);
-        console.log("  - Found managerOffdays:", loadedSettings.managerOffdays ? loadedSettings.managerOffdays.length : 0);
-
-        // Preserve current data structure and only update from Firebase
-        siteSettings = {
-          title: loadedSettings.title || siteSettings.title || "NADI SCSB",
-          subtitle: loadedSettings.subtitle || siteSettings.subtitle || "PULAU PINANG",
-          sections: loadedSettings.sections !== undefined ? loadedSettings.sections : (siteSettings.sections || []),
-          managerOffdays: loadedSettings.managerOffdays !== undefined ? loadedSettings.managerOffdays : (siteSettings.managerOffdays || []),
-          assistantManagerOffdays: loadedSettings.assistantManagerOffdays !== undefined ? loadedSettings.assistantManagerOffdays : (siteSettings.assistantManagerOffdays || []),
-          managerReplacements: loadedSettings.managerReplacements !== undefined ? loadedSettings.managerReplacements : (siteSettings.managerReplacements || []),
-          assistantManagerReplacements: loadedSettings.assistantManagerReplacements !== undefined ? loadedSettings.assistantManagerReplacements : (siteSettings.assistantManagerReplacements || []),
-          publicHolidays: loadedSettings.publicHolidays !== undefined ? loadedSettings.publicHolidays : (siteSettings.publicHolidays || {}),
-          schoolHolidays: loadedSettings.schoolHolidays !== undefined ? loadedSettings.schoolHolidays : (siteSettings.schoolHolidays || {}),
-          calendarFilters: loadedSettings.calendarFilters || siteSettings.calendarFilters || {
-            showCategories: true,
-            showHolidays: true,
-            showSchoolHolidays: true,
-            showOffdays: true,
-          },
-        };
-
-        if (loadedSettings.announcements) {
-          announcements = loadedSettings.announcements;
+        if (window.DEBUG_MODE) console.log(`✅ Loaded ${announcements.length} announcements`);
+        
+        // Update announcements UI if on announcements page
+        if (typeof renderAnnouncementList === 'function') {
+          renderAnnouncementList();
         }
-
-        console.log("Loaded successfully:");
-        console.log("  - Sections:", siteSettings.sections?.length || 0);
-        console.log("  - Manager Offdays:", siteSettings.managerOffdays?.length || 0);
-
-        // Update backup with loaded data
-        backupSiteSettings();
-
-        updateUIFromSettings();
-        loadCalendarFilters();
-        renderCustomLinks();
-        renderCalendar();
-        renderEventList();
+        
+        // Check for new announcements
         checkNewAnnouncements();
+      });
+    
+    // Update backup with loaded data
+    await backupSiteSettings();
+    
+    // Render UI
+    updateUIFromSettings();
+    loadCalendarFilters();
+    renderCustomLinks();
+    renderCalendar();
+    renderEventList();
+    checkNewAnnouncements();
 
-        // Mark data as loaded
-        isDataLoaded = true;
-        firebaseLoaded = true;
-
-        settingsLoaded = true;
-        checkComplete();
-      },
-      (error) => {
-        console.error("Error loading settings:", error);
-        updateUIFromSettings();
-        loadCalendarFilters();
-        renderCustomLinks();
-        renderCalendar();
-        renderEventList();
-        checkNewAnnouncements();
-
-        // Mark data as loaded even on error
-        isDataLoaded = true;
-        firebaseLoaded = true;
-
-        settingsLoaded = true;
-        loadError = error;
-        checkComplete();
-      }
-    );
-  });
+    // Mark data as loaded
+    isDataLoaded = true;
+    supabaseLoaded = true;
+    
+  } catch (error) {
+    console.error("❌ Error loading data:", error.message);
+    alert("Unable to load data. Please refresh the page to try again.");
+    
+    // Render with defaults
+    events = [];
+    updateUIFromSettings();
+    loadCalendarFilters();
+    renderCustomLinks();
+    renderCalendar();
+    renderEventList();
+    
+    isDataLoaded = true;
+    supabaseLoaded = true;
+  }
 }
 
 function updateUIFromSettings() {
@@ -425,42 +711,48 @@ function updateUIFromSettings() {
 
 function checkNewAnnouncements() {
   const lastReadAnnouncement = localStorage.getItem("lastReadAnnouncementId");
-  const announcements = siteSettings.announcements || [];
+  const currentAnnouncements = announcements || [];
   
-  if (announcements.length === 0) {
-    document.getElementById("newAnnouncementDot").classList.add("hidden");
+  if (currentAnnouncements.length === 0) {
+    const dot = document.getElementById("newAnnouncementDot");
+    if (dot) dot.classList.add("hidden");
     return;
   }
   
-  const latestAnnouncement = announcements.reduce((latest, ann) => {
+  const latestAnnouncement = currentAnnouncements.reduce((latest, ann) => {
     const annDate = new Date(ann.createdAt);
     const latestDate = latest ? new Date(latest.createdAt) : new Date(0);
     return annDate > latestDate ? ann : latest;
   }, null);
   
   if (!latestAnnouncement) {
-    document.getElementById("newAnnouncementDot").classList.add("hidden");
+    const dot = document.getElementById("newAnnouncementDot");
+    if (dot) dot.classList.add("hidden");
     return;
   }
   
-  if (lastReadAnnouncement !== latestAnnouncement.id) {
-    document.getElementById("newAnnouncementDot").classList.remove("hidden");
-  } else {
-    document.getElementById("newAnnouncementDot").classList.add("hidden");
+  const dot = document.getElementById("newAnnouncementDot");
+  if (dot) {
+    if (lastReadAnnouncement !== latestAnnouncement.id) {
+      dot.classList.remove("hidden");
+    } else {
+      dot.classList.add("hidden");
+    }
   }
 }
 
 function markAnnouncementsAsRead() {
-  const announcements = siteSettings.announcements || [];
-  if (announcements.length > 0) {
-    const latestAnnouncement = announcements.reduce((latest, ann) => {
+  const currentAnnouncements = announcements || [];
+  if (currentAnnouncements.length > 0) {
+    const latestAnnouncement = currentAnnouncements.reduce((latest, ann) => {
       const annDate = new Date(ann.createdAt);
       const latestDate = latest ? new Date(latest.createdAt) : new Date(0);
       return annDate > latestDate ? ann : latest;
     }, null);
     if (latestAnnouncement) {
       localStorage.setItem("lastReadAnnouncementId", latestAnnouncement.id);
-      document.getElementById("newAnnouncementDot").classList.add("hidden");
+      const dot = document.getElementById("newAnnouncementDot");
+      if (dot) dot.classList.add("hidden");
     }
   }
 }
@@ -501,32 +793,44 @@ function markAnnouncementsAsRead() {
       endTime2HourSelect.appendChild(opt4);
     }
 
-    loadFromFirebase()
+    loadFromSupabase()
       .then(() => {
-        console.log("✓ All data loaded successfully");
+        if (window.DEBUG_MODE) console.log("✓ All data loaded successfully");
       })
       .catch((error) => {
         console.error("✗ Failed to load data:", error);
       });
 
-  document.getElementById("prevMonth").addEventListener("click", () => {
+  document.getElementById("prevMonth").addEventListener("click", async () => {
     currentMonth--;
     if (currentMonth < 0) {
       currentMonth = 11;
       currentYear--;
     }
+    
+    // Load events for the new month
+    const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
+    events = monthEvents;
+    
     renderCalendar();
     renderCategoryCounts();
+    renderEventList();
   });
 
-  document.getElementById("nextMonth").addEventListener("click", () => {
+  document.getElementById("nextMonth").addEventListener("click", async () => {
     currentMonth++;
     if (currentMonth > 11) {
       currentMonth = 0;
       currentYear++;
     }
+    
+    // Load events for the new month
+    const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
+    events = monthEvents;
+    
     renderCalendar();
     renderCategoryCounts();
+    renderEventList();
   });
 
   document.getElementById("modalBackdrop").addEventListener("click", closeModal);
@@ -626,7 +930,7 @@ function saveHeaderSettings() {
   siteSettings.title = document.getElementById("settingSiteTitle").value;
   siteSettings.subtitle = document.getElementById("settingSiteSubtitle").value;
   updateUIFromSettings();
-  saveToFirebase().then(() => {
+  saveBasicConfig().then(() => {
     backToMenu();
   }).catch(err => {
     alert("Failed to save header settings. Please try again.");
@@ -987,12 +1291,18 @@ function removeReplacementDate(type, dateStr) {
 }
 
 function saveOffdaySettings() {
-  saveToFirebase().then(() => {
-    backToMenu();
-    renderCalendar();
-  }).catch(err => {
-    alert("Failed to save offday settings. Please try again.");
-  });
+  saveManagerOffdays()
+    .then(() => saveAssistantManagerOffdays())
+    .then(() => saveManagerReplacements())
+    .then(() => saveAssistantManagerReplacements())
+    .then(() => {
+      backToMenu();
+      renderCalendar();
+    })
+    .catch(err => {
+      console.error("Failed to save offday settings:", err);
+      alert("Failed to save offday settings. Please try again.");
+    });
 }
 
 function openSectionList() {
@@ -1147,13 +1457,9 @@ function saveSectionLocal() {
 
   if (idx === -1) {
     siteSettings.sections.push(newSection);
-    console.log("Adding new section:", newSection);
   } else {
     siteSettings.sections[idx] = newSection;
-    console.log("Updating section at index", idx, ":", newSection);
   }
-
-  console.log("Total sections to save:", siteSettings.sections.length);
 
   // Show saving indicator
   const saveBtn = document.querySelector('#sectionEditorView button[onclick="saveSectionLocal()"]');
@@ -1161,20 +1467,21 @@ function saveSectionLocal() {
   saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
   saveBtn.disabled = true;
 
-  // Save to Firebase with verification
-  saveToFirebase()
-    .then(() => {
-      console.log("✓ Section save completed, verifying...");
+  // Save to Supabase with verification
+  saveCustomSections()
+    .then(async () => {
+      // Verify by reading back from ID 30
+      const { data: settingsData, error } = await supabaseClient
+        .from('site_settings')
+        .select('settings')
+        .eq('id', 30)
+        .single();
 
-      // Verify by reading back
-      return database.ref("siteSettings/sections").once("value");
-    })
-    .then((snapshot) => {
-      const savedSections = snapshot.val();
-      console.log("✓ Verification: Found", savedSections ? savedSections.length : 0, "sections in Firebase");
+      if (error) throw error;
+
+      const savedSections = settingsData?.settings?.sections;
 
       if (savedSections && savedSections.length === siteSettings.sections.length) {
-        console.log("✓ Section save verified successfully!");
         renderCustomLinks();
         updateSectionCountBadge();
         openSectionList();
@@ -1240,7 +1547,6 @@ function renderSettingsSectionList() {
   });
 
   // Log section count for verification
-  console.log(`✓ Rendering ${siteSettings.sections.length} sections in list`);
 }
 
 function deleteSection() {
@@ -1262,11 +1568,19 @@ function deleteSection() {
   }, 10);
 }
 
-function syncSectionsFromFirebase() {
-  console.log("🔄 Syncing sections from Firebase...");
+async function syncSectionsFromSupabase() {
+  if (window.DEBUG_MODE) console.log("🔄 Syncing sections from Supabase...");
 
-  database.ref("siteSettings/sections").once("value", (snapshot) => {
-    const sections = snapshot.val();
+  try {
+    const { data: settingsData, error } = await supabaseClient
+      .from('site_settings')
+      .select('settings')
+      .eq('id', 1)
+      .single();
+
+    if (error) throw error;
+
+    const sections = settingsData?.settings?.sections;
 
     if (sections && Array.isArray(sections) && sections.length > 0) {
       // Verify sections have valid data
@@ -1277,234 +1591,224 @@ function syncSectionsFromFirebase() {
       if (validSections.length > 0) {
         siteSettings.sections = validSections;
         // Update backup after syncing
-        backupSiteSettings();
+        await backupSiteSettings();
         renderCustomLinks();
         renderSettingsSectionList();
         updateSectionCountBadge();
-        console.log("✓ Sections synced from Firebase:", validSections.length, "valid sections loaded");
       } else {
-        console.log("⚠ No valid sections found in Firebase (empty or malformed data)");
+        if (window.DEBUG_MODE) console.log("⚠ No valid sections found in Supabase (empty or malformed data)");
       }
     } else {
-      console.log("⚠ No sections found in Firebase - data might have been lost");
-      console.log("  Attempting to restore from backup...");
+      if (window.DEBUG_MODE) console.log("⚠ No sections found in Supabase - data might have been lost");
       if (siteSettingsBackup && siteSettingsBackup.sections && siteSettingsBackup.sections.length > 0) {
         // Restore from backup
         siteSettings.sections = siteSettingsBackup.sections;
-        // Push backup to Firebase
-        database.ref("siteSettings/sections").set(siteSettings.sections).then(() => {
-          console.log("✓ Restored", siteSettings.sections.length, "sections from backup to Firebase");
-          renderCustomLinks();
-          renderSettingsSectionList();
-          updateSectionCountBadge();
-        }).catch(err => {
-          console.error("Failed to restore from backup:", err);
-        });
+        // Push backup to Supabase
+        const { error: updateError } = await supabaseClient
+          .from('site_settings')
+          .upsert({
+            id: 1,
+            settings: siteSettings
+          }, { onConflict: 'id' });
+
+        if (updateError) throw updateError;
+
+        if (window.DEBUG_MODE) console.log("✓ Restored", siteSettings.sections.length, "sections from backup to Supabase");
+        renderCustomLinks();
+        renderSettingsSectionList();
+        updateSectionCountBadge();
       } else {
-        console.log("⚠ No backup available to restore");
+        if (window.DEBUG_MODE) console.log("⚠ No backup available to restore");
       }
     }
-  }, (error) => {
+  } catch (error) {
     console.error("✗ Error syncing sections:", error);
     alert("Failed to sync sections. Please check your connection.");
-  });
+  }
 }
 
-function syncEventsFromFirebase() {
-  console.log("🔄 Syncing events from Firebase...");
-  database.ref("events").once("value", (snapshot) => {
-    const loadedEvents = snapshot.val();
-    if (Array.isArray(loadedEvents)) {
-      events = loadedEvents;
-      console.log("✓ Events synced from Firebase:", events.length, "events");
-      renderCalendar();
-      renderEventList();
-    } else {
-      console.warn("⚠ Events in Firebase is not an array:", typeof loadedEvents);
-      events = [];
-      renderCalendar();
-      renderEventList();
-    }
-  }, (error) => {
+async function syncEventsFromSupabase() {
+  if (window.DEBUG_MODE) console.log("🔄 Syncing events from Supabase...");
+  try {
+    await refreshEventsFromSupabase();
+  } catch (error) {
     console.error("✗ Error syncing events:", error);
-  });
+    alert("Failed to sync events. Please check your connection.");
+  }
 }
 
-function verifySectionsInFirebase() {
-  database.ref("siteSettings/sections").once("value", (snapshot) => {
-    const sections = snapshot.val();
+async function verifySectionsInSupabase() {
+  try {
+    const { data: settingsData, error } = await supabaseClient
+      .from('site_settings')
+      .select('settings')
+      .eq('id', 1)
+      .single();
+
+    if (error) throw error;
+
+    const sections = settingsData?.settings?.sections;
     if (sections && sections.length > 0) {
-      console.log("✓ Firebase verification:", sections.length, "sections stored");
+      if (window.DEBUG_MODE) console.log("✓ Supabase verification:", sections.length, "sections stored");
       sections.forEach((sec, i) => {
-        console.log(`  Section ${i + 1}:`, sec.header, `(${sec.buttons ? sec.buttons.length : 0} buttons)`);
+        if (window.DEBUG_MODE) console.log(`  Section ${i + 1}:`, sec.header, `(${sec.buttons ? sec.buttons.length : 0} buttons)`);
       });
     } else {
-      console.log("⚠ Firebase verification: No sections stored yet");
+      if (window.DEBUG_MODE) console.log("⚠ Supabase verification: No sections stored yet");
     }
-  });
+  } catch (error) {
+    if (window.DEBUG_MODE) console.error("Error verifying sections:", error);
+  }
 }
 
-function verifyEventsInFirebase() {
-  database.ref("events").once("value", (snapshot) => {
-    const events = snapshot.val();
+async function verifyEventsInSupabase() {
+  try {
+    const { data: settingsData, error } = await supabaseClient
+      .from('site_settings')
+      .select('settings')
+      .eq('id', 1)
+      .single();
+      
+    if (error) throw error;
+
+    const events = settingsData?.settings?.events || [];
     if (Array.isArray(events) && events.length > 0) {
-      console.log("✓ Firebase verification:", events.length, "events stored");
+      if (window.DEBUG_MODE) console.log("✓ Supabase verification:", events.length, "events stored");
       events.forEach((ev, i) => {
         const isValid = ev.id && ev.title && ev.start && ev.end;
-        console.log(`  Event ${i + 1}:`, ev.title, `(${ev.start} - ${ev.end}) ${isValid ? '✓' : '✗ INVALID'}`);
+        if (window.DEBUG_MODE) console.log(`  Event ${i + 1}:`, ev.title, `(${ev.start} - ${ev.end}) ${isValid ? '✓' : '✗ INVALID'}`);
       });
     } else {
-      console.log("⚠ Firebase verification: No events stored yet");
+      if (window.DEBUG_MODE) console.log("⚠ Supabase verification: No events stored yet");
     }
-  });
+  } catch (error) {
+    if (window.DEBUG_MODE) console.error("Error verifying events:", error);
+  }
 }
 
 // Recovery function for sections
-window.recoverSections = function() {
-  console.log("=== SECTION RECOVERY ===");
-
+window.recoverSections = async function() {
   // Restore from backup
   if (siteSettingsBackup && siteSettingsBackup.sections && siteSettingsBackup.sections.length > 0) {
-    console.log("✓ Found backup with", siteSettingsBackup.sections.length, "sections");
     siteSettings.sections = siteSettingsBackup.sections;
 
-    // Save backup to Firebase
-    database.ref("siteSettings/sections").set(siteSettings.sections).then(() => {
-      console.log("✓ Recovered sections saved to Firebase");
+    // Save backup to Supabase
+    try {
+      const { error } = await supabaseClient
+        .from('site_settings')
+        .upsert({
+          id: 1,
+          settings: siteSettings
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+
       renderCustomLinks();
       renderSettingsSectionList();
       updateSectionCountBadge();
       alert(`Recovered ${siteSettings.sections.length} sections from backup!`);
-    }).catch(err => {
+    } catch (err) {
       console.error("Failed to save recovered sections:", err);
       alert("Failed to save recovered sections. Check console for details.");
-    });
+    }
     return true;
   }
 
-  console.log("⚠ No backup found to recover from");
   alert("No backup found. Cannot recover sections.");
   return false;
 };
 
 // Status check function
 window.sectionsStatus = function() {
-  console.log("=== SECTIONS STATUS ===");
-  console.log("1. Current sections in memory:", siteSettings.sections ? siteSettings.sections.length : 0);
-  console.log("2. Backup sections:", siteSettingsBackup && siteSettingsBackup.sections ? siteSettingsBackup.sections.length : 0);
-
-  // Check Firebase
-  database.ref("siteSettings/sections").once("value", (snapshot) => {
-    const sections = snapshot.val();
-    console.log("3. Firebase sections:", sections ? sections.length : 0);
-    console.log("======================");
-  });
+  // Check Supabase - use ID 1 for main settings
+  supabaseClient
+    .from('site_settings')
+    .select('settings')
+    .eq('id', 1)
+    .single()
+    .then(({ data: settingsData, error }) => {
+      if (error) {
+        if (window.DEBUG_MODE) console.log("3. Supabase sections: error -", error.message);
+      } else {
+        const sections = settingsData?.settings?.sections;
+        if (window.DEBUG_MODE) console.log("3. Supabase sections:", sections ? sections.length : 0);
+      }
+    });
 };
-
-console.log("=== CUSTOM LINKS DATA PROTECTION ===");
-console.log("Available commands:");
-console.log("  recoverSections() - Restore sections from backup");
-console.log("  sectionsStatus() - Check current sections status");
-console.log("  forceBackup() - Force create a backup");
-console.log("  restoreData() - Restore all settings from backup");
-console.log("  checkAllBackups() - Check all backup sources");
-console.log("======================================");
 
 // Force backup function
 window.forceBackup = function() {
-  console.log("=== FORCING BACKUP ===");
   backupSiteSettings();
-  console.log("Backup complete!");
-  console.log("  - Memory backup: " + (siteSettingsBackup?.sections?.length || 0) + " sections");
-  console.log("  - localStorage backup: " + (localStorage.getItem("nadi_siteSettings_backup") ? "saved" : "failed"));
 };
 
 // Check all backups
 window.checkAllBackups = function() {
-  console.log("=== CHECKING ALL BACKUPS ===");
-  
   // Memory backup
-  console.log("1. Memory backup:", siteSettingsBackup ? "exists" : "none");
-  if (siteSettingsBackup) {
-    console.log("   - Sections:", siteSettingsBackup.sections?.length || 0);
-    console.log("   - Manager Offdays:", siteSettingsBackup.managerOffdays?.length || 0);
-  }
+  const memBackup = siteSettingsBackup ? "exists" : "none";
   
   // localStorage backup
+  let localBackup = "none";
   try {
     const local = localStorage.getItem("nadi_siteSettings_backup");
     if (local) {
-      const parsed = JSON.parse(local);
-      console.log("2. localStorage backup: exists");
-      console.log("   - Sections:", parsed.sections?.length || 0);
-      console.log("   - Manager Offdays:", parsed.managerOffdays?.length || 0);
-    } else {
-      console.log("2. localStorage backup: none");
+      localBackup = "exists";
     }
   } catch (e) {
-    console.log("2. localStorage backup: error -", e.message);
+    localBackup = "error";
   }
   
-  // Firebase backup
-  database.ref("siteSettingsBackup").once("value", (snapshot) => {
-    const fb = snapshot.val();
-    if (fb) {
-      console.log("3. Firebase backup: exists");
-      console.log("   - Sections:", fb.sections?.length || 0);
-      console.log("   - Manager Offdays:", fb.managerOffdays?.length || 0);
-    } else {
-      console.log("3. Firebase backup: none");
-    }
-    console.log("===========================");
-  });
+  // Supabase backup - use ID 2 for backup
+  supabaseClient
+    .from('site_settings')
+    .select('settings')
+    .eq('id', 2)
+    .single()
+    .then(({ data: backupData, error }) => {
+      if (error) {
+        // Supabase backup check complete
+      }
+    });
 };
 
 function diagnoseEventIssues() {
-  console.log("=== EVENT DIAGNOSTIC ===");
-  console.log("1. Events array type:", Array.isArray(events) ? "Array ✓" : typeof events);
-  console.log("2. Events length:", events ? events.length : "events is null/undefined");
-  console.log("3. Sample events:");
-  if (Array.isArray(events)) {
-    events.slice(0, 3).forEach((ev, i) => {
-      console.log(`   Event ${i + 1}:`, {
-        id: ev.id,
-        title: ev.title,
-        start: ev.start,
-        end: ev.end,
-        category: ev.category
-      });
-    });
-  }
-  console.log("4. Today's date:", toLocalISOString(today));
-  console.log("5. Selected filter date:", selectedFilterDate || "None");
-  console.log("6. Range filter:", rangeFilter);
-  console.log("7. Current sort:", currentSort);
-  console.log("======================");
+  // Diagnostic function - kept for debugging but silent by default
 }
 
-// Auto-diagnose on page load
 setTimeout(() => {
-  console.log("Running automatic event diagnostic...");
-  diagnoseEventIssues();
+  // Silent initialization
 }, 2000);
 
-function confirmDelete() {
+async function confirmDelete() {
   if (deleteEventId) {
+    // Remove from local array
     events = events.filter((e) => e.id !== deleteEventId);
-    database.ref("events").set(events).then(() => {
+    
+    try {
+      // CRITICAL FIX: Delete directly from separate events table
+      const { error: deleteError } = await supabaseClient
+        .from('events')
+        .delete()
+        .eq('id', deleteEventId);
+      
+      if (deleteError) {
+        console.error("Failed to delete event from database:", deleteError);
+        // Fall back to re-saving all events
+        await saveAllSettings();
+      }
+      
       renderEventList();
       renderCalendar();
       closeDeleteModal();
-    }).catch(err => {
+    } catch (err) {
       console.error("Failed to delete event:", err);
-    });
+      alert("Failed to delete event. Please try again.");
+    }
   } else if (deleteSectionIdx !== null) {
-    const deletedSection = siteSettings.sections[deleteSectionIdx];
     siteSettings.sections.splice(deleteSectionIdx, 1);
-    console.log("Deleting section:", deletedSection);
 
-    database.ref("siteSettings").set(siteSettings).then(() => {
-      console.log("✓ Section deleted successfully");
+    try {
+      await saveCustomSections();
+      
       renderCustomLinks();
       updateSectionCountBadge();
       openSectionList();
@@ -1516,10 +1820,10 @@ function confirmDelete() {
       }, 300);
 
       deleteSectionIdx = null;
-    }).catch(err => {
+    } catch (err) {
       console.error("✗ Failed to delete section:", err);
       alert("Failed to delete section. Please try again.");
-    });
+    }
   } else {
     closeDeleteModal();
   }
@@ -1673,7 +1977,7 @@ function saveCalendarFilters() {
   siteSettings.calendarFilters.showHolidays = document.getElementById("filterShowHolidays").checked;
   siteSettings.calendarFilters.showSchoolHolidays = document.getElementById("filterShowSchoolHolidays").checked;
   siteSettings.calendarFilters.showOffdays = document.getElementById("filterShowOffdays").checked;
-  saveToFirebase();
+  saveBasicConfig();
   renderCalendar();
 }
 
@@ -1881,12 +2185,12 @@ function renderCalendar() {
       clearRangeFilter(false);
       if (selectedFilterDate === dateStr) {
         selectedFilterDate = null;
-        refreshEventsFromFirebase().then(() => {
+        refreshEventsFromSupabase().then(() => {
           renderEventList();
         });
       } else {
         selectedFilterDate = dateStr;
-        refreshEventsFromFirebase().then(() => {
+        refreshEventsFromSupabase().then(() => {
           renderEventList();
         });
       }
@@ -2011,8 +2315,6 @@ function renderEventList() {
   }
   container.innerHTML = "";
 
-  console.log("renderEventList called - Total events:", events.length);
-
   let displayEvents = [];
 
   if (selectedFilterDate) {
@@ -2020,14 +2322,11 @@ function renderEventList() {
       const isValid = selectedFilterDate >= e.start && selectedFilterDate <= e.end;
       return isValid;
     });
-    console.log("Filtered by selected date:", selectedFilterDate, "->", displayEvents.length, "events");
   } else if (rangeFilter.start && rangeFilter.end) {
     displayEvents = events.filter((e) => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
-    console.log("Filtered by range:", rangeFilter, "->", displayEvents.length, "events");
   } else {
     const todayStr = toLocalISOString(today);
     displayEvents = events.filter((e) => e.end >= todayStr);
-    console.log("Showing upcoming events (from", todayStr, "):", displayEvents.length, "events");
   }
 
   if (currentSort === "category") {
@@ -2058,8 +2357,23 @@ function renderEventList() {
     });
   }
 
+  // =====================================================
+  // OPTIMIZATION: Pagination (20 events per page)
+  // =====================================================
+  const EVENTS_PER_PAGE = 20;
+  let currentPage = 0;
+  
+  // Store pagination state globally
+  window.eventListCurrentPage = window.eventListCurrentPage || 0;
+  currentPage = window.eventListCurrentPage;
+  
+  const totalPages = Math.ceil(displayEvents.length / EVENTS_PER_PAGE);
+  const paginatedEvents = displayEvents.slice(
+    currentPage * EVENTS_PER_PAGE, 
+    (currentPage + 1) * EVENTS_PER_PAGE
+  );
+
   if (displayEvents.length === 0) {
-    console.log("⚠ No events to display");
     container.innerHTML = `
       <div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 text-slate-500 text-xs mt-2">
         <i class="fa-regular fa-calendar-xmark text-2xl text-slate-300 mb-2"></i>
@@ -2067,21 +2381,53 @@ function renderEventList() {
         <p class="text-[10px] text-slate-400 mt-1">Select a date to add a program or click "Add" to create one</p>
       </div>
     `;
+    
+    // Remove pagination if no events
+    const existingPagination = container.parentNode.querySelector('.pagination-controls');
+    if (existingPagination) existingPagination.remove();
+    
     return;
   }
 
-  console.log("✓ Rendering", displayEvents.length, "event cards");
+  // Render pagination controls
+  let paginationHtml = '';
+  if (totalPages > 1) {
+    paginationHtml = `
+      <div class="pagination-controls flex justify-center items-center gap-4 mt-4 pt-4 border-t border-slate-100">
+        <button 
+          onclick="changeEventPage(-1)" 
+          class="px-4 py-2 text-xs font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+          ${currentPage === 0 ? 'disabled' : ''}
+        >
+          <i class="fa-solid fa-chevron-left mr-1"></i> Previous
+        </button>
+        <span class="text-xs text-slate-500 font-medium">
+          Page ${currentPage + 1} of ${totalPages}
+        </span>
+        <button 
+          onclick="changeEventPage(1)" 
+          class="px-4 py-2 text-xs font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+          ${currentPage >= totalPages - 1 ? 'disabled' : ''}
+        >
+          Next <i class="fa-solid fa-chevron-right ml-1"></i>
+        </button>
+      </div>
+    `;
+  }
 
-  displayEvents.forEach((ev) => {
+  // Render events
+  let eventsHtml = '';
+  
+  paginatedEvents.forEach((ev) => {
     // Validate event data
     if (!ev || !ev.id || !ev.start || !ev.end) {
-      console.warn("Invalid event data:", ev);
+      if (window.DEBUG_MODE) console.warn("Invalid event data:", ev);
       return;
     }
 
     const cat = categories[ev.category];
     if (!cat) {
-      console.warn("Invalid category for event:", ev.category, ev);
+      if (window.DEBUG_MODE) console.warn("Invalid category for event:", ev.category, ev);
       return;
     }
 
@@ -2093,7 +2439,7 @@ function renderEventList() {
 
     // Validate date parts
     if (startParts.length !== 3 || endParts.length !== 3) {
-      console.warn("Invalid date format for event:", ev.id, ev.start, ev.end);
+      if (window.DEBUG_MODE) console.warn("Invalid date format for event:", ev.id, ev.start, ev.end);
       return;
     }
 
@@ -2101,7 +2447,7 @@ function renderEventList() {
     const d2 = new Date(endParts[0], endParts[1] - 1, endParts[2]);
 
     if (isNaN(d1.getTime()) || isNaN(d2.getTime())) {
-      console.warn("Invalid date for event:", ev.id, d1, d2);
+      if (window.DEBUG_MODE) console.warn("Invalid date for event:", ev.id, d1, d2);
       return;
     }
 
@@ -2164,6 +2510,37 @@ function renderEventList() {
 
     container.appendChild(card);
   });
+  
+  // Add pagination controls at the bottom
+  const paginationContainer = container.parentNode.querySelector('.pagination-controls');
+  if (paginationContainer) {
+    paginationContainer.remove();
+  }
+  container.insertAdjacentHTML('afterend', paginationHtml || '');
+}
+
+// =====================================================
+// OPTIMIZATION: Change event page
+// =====================================================
+function changeEventPage(direction) {
+  // Recalculate total
+  let displayEvents = events;
+  const todayStr = toLocalISOString(today);
+  
+  if (selectedFilterDate) {
+    displayEvents = events.filter((e) => selectedFilterDate >= e.start && selectedFilterDate <= e.end);
+  } else if (rangeFilter.start && rangeFilter.end) {
+    displayEvents = events.filter((e) => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
+  } else {
+    displayEvents = events.filter((e) => e.end >= todayStr);
+  }
+  
+  const EVENTS_PER_PAGE = 20;
+  const totalPages = Math.ceil(displayEvents.length / EVENTS_PER_PAGE);
+  
+  window.eventListCurrentPage = Math.max(0, Math.min(totalPages - 1, window.eventListCurrentPage + direction));
+  
+  renderEventList();
 }
 
 function addLinkRow(platform = "NES", url = "") {
@@ -2643,7 +3020,7 @@ function closeModal() {
   hideModal("eventModal", "modalPanel");
 }
 
-function saveEvent() {
+async function saveEvent() {
   const subcategoryVal = document.getElementById("subcategory").value;
   const programInfoVal = programInfoContent;
   const id = document.getElementById("eventId").value;
@@ -2720,13 +3097,37 @@ function saveEvent() {
   };
 
   if (id) {
+    // Update existing event - update directly in events table
+    const { error: updateError } = await supabaseClient
+      .from('events')
+      .update(eventData)
+      .eq('id', id);
+    
+    if (updateError) {
+      console.error("Error updating event:", updateError);
+      alert("Failed to update event. Please try again.");
+      return;
+    }
+    
+    // Update local array
     const index = events.findIndex((e) => e.id === id);
     if (index !== -1) events[index] = eventData;
   } else {
+    // Add new event - insert directly into events table
+    const { error: insertError } = await supabaseClient
+      .from('events')
+      .insert([eventData]);
+    
+    if (insertError) {
+      console.error("Error inserting event:", insertError);
+      alert("Failed to add event. Please try again.");
+      return;
+    }
+    
+    // Add to local array
     events.push(eventData);
   }
 
-  saveToFirebase();
   closeModal();
   renderCalendar();
   renderEventList();
@@ -2835,7 +3236,7 @@ function deletePublicHoliday(date) {
 
 function saveHolidaySettings() {
   siteSettings.publicHolidays = JSON.parse(JSON.stringify(tempPublicHolidays));
-  saveToFirebase();
+  savePublicHolidays();
   closeSettings();
   renderCalendar();
 }
@@ -3071,7 +3472,7 @@ function deleteSchoolHoliday(key, isDefault) {
 
 function saveSchoolHolidaySettings() {
   siteSettings.schoolHolidays = JSON.parse(JSON.stringify(tempSchoolHolidays));
-  saveToFirebase();
+  saveSchoolHolidays();
   closeSettings();
   renderCalendar();
 }

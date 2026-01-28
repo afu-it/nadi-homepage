@@ -73,16 +73,19 @@ const announcementSubcategories = {
   "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
 };
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBul5HXNuQh8QKExhzYvuVqin7EUrQXBkw",
-  authDomain: "nadiscsb-homepage.firebaseapp.com",
-  databaseURL: "https://nadiscsb-homepage-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "nadiscsb-homepage",
-  storageBucket: "nadiscsb-homepage.firebasestorage.app",
-  messagingSenderId: "184320941986",
-  appId: "1:184320941986:web:fce6a0b9ef506cb89e1cfb",
-  measurementId: "G-7MMMM7JPLF",
-};
+// Make all constants available globally
+window.categories = categories;
+window.subcategories = subcategories;
+window.defaultHolidays = defaultHolidays;
+window.defaultSchoolHolidays = defaultSchoolHolidays;
+window.platformOptions = platformOptions;
+window.announcementSubcategories = announcementSubcategories;
 
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
+// Initialize Supabase client
+if (typeof window.supabaseClient === 'undefined') {
+  window.supabaseClient = window.supabase.createClient(
+    'https://xprztwchhoopkpmoiwdh.supabase.co',
+    'sb_publishable_1yNJb7umrgVZ_ihVSe6Qsg_Wv29Q_Ap'
+  );
+}
+

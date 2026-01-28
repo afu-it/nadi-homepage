@@ -7,11 +7,13 @@
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
     <style type="text/tailwindcss">
-      /* eslint-disable-next-line tailwindcss/no-custom-classname */
-      @theme {
-        --color-nadi: #2228a4;
-        --font-family-sans: "Plus Jakarta Sans", sans-serif;
-        --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+      /* Tailwind CSS v4 theme configuration */
+      @layer base {
+        :root {
+          --color-nadi: #2228a4;
+          --font-family-sans: "Plus Jakarta Sans", sans-serif;
+          --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+        }
       }
       #ssoSubFilter { display: none; }
       #ssoSubFilter:not(.hidden) { display: block; }
@@ -20,8 +22,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body class="min-h-screen flex flex-col text-slate-800 font-sans bg-slate-50">
     <header class="sticky top-0 z-40 header-bg shadow-md">
@@ -56,7 +57,7 @@
             <div id="ssoSubFilter" class="hidden mt-3 pt-3 border-t border-slate-100">
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Category</label>
+                  <label aria-label="SSO Subcategory Filter" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Category</label>
                   <div class="grid grid-cols-1 gap-1">
                     <label class="relative cursor-pointer group">
                       <input type="radio" name="ssoSubFilter" value="Usahawan" onchange="setSSOSubFilter('Usahawan')" class="peer sr-only" />
@@ -91,7 +92,7 @@
                   </div>
                 </div>
                 <div id="ssoSubSubFilter" class="hidden">
-                  <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Subcategory</label>
+                  <label aria-label="SSO Sub-Subcategory Filter" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Subcategory</label>
                   <div id="ssoSubSubFilterContainer" class="grid grid-cols-2 gap-1"></div>
                 </div>
               </div>
@@ -120,73 +121,74 @@
       </div>
       <div class="p-4 space-y-3 max-h-[calc(100vh-180px)] overflow-y-auto">
         <div>
-          <input type="text" id="announcementTitle" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" placeholder="Title..." />
+          <label for="announcementTitle" class="sr-only">Title</label>
+          <input type="text" id="announcementTitle" name="announcementTitle" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" placeholder="Title..." />
         </div>
         <div class="grid grid-cols-5 gap-1">
           <label class="relative cursor-pointer group">
-            <input type="radio" name="annCategory" value="Urgent" onchange="annCategoryChanged()" class="peer sr-only" />
+            <input type="radio" id="annCategoryUrgent" name="annCategory" value="Urgent" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-red-700 peer-checked:border-red-400 peer-checked:bg-red-50 text-center transition-all flex items-center justify-center">
               <span class="text-[8px] font-bold uppercase">Urgent</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
-            <input type="radio" name="annCategory" value="TP" onchange="annCategoryChanged()" class="peer sr-only" />
+            <input type="radio" id="annCategoryTP" name="annCategory" value="TP" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-slate-600 peer-checked:border-slate-400 peer-checked:bg-slate-100 text-center transition-all flex items-center justify-center">
               <span class="text-[8px] font-bold uppercase">TP</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
-            <input type="radio" name="annCategory" value="Samudra" onchange="annCategoryChanged()" class="peer sr-only" />
+            <input type="radio" id="annCategorySamudra" name="annCategory" value="Samudra" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-cyan-700 peer-checked:border-cyan-400 peer-checked:bg-cyan-50 text-center transition-all flex items-center justify-center">
               <span class="text-[8px] font-bold uppercase">Samudra</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
-            <input type="radio" name="annCategory" value="Maxis" onchange="annCategoryChanged()" class="peer sr-only" />
+            <input type="radio" id="annCategoryMaxis" name="annCategory" value="Maxis" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-rose-700 peer-checked:border-rose-400 peer-checked:bg-rose-50 text-center transition-all flex items-center justify-center">
               <span class="text-[8px] font-bold uppercase">Maxis</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
-            <input type="radio" name="annCategory" value="SSO" onchange="annCategoryChanged()" class="peer sr-only" />
+            <input type="radio" id="annCategorySSO" name="annCategory" value="SSO" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-nadi peer-checked:border-nadi peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center">
               <span class="text-[8px] font-bold uppercase">SSO</span>
             </div>
           </label>
         </div>
         <div id="ssoMainContainer" class="hidden">
-          <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Category</label>
+          <label aria-label="SSO Main Category Selection" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Category</label>
           <div class="grid grid-cols-2 gap-1.5">
             <label class="relative cursor-pointer group">
-              <input type="radio" name="ssoCategory" value="Usahawan" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <input type="radio" id="ssoCategoryUsahawan" name="ssoCategory" value="Usahawan" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-yellow-700 peer-checked:border-yellow-400 peer-checked:bg-yellow-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
                 <span class="text-[9px] font-bold uppercase">Usahawan</span>
               </div>
             </label>
             <label class="relative cursor-pointer group">
-              <input type="radio" name="ssoCategory" value="Kesejahteraan Kendiri" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <input type="radio" id="ssoCategoryKesejahteraan" name="ssoCategory" value="Kesejahteraan Kendiri" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-emerald-700 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 <span class="text-[9px] font-bold uppercase">Kesejahteraan</span>
               </div>
             </label>
             <label class="relative cursor-pointer group">
-              <input type="radio" name="ssoCategory" value="Kesedaran" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <input type="radio" id="ssoCategoryKesedaran" name="ssoCategory" value="Kesedaran" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-violet-700 peer-checked:border-violet-400 peer-checked:bg-violet-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
                 <span class="text-[9px] font-bold uppercase">Kesedaran</span>
               </div>
             </label>
             <label class="relative cursor-pointer group">
-              <input type="radio" name="ssoCategory" value="Inisiatif Kerajaan" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <input type="radio" id="ssoCategoryKerajaan" name="ssoCategory" value="Inisiatif Kerajaan" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-red-700 peer-checked:border-red-400 peer-checked:bg-red-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                 <span class="text-[9px] font-bold uppercase">Kerajaan</span>
               </div>
             </label>
             <label class="relative cursor-pointer group col-span-2">
-              <input type="radio" name="ssoCategory" value="Pembelajaran Sepanjang Hayat" onchange="annSSOMainChanged()" class="peer sr-only" />
+              <input type="radio" id="ssoCategoryPembelajaran" name="ssoCategory" value="Pembelajaran Sepanjang Hayat" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-blue-700 peer-checked:border-blue-400 peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                 <span class="text-[9px] font-bold uppercase">Pembelajaran Sepanjang Hayat</span>
@@ -195,7 +197,7 @@
           </div>
         </div>
         <div id="ssoSubContainer" class="hidden">
-          <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Subcategory</label>
+          <label aria-label="SSO Subcategory Selection" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Subcategory</label>
           <div id="ssoSubRadioContainer" class="grid grid-cols-2 gap-1.5"></div>
         </div>
         <div class="border border-slate-200 rounded-lg overflow-hidden">
@@ -203,7 +205,8 @@
             <button type="button" onclick="annExecFormat('bold')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Bold"><i class="fa-solid fa-bold text-[10px]"></i></button>
             <button type="button" onclick="annExecFormat('italic')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Italic"><i class="fa-solid fa-italic text-[10px]"></i></button>
             <button type="button" onclick="annExecFormat('underline')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Underline"><i class="fa-solid fa-underline text-[10px]"></i></button>
-            <select onchange="annChangeFontSize(this.value)" class="px-1.5 h-7 bg-white border border-slate-200 rounded text-[10px] font-semibold outline-none cursor-pointer text-slate-600">
+            <label for="annFontSize" class="sr-only">Font Size</label>
+            <select id="annFontSize" name="annFontSize" onchange="annChangeFontSize(this.value)" class="px-1.5 h-7 bg-white border border-slate-200 rounded text-[10px] font-semibold outline-none cursor-pointer text-slate-600">
               <option value="" disabled selected>Size</option>
               <option value="11">11</option>
               <option value="12">12</option>
@@ -212,7 +215,8 @@
           </div>
           <div id="announcementEditor" contenteditable="true" class="w-full min-h-[80px] p-2 bg-white text-xs text-slate-700 outline-none" placeholder="Details..."></div>
         </div>
-        <input type="date" id="announcementDueDate" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" />
+          <label for="announcementDueDate" class="sr-only">Due Date</label>
+          <input type="date" id="announcementDueDate" name="announcementDueDate" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" />
         <div class="flex gap-2">
           <button onclick="annSaveAnnouncement()" class="flex-1 py-2 bg-nadi hover:bg-[#1b1d8a] text-white text-xs font-bold rounded-lg shadow transition-colors">Save</button>
           <button onclick="annHideAddForm()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-bold rounded-lg transition-colors">Cancel</button>
@@ -235,12 +239,12 @@
           </div>
           <div class="p-4 space-y-3">
             <div>
-              <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Display Text</label>
-              <input type="text" id="annLinkTextField" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" placeholder="Click here" />
+              <label for="annLinkTextField" class="text-xs font-bold text-slate-500 uppercase block mb-1">Display Text</label>
+              <input type="text" id="annLinkTextField" name="annLinkTextField" autocomplete="off" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" placeholder="Click here" />
             </div>
             <div>
-              <label class="text-xs font-bold text-slate-500 uppercase block mb-1">URL <span class="text-red-500">*</span></label>
-              <input type="url" id="annUrlInputField" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" placeholder="https://example.com" onkeydown="if(event.key==='Enter') annConfirmInsertLink()" />
+              <label for="annUrlInputField" class="text-xs font-bold text-slate-500 uppercase block mb-1">URL <span class="text-red-500">*</span></label>
+              <input type="url" id="annUrlInputField" name="annUrlInputField" autocomplete="off" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" placeholder="https://example.com" onkeydown="if(event.key==='Enter') annConfirmInsertLink()" />
             </div>
           </div>
           <div class="px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
@@ -636,43 +640,91 @@
         }).join("");
       }
 
-      function annSaveAnnouncement() {
+      async function annSaveAnnouncement() {
         const title = document.getElementById("announcementTitle").value.trim();
-        const content = document.getElementById("announcementEditor").innerHTML;
-        const category = document.querySelector('input[name="annCategory"]:checked')?.value || "all";
-        const ssoMain = document.querySelector('input[name="ssoCategory"]:checked')?.value || "";
-        const ssoSub = document.querySelector('input[name="ssoSubCategory"]:checked')?.value || "";
+        const content = document.getElementById("announcementEditor").innerHTML.trim();
         const dueDate = document.getElementById("announcementDueDate").value;
-        if (!title) { showToast("Please enter a title."); return; }
-        if (category === "SSO" && !ssoMain) { showToast("Please select SSO category."); return; }
-        const isUrgent = category === "Urgent";
-        const saveCategory = isUrgent ? "Urgent" : category;
-        const saveSSOMain = category === "SSO" ? ssoMain : "";
-        const saveSSOSub = category === "SSO" ? ssoSub : "";
-        if (annEditingId) {
-          const idx = announcements.findIndex((a) => a.id === annEditingId);
-          if (idx !== -1) {
-            announcements[idx] = { ...announcements[idx], title, content, category: saveCategory, ssoMain: saveSSOMain, ssoSub: saveSSOSub, dueDate, isUrgent, updatedAt: new Date().toISOString() };
-          }
-        } else {
-          announcements.push({ id: Date.now().toString(), title, content, category: saveCategory, ssoMain: saveSSOMain, ssoSub: saveSSOSub, dueDate, isUrgent, createdAt: new Date().toISOString() });
+        const saveCategory = document.querySelector('input[name="annCategory"]:checked')?.value;
+        const saveSSOMain = document.querySelector('input[name="ssoCategory"]:checked')?.value;
+        const saveSSOSub = document.querySelector('input[name="ssoSubCategory"]:checked')?.value;
+
+        const isUrgent = saveCategory === "Urgent";
+
+        if (!title || !content) {
+          alert("Please fill in title and content!");
+          return;
         }
-        siteSettings.announcements = announcements;
-        database.ref("siteSettings").set(siteSettings).catch(err => {
+
+        const announcementData = {
+          id: annEditingId || Date.now().toString(),
+          title: title,
+          content: content,
+          category: saveCategory,
+          ssoMain: saveSSOMain || "",
+          ssoSub: saveSSOSub || "",
+          dueDate: dueDate || "",
+          isUrgent: isUrgent,
+          updatedAt: annEditingId ? new Date().toISOString() : undefined,
+          createdAt: annEditingId ? announcements.find(a => a.id === annEditingId)?.createdAt : new Date().toISOString()
+        };
+
+        try {
+          if (annEditingId) {
+            // Update existing announcement
+            const { error } = await supabaseClient
+              .from('announcements')
+              .update(announcementData)
+              .eq('id', annEditingId);
+            
+            if (error) throw error;
+            
+            // Update local array
+            const index = announcements.findIndex((a) => a.id === annEditingId);
+            if (index !== -1) announcements[index] = announcementData;
+            
+            annEditingId = null;
+          } else {
+            // Insert new announcement
+            const { error } = await supabaseClient
+              .from('announcements')
+              .insert([announcementData]);
+            
+            if (error) throw error;
+            
+            // Add to local array
+            announcements.push(announcementData);
+          }
+        } catch (err) {
           console.error("Failed to save announcement:", err);
-        });
+          alert("Failed to save announcement. Please try again.");
+          return;
+        }
+        
         annHideAddForm();
         renderAnnouncementList();
         showToast("Announcement saved!");
       }
 
-      function annDeleteAnnouncement(id) {
+      async function annDeleteAnnouncement(id) {
         if (!confirm("Delete this announcement?")) return;
-        announcements = announcements.filter((a) => a.id !== id);
-        siteSettings.announcements = announcements;
-        database.ref("siteSettings").set(siteSettings).catch(err => {
+        
+        try {
+          // Delete from separate announcements table
+          const { error } = await supabaseClient
+            .from('announcements')
+            .delete()
+            .eq('id', id);
+          
+          if (error) throw error;
+          
+          // Remove from local array
+          announcements = announcements.filter((a) => a.id !== id);
+        } catch (err) {
           console.error("Failed to delete announcement:", err);
-        });
+          alert("Failed to delete announcement. Please try again.");
+          return;
+        }
+        
         renderAnnouncementList();
       }
 
@@ -775,13 +827,20 @@
           });
         }
         
-        database.ref("siteSettings").once("value", (snapshot) => {
-          const settings = snapshot.val() || {};
-          if (settings.announcements) announcements = settings.announcements;
-          renderAnnouncementList();
-        }, (error) => {
-          console.error("Error loading announcements:", error);
-        });
+        supabaseClient
+          .from('site_settings')
+          .select('settings')
+          .eq('id', 1)
+          .single()
+          .then(({ data: settingsData, error }) => {
+            if (error) {
+              console.error("Error loading announcements:", error);
+              return;
+            }
+            const settings = settingsData?.settings || {};
+            if (settings.announcements) announcements = settings.announcements;
+            renderAnnouncementList();
+          });
       });
     </script>
   </body>
