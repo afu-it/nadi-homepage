@@ -202,6 +202,9 @@
           <label aria-label="SSO Subcategory Selection" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Subcategory</label>
           <div id="ssoSubRadioContainer" class="grid grid-cols-2 gap-1.5"></div>
         </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Content</label>
+        </div>
         <div class="border border-slate-200 rounded-lg overflow-hidden">
           <div class="flex gap-0.5 p-1.5 bg-slate-100 border-b border-slate-200">
             <button type="button" onclick="annExecFormat('bold')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Bold"><i class="fa-solid fa-bold text-[10px]"></i></button>
@@ -226,9 +229,23 @@
       </div>
     </div>
 
-    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs font-bold px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2">
-      <i class="fa-solid fa-check-circle text-green-400"></i>
-      <span id="toastMessage">Saved successfully!</span>
+    <div id="deleteModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="annCloseDeleteModal()"></div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-red-50 rounded-t-xl">
+            <h3 class="text-base font-bold text-red-700">Delete Announcement</h3>
+            <button onclick="annCloseDeleteModal()" class="w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 flex items-center justify-center text-red-600"><i class="fa-solid fa-xmark text-xs"></i></button>
+          </div>
+          <div class="p-4">
+            <p class="text-sm text-slate-600">Are you sure you want to delete this announcement? This action cannot be undone.</p>
+          </div>
+          <div class="px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
+            <button onclick="annCloseDeleteModal()" class="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800">Cancel</button>
+            <button id="deleteConfirmBtn" onclick="annConfirmDelete()" class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg shadow">Delete</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="urlInputModal" class="fixed inset-0 z-50 hidden">
@@ -283,6 +300,11 @@
         document.getElementById("announcementTitle").focus();
         document.getElementById("announcementEditor").style.fontSize = "11px";
         
+        // If editing, don't change the form values - annEditAnnouncement handles that
+        if (annEditingId) {
+          return;
+        }
+        
         const filter = currentAnnouncementFilter;
         if (filter && filter !== "all") {
           const catRadio = document.querySelector(`input[name="annCategory"][value="${filter}"]`);
@@ -326,16 +348,6 @@
           document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
           document.querySelectorAll('input[name="ssoSubCategory"]').forEach(r => r.checked = false);
         }
-      }
-
-      function showToast(message) {
-        const toast = document.getElementById("toast");
-        const toastMessage = document.getElementById("toastMessage");
-        toastMessage.textContent = message;
-        toast.classList.remove("translate-y-20", "opacity-0");
-        setTimeout(() => {
-          toast.classList.add("translate-y-20", "opacity-0");
-        }, 3000);
       }
 
       function annSSOMainChanged() {
@@ -412,22 +424,48 @@
         document.getElementById("urlInputModal").classList.add("hidden");
       }
 
+      let pendingDeleteId = null;
+
+      function annShowDeleteModal(id) {
+        pendingDeleteId = id;
+        document.getElementById("deleteModal").classList.remove("hidden");
+      }
+
+      function annCloseDeleteModal() {
+        document.getElementById("deleteModal").classList.add("hidden");
+        pendingDeleteId = null;
+      }
+
+      function annConfirmDelete() {
+        if (pendingDeleteId) {
+          annDeleteAnnouncement(pendingDeleteId);
+        }
+        annCloseDeleteModal();
+      }
+
       function formatDateStr(dateInput) {
-        if (!dateInput) return { date: "", time: "" };
-        try {
-          let date;
-          if (typeof dateInput === "string" && dateInput.includes("T")) {
-            date = new Date(dateInput);
-          } else if (typeof dateInput === "string") {
-            date = new Date(dateInput + "T00:00:00");
-          } else {
-            date = new Date(dateInput);
+        let date;
+        if (!dateInput) {
+          date = new Date();
+        } else {
+          try {
+            if (typeof dateInput === "string" && dateInput.includes("T")) {
+              date = new Date(dateInput);
+            } else if (typeof dateInput === "string") {
+              date = new Date(dateInput + "T00:00:00");
+            } else {
+              date = new Date(dateInput);
+            }
+            if (isNaN(date.getTime())) {
+              date = new Date();
+            }
+          } catch (e) {
+            date = new Date();
           }
-          if (isNaN(date.getTime())) return { date: "", time: "" };
-          const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-          const timeStr = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
-          return { date: dateStr, time: timeStr };
-        } catch (e) { return { date: "", time: "" }; }
+        }
+        const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+        const timeStr = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+        return { date: dateStr, time: timeStr };
       }
 
       function formatDueDate(dateStr, timeStr) {
@@ -574,13 +612,13 @@
           filtered = announcements.filter((a) => a.category === filter);
         }
         
-        filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         if (!filtered || filtered.length === 0) {
           container.innerHTML = '<div class="text-center py-12"><div class="text-slate-300 text-4xl mb-3"><i class="fa-regular fa-calendar-xmark"></i></div><p class="text-slate-500 text-sm">No announcements yet</p></div>';
           return;
         }
           container.innerHTML = filtered.map((ann) => {
-          const { date: createdDateStr, time: createdTimeStr } = formatDateStr(ann.createdAt);
+          const { date: createdDateStr, time: createdTimeStr } = formatDateStr(ann.created_at);
           const isUrgent = ann.isUrgent || ann.category === "Urgent";
           const dueDisplay = ann.dueDate ? `<span class="inline-flex items-center gap-1 text-red-600 font-bold text-[9px] bg-red-50 px-2 py-1 rounded"><i class="fa-regular fa-clock"></i> Due: ${formatDueDate(ann.dueDate, ann.dueTime)}</span>` : "";
           const urgentBadge = isUrgent ? '<span class="inline-block bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded">URGENT</span>' : "";
@@ -626,7 +664,7 @@
                 </div>
                 <div class="flex gap-1.5">
                   <button onclick="annEditAnnouncement('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-pen text-[10px]"></i></button>
-                  <button onclick="annDeleteAnnouncement('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
+                  <button onclick="annShowDeleteModal('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
                 </div>
               </div>
               <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(convertBoldSyntax(ann.content)) : ""}</div>
@@ -654,49 +692,52 @@
 
         const isUrgent = saveCategory === "Urgent";
 
-        if (!title || !content) {
-          alert("Please fill in title and content!");
+        if (!title || !content || !saveCategory) {
+          alert("Please fill in title, content, and select a category!");
           return;
         }
 
         const announcementData = {
-          id: annEditingId || Date.now().toString(),
           title: title,
           content: content,
           category: saveCategory,
           ssoMain: saveSSOMain || "",
           ssoSub: saveSSOSub || "",
           dueDate: dueDate || "",
-          isUrgent: isUrgent,
-          updatedAt: annEditingId ? new Date().toISOString() : undefined,
-          createdAt: annEditingId ? announcements.find(a => a.id === annEditingId)?.createdAt : new Date().toISOString()
+          isUrgent: isUrgent
         };
 
         try {
           if (annEditingId) {
             // Update existing announcement
-            const { error } = await supabaseClient
+            const { data: updatedData, error } = await supabaseClient
               .from('announcements')
               .update(announcementData)
-              .eq('id', annEditingId);
+              .eq('id', annEditingId)
+              .select();
             
             if (error) throw error;
             
-            // Update local array
+            // Update local array with returned data
             const index = announcements.findIndex((a) => a.id === annEditingId);
-            if (index !== -1) announcements[index] = announcementData;
+            if (index !== -1 && updatedData && updatedData.length > 0) {
+              announcements[index] = updatedData[0];
+            }
             
             annEditingId = null;
           } else {
             // Insert new announcement
-            const { error } = await supabaseClient
+            const { data: insertedData, error } = await supabaseClient
               .from('announcements')
-              .insert([announcementData]);
+              .insert([announcementData])
+              .select();
             
             if (error) throw error;
             
-            // Add to local array
-            announcements.push(announcementData);
+            // Add returned data (with id and created_at) to local array
+            if (insertedData && insertedData.length > 0) {
+              announcements.unshift(insertedData[0]);
+            }
           }
         } catch (err) {
           console.error("Failed to save announcement:", err);
@@ -706,12 +747,9 @@
         
         annHideAddForm();
         renderAnnouncementList();
-        showToast("Announcement saved!");
       }
 
       async function annDeleteAnnouncement(id) {
-        if (!confirm("Delete this announcement?")) return;
-        
         try {
           // Delete from separate announcements table
           const { error } = await supabaseClient
@@ -723,6 +761,7 @@
           
           // Remove from local array
           announcements = announcements.filter((a) => a.id !== id);
+          renderAnnouncementList();
         } catch (err) {
           console.error("Failed to delete announcement:", err);
           alert("Failed to delete announcement. Please try again.");
@@ -748,8 +787,10 @@
           const radio = document.querySelector(`input[name="ssoCategory"][value="${ann.ssoMain}"]`);
           if (radio) radio.checked = true;
           annSSOMainChanged();
-          const subRadio = document.querySelector(`input[name="ssoSubCategory"][value="${ann.ssoSub}"]`);
-          if (subRadio) subRadio.checked = true;
+          setTimeout(() => {
+            const subRadio = document.querySelector(`input[name="ssoSubCategory"][value="${ann.ssoSub}"]`);
+            if (subRadio) subRadio.checked = true;
+          }, 50);
         }
         document.getElementById("announcementDueDate").value = ann.dueDate || "";
       }
