@@ -18,6 +18,12 @@ body {
   background-color: #2228a4;
   color: white;
 }
+.bg-nadi {
+  background-color: #2228a4;
+}
+.bg-nadi:hover, .hover\:bg-nadi:hover {
+  background-color: #1b1d8a;
+}
 .cat-radio:checked + div {
   border-color: currentColor;
   background-color: rgb(248 250 252);

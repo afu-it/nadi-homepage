@@ -57,34 +57,34 @@
             <div id="ssoSubFilter" class="hidden mt-3 pt-3 border-t border-slate-100">
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label aria-label="SSO Subcategory Filter" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Category</label>
+                  <label aria-label="SSO Main Category Filter" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Category</label>
                   <div class="grid grid-cols-1 gap-1">
                     <label class="relative cursor-pointer group">
-                      <input type="radio" name="ssoSubFilter" value="Usahawan" onchange="setSSOSubFilter('Usahawan')" class="peer sr-only" />
+                      <input type="radio" name="ssoMainFilter" value="Usahawan" onchange="setSSOSubFilter('Usahawan')" class="peer sr-only" />
                       <div class="px-2 py-1 rounded border border-slate-200 hover:bg-yellow-100 text-center transition-all flex items-center justify-center bg-yellow-50 text-yellow-700 border-yellow-200">
                         <span class="text-[9px] font-bold uppercase">Usahawan</span>
                       </div>
                     </label>
                     <label class="relative cursor-pointer group">
-                      <input type="radio" name="ssoSubFilter" value="Kesejahteraan Kendiri" onchange="setSSOSubFilter('Kesejahteraan Kendiri')" class="peer sr-only" />
+                      <input type="radio" name="ssoMainFilter" value="Kesejahteraan Kendiri" onchange="setSSOSubFilter('Kesejahteraan Kendiri')" class="peer sr-only" />
                       <div class="px-2 py-1 rounded border border-slate-200 hover:bg-emerald-50 text-center transition-all flex items-center justify-center bg-emerald-50 text-emerald-700 border-emerald-200">
                         <span class="text-[9px] font-bold uppercase">Kesejahteraan</span>
                       </div>
                     </label>
                     <label class="relative cursor-pointer group">
-                      <input type="radio" name="ssoSubFilter" value="Kesedaran" onchange="setSSOSubFilter('Kesedaran')" class="peer sr-only" />
+                      <input type="radio" name="ssoMainFilter" value="Kesedaran" onchange="setSSOSubFilter('Kesedaran')" class="peer sr-only" />
                       <div class="px-2 py-1 rounded border border-slate-200 hover:bg-violet-50 text-center transition-all flex items-center justify-center bg-violet-50 text-violet-700 border-violet-200">
                         <span class="text-[9px] font-bold uppercase">Kesedaran</span>
                       </div>
                     </label>
                     <label class="relative cursor-pointer group">
-                      <input type="radio" name="ssoSubFilter" value="Inisiatif Kerajaan" onchange="setSSOSubFilter('Inisiatif Kerajaan')" class="peer sr-only" />
+                      <input type="radio" name="ssoMainFilter" value="Inisiatif Kerajaan" onchange="setSSOSubFilter('Inisiatif Kerajaan')" class="peer sr-only" />
                       <div class="px-2 py-1 rounded border border-slate-200 hover:bg-red-50 text-center transition-all flex items-center justify-center bg-red-50 text-red-700 border-red-200">
                         <span class="text-[9px] font-bold uppercase">Kerajaan</span>
                       </div>
                     </label>
                     <label class="relative cursor-pointer group">
-                      <input type="radio" name="ssoSubFilter" value="Pembelajaran Sepanjang Hayat" onchange="setSSOSubFilter('Pembelajaran Sepanjang Hayat')" class="peer sr-only" />
+                      <input type="radio" name="ssoMainFilter" value="Pembelajaran Sepanjang Hayat" onchange="setSSOSubFilter('Pembelajaran Sepanjang Hayat')" class="peer sr-only" />
                       <div class="px-2 py-1 rounded border border-slate-200 hover:bg-blue-50 text-center transition-all flex items-center justify-center bg-blue-50 text-blue-700 border-blue-200">
                         <span class="text-[9px] font-bold uppercase">Pembelajaran Sepanjang Hayat</span>
                       </div>
@@ -750,8 +750,27 @@
         document.getElementById("announcementDueDate").value = ann.dueDate || "";
       }
 
-      document.addEventListener("DOMContentLoaded", function() {
+      document.addEventListener("DOMContentLoaded", async function() {
         setAnnouncementFilter("all");
+        
+        // Load announcements from Supabase
+        try {
+          const { data: announcementsData, error } = await supabaseClient
+            .from('announcements')
+            .select('*');
+          
+          if (error) {
+            console.error("Error loading announcements:", error);
+          } else {
+            announcements = announcementsData || [];
+            if (!Array.isArray(announcements)) {
+              announcements = [];
+            }
+            renderAnnouncementList();
+          }
+        } catch (err) {
+          console.error("Failed to load announcements:", err);
+        }
         
         // Auto-convert pasted URLs to clickable links while preserving formatting
         const editor = document.getElementById("announcementEditor");
@@ -826,21 +845,6 @@
             }
           });
         }
-        
-        supabaseClient
-          .from('site_settings')
-          .select('settings')
-          .eq('id', 1)
-          .single()
-          .then(({ data: settingsData, error }) => {
-            if (error) {
-              console.error("Error loading announcements:", error);
-              return;
-            }
-            const settings = settingsData?.settings || {};
-            if (settings.announcements) announcements = settings.announcements;
-            renderAnnouncementList();
-          });
       });
     </script>
   </body>
