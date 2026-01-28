@@ -21,8 +21,32 @@ body {
 .bg-nadi {
   background-color: #2228a4;
 }
-.bg-nadi:hover, .hover\:bg-nadi:hover {
+.hover\:bg-nadi:hover {
   background-color: #1b1d8a;
+}
+.border-nadi {
+  border-color: #2228a4;
+}
+.hover\:border-nadi:hover {
+  border-color: #2228a4;
+}
+.text-nadi {
+  color: #2228a4;
+}
+.hover\:text-nadi:hover {
+  color: #2228a4;
+}
+.group\:hover\:text-nadi:hover {
+  color: #2228a4;
+}
+.peer-checked\:text-nadi:peer-checked {
+  color: #2228a4;
+}
+.peer-checked\:border-nadi:peer-checked {
+  border-color: #2228a4;
+}
+.focus\:border-nadi:focus {
+  border-color: #2228a4;
 }
 .cat-radio:checked + div {
   border-color: currentColor;

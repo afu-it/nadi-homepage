@@ -11,10 +11,12 @@
       @layer base {
         :root {
           --color-nadi: #2228a4;
+          --color-nadi-hover: #1b1d8a;
           --font-family-sans: "Plus Jakarta Sans", sans-serif;
           --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
         }
       }
+      
       #ssoSubFilter { display: none; }
       #ssoSubFilter:not(.hidden) { display: block; }
     </style>
@@ -488,7 +490,7 @@
         });
         
         // Reset SSO subfilter radio buttons
-        document.querySelectorAll('input[name="ssoSubFilter"]').forEach((radio) => {
+        document.querySelectorAll('input[name="ssoMainFilter"]').forEach((radio) => {
           radio.checked = false;
         });
         
@@ -585,8 +587,9 @@
           
           let topLeftLabel = "";
           let bottomLeftLabel = "";
+          const categoryValue = ann.category;
           
-          if (ann.category === "SSO") {
+          if (categoryValue === "SSO") {
             const catColors = {
               "Usahawan": { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" },
               "Kesejahteraan Kendiri": { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" },
@@ -599,17 +602,18 @@
             const ssoSubLabel = ann.ssoSub ? `<span class="text-[8px] ${colors.text} font-semibold ml-1">${ann.ssoSub}</span>` : "";
             topLeftLabel = `<div class="mb-0.5 flex items-center gap-1 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #2228a4; color: white;">SSO</span>${ssoLabel}${ssoSubLabel}</div>`;
             bottomLeftLabel = ``;
-          } else if (ann.category === "Urgent") {
-            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #dc2626; color: white;">Urgent</span></div>`;
+          } else if (categoryValue === "Urgent" || categoryValue === "urgent") {
+            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #dc2626; color: white;">URGENT</span></div>`;
             bottomLeftLabel = ``;
-          } else if (ann.category === "Maxis") {
-            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #46c910; color: white;">Maxis</span></div>`;
-          } else if (ann.category === "Samudra") {
-            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94237a; color: white;">Samudra</span></div>`;
-          } else if (ann.category === "TP") {
+          } else if (categoryValue === "Maxis" || categoryValue === "maxis") {
+            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #46c910; color: white;">MAXIS</span></div>`;
+          } else if (categoryValue === "Samudra" || categoryValue === "samudra") {
+            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94237a; color: white;">SAMUDRA</span></div>`;
+          } else if (categoryValue === "TP" || categoryValue === "tp") {
             topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #f97316; color: white;">TP</span></div>`;
           } else {
-            topLeftLabel = `<span class="text-[8px] font-bold text-slate-400 uppercase block mb-0.5">${ann.category}</span>`;
+            if (window.DEBUG_MODE) console.log("Unknown category:", categoryValue);
+            topLeftLabel = `<span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94a3b8; color: white;">${categoryValue || 'Unknown'}</span>`;
           }
           
           return `
