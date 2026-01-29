@@ -822,9 +822,9 @@
           <div class="p-4 space-y-3">
             <form id="eventForm" class="space-y-3">
               <input type="hidden" id="eventId" name="eventId" />
-              <div>
+              <div id="categorySection">
                 <label aria-label="Program Category" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1.5">Category</label>
-                <div class="grid grid-cols-2 gap-1.5">
+                <div class="grid grid-cols-2 gap-1.5" id="categoryGrid">
                   <label class="relative cursor-pointer group block">
                     <input type="radio" id="categoryEntrepreneur" name="category" value="entrepreneur" class="peer sr-only cat-radio" />
                     <div
@@ -903,7 +903,11 @@
                     </div>
                   </label>
                 </div>
-              </div>
+                <!-- Category Error Text -->
+                <div id="categoryErrorText" class="hidden category-error-text">
+                  *Please select a Category.
+                </div>
+              </div> <!-- End of categorySection -->
               <div id="subcategorySection" class="mt-2 hidden col-span-2">
                 <label for="subcategory" class="text-[8px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
                   >Sub-Category</label

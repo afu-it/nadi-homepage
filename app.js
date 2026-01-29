@@ -857,6 +857,8 @@ function markAnnouncementsAsRead() {
   document.querySelectorAll('input[name="category"]').forEach((radio) => {
     radio.addEventListener("change", function () {
       updateSubcategories(this.value);
+      // Hide category error when a category is selected
+      hideCategoryError();
     });
   });
 
@@ -3020,6 +3022,49 @@ function closeModal() {
   hideModal("eventModal", "modalPanel");
 }
 
+// Show category validation error with red blinking outline
+function showCategoryError() {
+  const categoryGrid = document.getElementById('categoryGrid');
+  const errorText = document.getElementById('categoryErrorText');
+  
+  if (categoryGrid) {
+    // Add blinking red outline class
+    categoryGrid.classList.add('category-error');
+    
+    // Scroll to category section smoothly
+    categoryGrid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // Remove animation class after it completes (0.8s for 2 blinks)
+    setTimeout(() => {
+      categoryGrid.classList.remove('category-error');
+    }, 800);
+  }
+  
+  if (errorText) {
+    // Show error text
+    errorText.classList.remove('hidden');
+    
+    // Hide error text after 5 seconds
+    setTimeout(() => {
+      errorText.classList.add('hidden');
+    }, 5000);
+  }
+}
+
+// Hide category error
+function hideCategoryError() {
+  const categoryGrid = document.getElementById('categoryGrid');
+  const errorText = document.getElementById('categoryErrorText');
+  
+  if (categoryGrid) {
+    categoryGrid.classList.remove('category-error');
+  }
+  
+  if (errorText) {
+    errorText.classList.add('hidden');
+  }
+}
+
 async function saveEvent() {
   const subcategoryVal = document.getElementById("subcategory").value;
   const programInfoVal = programInfoContent;
@@ -3079,9 +3124,24 @@ async function saveEvent() {
     }
   });
 
-  if (!start || !title) return alert("Start Date and Title are required.");
-  if (!category) return alert("Please select a Category.");
-  if (end < start) return alert("End Date cannot be before Start Date.");
+  // Validation with visual feedback
+  if (!start || !title) {
+    alert("Start Date and Title are required.");
+    return;
+  }
+  
+  if (!category) {
+    showCategoryError();
+    return;
+  }
+  
+  if (end < start) {
+    alert("End Date cannot be before Start Date.");
+    return;
+  }
+
+  // Hide any previous category errors
+  hideCategoryError();
 
   const eventData = {
     id: id || Date.now().toString(),
