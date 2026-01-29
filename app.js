@@ -857,6 +857,8 @@ function markAnnouncementsAsRead() {
   document.querySelectorAll('input[name="category"]').forEach((radio) => {
     radio.addEventListener("change", function () {
       updateSubcategories(this.value);
+      // Hide category error when a category is selected
+      hideCategoryError();
     });
   });
 
@@ -3020,44 +3022,46 @@ function closeModal() {
   hideModal("eventModal", "modalPanel");
 }
 
-// Show visual warning in modal
-function showModalWarning(message, highlightElementId = null) {
-  const warningDiv = document.getElementById('categoryWarning');
-  if (warningDiv) {
-    const messageSpan = warningDiv.querySelector('span');
-    if (messageSpan) {
-      messageSpan.textContent = message;
-    }
-    warningDiv.classList.remove('hidden');
+// Show category validation error with red blinking outline
+function showCategoryError() {
+  const categoryGrid = document.getElementById('categoryGrid');
+  const errorText = document.getElementById('categoryErrorText');
+  
+  if (categoryGrid) {
+    // Add blinking red outline class
+    categoryGrid.classList.add('category-error');
     
-    // Highlight the element if specified
-    if (highlightElementId) {
-      const element = document.getElementById(highlightElementId);
-      if (element) {
-        element.classList.add('category-warning');
-        
-        // Scroll to the element
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Remove highlight after animation
-        setTimeout(() => {
-          element.classList.remove('category-warning');
-        }, 600);
-      }
-    }
+    // Scroll to category section smoothly
+    categoryGrid.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
-    // Auto-hide warning after 5 seconds
+    // Remove animation class after it completes (0.8s for 2 blinks)
     setTimeout(() => {
-      warningDiv.classList.add('hidden');
+      categoryGrid.classList.remove('category-error');
+    }, 800);
+  }
+  
+  if (errorText) {
+    // Show error text
+    errorText.classList.remove('hidden');
+    
+    // Hide error text after 5 seconds
+    setTimeout(() => {
+      errorText.classList.add('hidden');
     }, 5000);
   }
 }
 
-// Hide modal warning
-function hideModalWarning() {
-  const warningDiv = document.getElementById('categoryWarning');
-  if (warningDiv) {
-    warningDiv.classList.add('hidden');
+// Hide category error
+function hideCategoryError() {
+  const categoryGrid = document.getElementById('categoryGrid');
+  const errorText = document.getElementById('categoryErrorText');
+  
+  if (categoryGrid) {
+    categoryGrid.classList.remove('category-error');
+  }
+  
+  if (errorText) {
+    errorText.classList.add('hidden');
   }
 }
 
@@ -3122,22 +3126,22 @@ async function saveEvent() {
 
   // Validation with visual feedback
   if (!start || !title) {
-    showModalWarning("Start Date and Title are required.");
+    alert("Start Date and Title are required.");
     return;
   }
   
   if (!category) {
-    showModalWarning("Please select a category before saving", "categorySection");
+    showCategoryError();
     return;
   }
   
   if (end < start) {
-    showModalWarning("End Date cannot be before Start Date.");
+    alert("End Date cannot be before Start Date.");
     return;
   }
 
-  // Hide any previous warnings
-  hideModalWarning();
+  // Hide any previous category errors
+  hideCategoryError();
 
   const eventData = {
     id: id || Date.now().toString(),

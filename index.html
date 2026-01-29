@@ -820,12 +820,6 @@
             </button>
           </div>
           <div class="p-4 space-y-3">
-            <!-- Warning Message Container -->
-            <div id="categoryWarning" class="hidden warning-message">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>Please select a category before saving</span>
-            </div>
-            
             <form id="eventForm" class="space-y-3">
               <input type="hidden" id="eventId" name="eventId" />
               <div id="categorySection">
@@ -908,6 +902,10 @@
                       ></i>
                     </div>
                   </label>
+                </div>
+                <!-- Category Error Text -->
+                <div id="categoryErrorText" class="hidden category-error-text">
+                  *Please select a Category.
                 </div>
               </div> <!-- End of categorySection -->
               <div id="subcategorySection" class="mt-2 hidden col-span-2">
