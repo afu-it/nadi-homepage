@@ -3044,10 +3044,10 @@ function showCategoryError() {
     // Show error text
     errorText.classList.remove('hidden');
     
-    // Hide error text after 5 seconds
+    // Hide error text after animation completes (0.8s)
     setTimeout(() => {
       errorText.classList.add('hidden');
-    }, 5000);
+    }, 800);
   }
 }
 
