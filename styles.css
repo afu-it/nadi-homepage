@@ -1,0 +1,211 @@
+body {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.header-bg {
+  background-color: #2228a4;
+  color: white;
+}
+.bg-nadi {
+  background-color: #2228a4;
+}
+.hover\:bg-nadi:hover {
+  background-color: #1b1d8a;
+}
+.border-nadi {
+  border-color: #2228a4;
+}
+.hover\:border-nadi:hover {
+  border-color: #2228a4;
+}
+.text-nadi {
+  color: #2228a4;
+}
+.hover\:text-nadi:hover {
+  color: #2228a4;
+}
+.group\:hover\:text-nadi:hover {
+  color: #2228a4;
+}
+.peer-checked\:text-nadi:peer-checked {
+  color: #2228a4;
+}
+.peer-checked\:border-nadi:peer-checked {
+  border-color: #2228a4;
+}
+.focus\:border-nadi:focus {
+  border-color: #2228a4;
+}
+.cat-radio:checked + div {
+  border-color: currentColor;
+  background-color: rgb(248 250 252);
+  box-shadow: 0 0 0 1px currentColor;
+}
+.cat-radio:checked + div .check-icon {
+  opacity: 1;
+  transform: scale(1);
+}
+#filterSection {
+  transition:
+    max-height 0.3s ease-out,
+    opacity 0.3s ease-out,
+    margin 0.3s ease;
+}
+.filter-hidden {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: none !important;
+}
+#richTextEditor {
+  font-size: 10px;
+  line-height: 1.4;
+  font-family: inherit;
+  color: inherit;
+}
+#richTextEditor:empty:before {
+  content: attr(placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+#richTextEditor br {
+  display: block;
+  margin: 2px 0;
+  content: "";
+}
+#richTextEditor a {
+  color: #2563eb !important;
+  text-decoration: underline;
+  cursor: pointer;
+}
+#richTextEditor * {
+  font-size: inherit;
+  font-family: inherit !important;
+  line-height: inherit !important;
+  color: inherit !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.event-info-content {
+  font-size: 10px;
+  line-height: 1.4;
+}
+.event-info-content b,
+.event-info-content strong {
+  font-weight: 700;
+}
+.event-info-content i,
+.event-info-content em {
+  font-style: italic;
+}
+.event-info-content u {
+  text-decoration: underline;
+}
+.event-info-content s,
+.event-info-content strike {
+  text-decoration: line-through;
+}
+.event-info-content ul,
+.event-info-content ol {
+  margin-left: 1.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  padding-left: 0.5rem;
+}
+.event-info-content li {
+  margin: 0.125rem 0;
+  list-style-type: disc;
+  font-size: inherit;
+}
+.event-info-content ol li {
+  list-style-type: decimal;
+  font-size: inherit;
+}
+.event-info-content a {
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.event-info-content p {
+  margin: 0.25rem 0;
+}
+.event-info-content br {
+  display: block;
+  margin: 2px 0;
+  content: "";
+}
+.event-info-content span[style*="font-size"],
+.event-info-content font[size] {
+  display: inline-block;
+  line-height: 1.4;
+}
+
+/* Category validation warning styles */
+@keyframes shake-blink {
+  0%, 100% { 
+    transform: translateX(0);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  10%, 30%, 50%, 70%, 90% { 
+    transform: translateX(-3px);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+  }
+  20%, 40%, 60%, 80% { 
+    transform: translateX(3px);
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+  }
+}
+
+.category-warning {
+  animation: shake-blink 0.6s ease-in-out;
+  border: 2px solid #ef4444 !important;
+  border-radius: 8px;
+  padding: 8px;
+  margin: -8px;
+}
+
+.warning-message {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.warning-message i {
+  color: #dc2626;
+}

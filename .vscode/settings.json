@@ -1,0 +1,13 @@
+{
+  "css.validate": false,
+  "stylelint.validate": ["css", "scss"],
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["class: \"([^\"]*)\"", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+  ]
+}

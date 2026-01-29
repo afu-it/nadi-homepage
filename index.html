@@ -1,0 +1,1456 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NADI SCSB Calendar</title>
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
+    <style type="text/tailwindcss">
+      /* Tailwind CSS v4 theme configuration */
+      @layer base {
+        :root {
+          --color-nadi: #2228a4;
+          --color-nadi-hover: #1b1d8a;
+          --color-cat-entrepreneur: #facc15;
+          --color-cat-learning: #3b82f6;
+          --color-cat-wellbeing: #10b981;
+          --color-cat-awareness: #8b5cf6;
+          --color-cat-gov: #ef4444;
+          --font-family-sans: "Plus Jakarta Sans", sans-serif;
+          --shadow-card: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+        }
+      }
+      
+      .offday-line-m { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); width: 16px; height: 2.5px; background-color: #00aff0; border-radius: 2px; }
+      .offday-line-am { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); width: 16px; height: 2.5px; background-color: #90cf53; border-radius: 2px; }
+    </style>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="supabase.js"></script>
+  </head>
+  <body class="min-h-screen flex flex-col text-slate-800 font-sans">
+    <header class="sticky top-0 z-40 header-bg shadow-md">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div
+          id="editableHeader"
+          class="flex items-center gap-3 cursor-pointer select-none group"
+          title="Triple click to edit"
+        >
+          <div>
+            <h1 id="siteTitle" class="text-base font-bold leading-tight text-white group-hover:text-slate-200">
+              NADI SCSB
+            </h1>
+            <p id="siteSubtitle" class="text-[9px] font-bold text-slate-300 tracking-wider group-hover:text-slate-200">
+              PULAU PINANG
+            </p>
+          </div>
+        </div>
+          <div class="flex items-center gap-3">
+            <a
+              href="announcements.html"
+              id="announcementBtn"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors relative"
+            >
+              <i class="fa-solid fa-bullhorn text-[#2228a4]"></i> Announcements
+              <span id="newAnnouncementDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+            </a>
+            <div id="current-date-header" class="hidden sm:flex flex-col items-end border-l border-white/20 pl-3"></div>
+          </div>
+      </div>
+    </header>
+
+    <main class="flex-grow w-full px-4 py-6">
+      <div class="max-w-5xl mx-auto">
+        <div class="flex flex-col md:flex-row gap-6 items-start">
+          <div class="w-full md:w-7/12 order-1 md:order-2">
+            <div class="bg-white rounded-xl shadow-card border border-slate-200 p-5">
+                <div class="flex items-center justify-between mb-4">
+                  <button id="prevMonth" class="w-7 h-7 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-800" aria-label="Previous month">
+                    <i class="fa-solid fa-chevron-left text-xs"></i>
+                  </button>
+                  <div class="text-center">
+                    <span id="calendarMonthLabel" class="block text-lg font-bold text-slate-900"></span>
+                    <span id="calendarYearLabel" class="text-xs font-semibold text-slate-400"></span>
+                  </div>
+                  <button id="nextMonth" class="w-7 h-7 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-800" aria-label="Next month">
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                  </button>
+                </div>
+              
+              <div class="grid grid-cols-7 mb-2 border-b border-slate-100 pb-2">
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SUN</div>
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">MON</div>
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">TUE</div>
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">WED</div>
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">THU</div>
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">FRI</div>
+                <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SAT</div>
+              </div>
+              <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
+              <div class="mt-4 pt-3 border-t border-slate-100">
+                <div class="flex flex-wrap gap-x-4 gap-y-2 justify-center text-[9px] font-semibold text-slate-500 mb-3">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> Usahawan
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Pembelajaran
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Kesejahteraan
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span> Kesedaran
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Inisiatif Kerajaan
+                  </div>
+                </div>
+                <div
+                  class="flex justify-center gap-4 text-[9px] font-semibold text-slate-500 border-t border-slate-50 pt-2"
+                >
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full border border-slate-300"></span> Cuti Umum
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full border-2 border-yellow-400 bg-yellow-100"></span>
+                    Cuti Sekolah
+                  </div>
+                </div>
+                <div
+                  class="flex justify-center gap-4 text-[9px] font-semibold text-slate-500 border-t border-slate-100 pt-2 mt-2 relative items-center"
+                >
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-1 rounded-sm bg-[#00aff0]"></span>
+                    M Off
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-1 rounded-sm bg-[#90cf53]"></span>
+                    AM Off
+                  </div>
+                  <div class="flex items-center gap-0.5">
+                    <span class="w-2 h-0.5 rounded-sm bg-[#00aff0]" style="box-shadow: 0 0 3px #00aff0;"></span>
+                    <span class="w-0.5 h-0.5 rounded-sm bg-transparent"></span>
+                    <span class="w-2 h-0.5 rounded-sm bg-[#00aff0]" style="box-shadow: 0 0 3px #00aff0;"></span>
+                    M Replace
+                  </div>
+                  <div class="flex items-center gap-0.5">
+                    <span class="w-2 h-0.5 rounded-sm bg-[#90cf53]" style="box-shadow: 0 0 3px #90cf53;"></span>
+                    <span class="w-0.5 h-0.5 rounded-sm bg-transparent"></span>
+                    <span class="w-2 h-0.5 rounded-sm bg-[#90cf53]" style="box-shadow: 0 0 3px #90cf53;"></span>
+                    AM Replace
+                  </div>
+                  <div class="relative">
+                    <button
+                      onclick="toggleCalendarFilter()"
+                      id="calendarFilterBtn"
+                      class="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-colors"
+                      title="Filter Calendar"
+                    >
+                      <i class="fa-solid fa-eye-slash text-[9px]"></i>
+                    </button>
+                    <div id="calendarFilterPanel" class="filter-hidden absolute bottom-full right-0 mb-2 bg-white rounded-lg border border-slate-200 shadow-lg p-2 w-36 z-50">
+                      <div class="flex justify-between items-center mb-1.5 pb-1 border-b border-slate-100">
+                        <span class="text-[9px] font-bold text-slate-500 uppercase">Show/Hide</span>
+                        <button onclick="resetCalendarFilters()" class="text-[8px] text-blue-600 hover:underline">Reset</button>
+                       </div>
+                        <div class="space-y-1 text-[9px]">
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowCategories" name="filterShowCategories" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Categories</span>
+                          </label>
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowHolidays" name="filterShowHolidays" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Cuti Umum</span>
+                          </label>
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowSchoolHolidays" name="filterShowSchoolHolidays" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Cuti Sekolah</span>
+                          </label>
+                          <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="filterShowOffdays" name="filterShowOffdays" autocomplete="off" checked onchange="saveCalendarFilters()" class="rounded border-slate-300 w-3 h-3">
+                            <span>Off Days</span>
+                          </label>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="categoryCounts" class="mt-4"></div>
+          </div>
+
+          <div class="w-full md:w-5/12 order-2 md:order-1 flex flex-col">
+            <div class="flex items-center justify-between mb-2">
+              <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
+              <div class="flex gap-2">
+                <button
+                  onclick="syncEventsFromSupabase()"
+                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-green-600 hover:border-green-300 shadow-sm"
+                  title="Sync Events from Supabase"
+                >
+                  <i class="fa-solid fa-rotate text-[10px]"></i>
+                </button>
+                <button
+                  onclick="forceRefreshEvents()"
+                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-orange-600 hover:border-orange-300 shadow-sm"
+                  title="Force Refresh from Supabase"
+                >
+                  <i class="fa-solid fa-arrow-rotate-right text-[10px]"></i>
+                </button>
+                <button
+                  onclick="toggleFilter()"
+                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm"
+                >
+                  <i class="fa-solid fa-filter text-[10px]"></i>
+                </button>
+                <button
+                  onclick="toggleSort()"
+                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-purple-600 hover:border-purple-300 shadow-sm"
+                  title="Sort"
+                >
+                  <i class="fa-solid fa-arrow-down-a-z text-[10px]"></i>
+                </button>
+                <button
+                  onclick="openModal(null, selectedFilterDate)"
+                  class="text-[10px] font-bold text-white bg-slate-900 hover:bg-slate-700 px-3 py-1.5 rounded shadow flex items-center gap-1"
+                >
+                  <i class="fa-solid fa-plus"></i> Add
+                </button>
+              </div>
+            </div>
+
+            <div id="sortSection" class="filter-hidden bg-white p-2 rounded-lg border border-slate-200 mb-3 shadow-sm">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[9px] font-bold text-slate-500 uppercase">Sort By</span>
+              </div>
+              <select
+                id="sortSelect"
+                onchange="applySorting()"
+                class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-semibold outline-none focus:border-purple-400"
+              >
+                <option value="category">Category</option>
+                <option value="startTime" selected>Start Time</option>
+              </select>
+            </div>
+
+            <div
+              id="filterSection"
+              class="filter-hidden bg-white p-2 rounded-lg border border-slate-200 mb-3 shadow-sm"
+            >
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[9px] font-bold text-slate-500 uppercase">Date Range</span>
+                <button
+                  id="clearRangeBtn"
+                  onclick="clearRangeFilter()"
+                  class="hidden text-[9px] text-red-500 hover:underline"
+                >
+                  Reset
+                </button>
+              </div>
+              <div class="flex gap-2 items-center">
+                <label for="filterStart" class="sr-only">Start Date</label>
+                <input
+                  type="date"
+                  id="filterStart"
+                  name="filterStart"
+                  autocomplete="off"
+                  onchange="applyRangeFilter()"
+                  class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-blue-400 text-slate-600"
+                />
+                <span class="text-slate-300 text-[10px]"><i class="fa-solid fa-arrow-right"></i></span>
+                <label for="filterEnd" class="sr-only">End Date</label>
+                <input
+                  type="date"
+                  id="filterEnd"
+                  name="filterEnd"
+                  autocomplete="off"
+                  onchange="applyRangeFilter()"
+                  class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-blue-400 text-slate-600"
+                />
+              </div>
+            </div>
+            <div id="eventListContainer" class="space-y-2 pb-2 overflow-y-auto max-h-[500px] pr-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="max-w-4xl mx-auto mt-12">
+        <div id="customLinksWrapper" class="space-y-8"></div>
+      </div>
+    </main>
+
+    <div id="settingsModal" class="fixed inset-0 z-50 hidden" role="dialog">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeSettings()"></div>
+      <div class="fixed inset-0 z-50 flex items-start justify-center pt-10 px-4 overflow-y-auto">
+        <div
+          id="settingsModalPanel"
+          class="bg-white rounded-xl shadow-xl w-full max-w-sm flex flex-col mb-10 overflow-hidden min-h-[300px] transition-all duration-300 ease-in-out relative"
+        >
+          <button
+            onclick="closeSettings()"
+            class="absolute top-3 right-3 z-50 w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 hover:text-slate-800 shadow-md transition-colors"
+          >
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+
+          <div id="settingsMenuView" class="flex flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <h3 class="text-base font-bold text-slate-900">Site Settings</h3>
+            </div>
+
+            <div class="p-4 space-y-2 flex-1">
+              <button
+                onclick="openHeaderSettings()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Edit Header Text</h4>
+                  <p class="text-[10px] text-slate-500">Change site title and location</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+              </button>
+
+              <button
+                onclick="openOffdaySettings()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Manage Offday Calendar</h4>
+                  <p class="text-[10px] text-slate-500">Set Manager & Assistant Manager offdays</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+              </button>
+
+              <button
+                onclick="openSectionList()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Manage Custom Links</h4>
+                  <p class="text-[10px] text-slate-500">Add sections, buttons & columns</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="sectionCountBadge" class="hidden text-[9px] font-bold text-white bg-nadi px-2 py-0.5 rounded-full">0</span>
+                  <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+                </div>
+              </button>
+
+              <button
+                onclick="openHolidaySettings()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Manage Public Holidays</h4>
+                  <p class="text-[10px] text-slate-500">Add & edit holidays on calendar</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+              </button>
+
+              <button
+                onclick="openSchoolHolidaySettings()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Manage School Holidays</h4>
+                  <p class="text-[10px] text-slate-500">Add & edit school breaks on calendar</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+              </button>
+            </div>
+          </div>
+
+          <div id="headerSettingsView" class="hidden flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-600">
+                  <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 class="text-base font-bold text-slate-900">Header Text</h3>
+              </div>
+            </div>
+
+            <div class="p-6 space-y-4">
+              <div>
+                <label for="settingSiteTitle" class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                  >Main Title</label
+                >
+                <input
+                  type="text"
+                  id="settingSiteTitle"
+                  name="settingSiteTitle"
+                  autocomplete="off"
+                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm outline-none focus:border-nadi"
+                  placeholder="NADI SCSB"
+                />
+              </div>
+              <div>
+                <label for="settingSiteSubtitle" class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Subtitle</label>
+                <input
+                  type="text"
+                  id="settingSiteSubtitle"
+                  name="settingSiteSubtitle"
+                  autocomplete="off"
+                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm outline-none focus:border-nadi"
+                  placeholder="PULAU PINANG"
+                />
+              </div>
+            </div>
+
+            <div class="px-4 py-4 border-t border-slate-100 bg-slate-50 flex justify-end mt-auto">
+              <button
+                onclick="saveHeaderSettings()"
+                class="px-5 py-1.5 bg-nadi hover:bg-[#1b1d8a] text-white text-xs font-bold rounded shadow transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <div id="sectionsListView" class="hidden flex-col h-full w-full">
+            <div
+              class="px-5 py-4 border-b-2 border-slate-200 flex justify-between items-center bg-gradient-to-r from-slate-50 to-slate-100"
+            >
+              <div class="flex items-center gap-3">
+                <button
+                  onclick="backToMenu()"
+                  class="w-8 h-8 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-700 shadow-sm transition-colors"
+                >
+                  <i class="fa-solid fa-arrow-left text-sm"></i>
+                </button>
+                <div>
+                  <h3 class="text-lg font-bold text-slate-900">Custom Link Sections</h3>
+                  <p class="text-[10px] text-slate-500 font-semibold">Manage your button groups</p>
+                </div>
+              </div>
+
+              <div class="flex gap-2">
+                <button
+                  onclick="syncSectionsFromSupabase()"
+                  class="text-xs font-bold text-nadi bg-white hover:bg-slate-50 border border-nadi px-3 py-2 rounded-lg shadow-md flex items-center gap-2"
+                  title="Sync sections from Supabase"
+                >
+                  <i class="fa-solid fa-rotate"></i> Sync
+                </button>
+                <button
+                  onclick="recoverSections()"
+                  class="text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-2 rounded-lg shadow-md flex items-center gap-2"
+                  title="Recover lost sections from backup"
+                >
+                  <i class="fa-solid fa-rotate-left"></i> Recover
+                </button>
+                <button
+                  onclick="openSectionEditor()"
+                  class="text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-4 py-2 rounded-lg shadow-md flex items-center gap-2"
+                >
+                  <i class="fa-solid fa-plus"></i> New Section
+                </button>
+              </div>
+            </div>
+
+            <div class="p-5 flex-1 overflow-y-auto bg-slate-50">
+              <div id="settingsSectionList" class="space-y-3 max-h-[400px]"></div>
+            </div>
+          </div>
+
+          <div id="sectionEditorView" class="hidden flex-col w-full bg-white max-h-[85vh]">
+            <div class="px-4 py-3 border-b border-slate-200 bg-slate-50 shrink-0">
+              <div class="flex items-center gap-2">
+                <button onclick="backToSectionList()" class="text-slate-400 hover:text-slate-600">
+                  <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 class="text-base font-bold text-slate-900" id="sectionEditorTitle">Edit Section</h3>
+              </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4">
+              <input type="hidden" id="editSectionId" />
+
+              <div class="bg-slate-50 rounded-lg border border-slate-200 p-3 mb-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="editSectionHeader" class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Section Title</label>
+                    <input
+                      type="text"
+                      id="editSectionHeader"
+                      name="editSectionHeader"
+                      autocomplete="off"
+                      class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm font-semibold outline-none focus:border-blue-400"
+                      placeholder="e.g. Quick Links"
+                    />
+                  </div>
+                  <div>
+                    <label for="editSectionCols" class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Columns</label>
+                    <select
+                      id="editSectionCols"
+                      name="editSectionCols"
+                      onchange="renderColumnEditors()"
+                      class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-sm font-semibold outline-none focus:border-blue-400 cursor-pointer"
+                    >
+                      <option value="1">1 Col</option>
+                      <option value="2">2 Cols</option>
+                      <option value="3">3 Cols</option>
+                      <option value="4">4 Cols</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div id="columnEditorsContainer" class="grid gap-3"></div>
+            </div>
+
+            <div class="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
+              <button
+                onclick="deleteSection()"
+                id="btnDeleteSection"
+                class="text-xs font-bold text-red-600 hover:text-red-700 px-2"
+              >
+                <i class="fa-solid fa-trash mr-1"></i> Delete
+              </button>
+              <button
+                onclick="saveSectionLocal()"
+                class="text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded shadow"
+              >
+                <i class="fa-solid fa-check mr-1"></i> Save
+              </button>
+            </div>
+          </div>
+
+          <div id="offdaySettingsView" class="hidden flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-arrow-left"></i>
+                  </button>
+                  <h3 class="text-base font-bold text-slate-900">Offday Calendar</h3>
+                </div>
+              </div>
+            </div>
+
+            <div class="px-4 py-2 bg-slate-50 border-b border-slate-100">
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="changeOffdayMonth(-1)" class="w-6 h-6 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500">
+                  <i class="fa-solid fa-chevron-left text-xs"></i>
+                </button>
+                <span id="offdayMonthLabel" class="text-xs font-bold text-slate-700 min-w-[120px] text-center"></span>
+                <button onclick="changeOffdayMonth(1)" class="w-6 h-6 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500">
+                  <i class="fa-solid fa-chevron-right text-xs"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#00aff0]/10 border-b border-[#00aff0]/20 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1 rounded-sm bg-[#00aff0]"></span>
+                    <span class="text-xs font-bold text-slate-800">Manager (M) Offdays</span>
+                  </div>
+                  <span id="managerOffdayCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3">
+                  <div id="offdayManagerCalendar" class="grid grid-cols-7 gap-1 text-center mb-2"></div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#90cf53]/15 border-b border-[#90cf53]/25 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1 rounded-sm bg-[#90cf53]"></span>
+                    <span class="text-xs font-bold text-slate-800">Assistant Manager (AM) Offdays</span>
+                  </div>
+                  <span id="amOffdayCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3">
+                  <div id="offdayAMCalendar" class="grid grid-cols-7 gap-1 text-center mb-2"></div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#00aff0]/15 border-b border-[#00aff0]/25 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1 rounded-sm bg-[#00aff0]" style="box-shadow: 0 0 3px #00aff0;"></span>
+                    <span class="text-xs font-bold text-slate-800">Manager (M) Replacement</span>
+                  </div>
+                  <span id="managerReplacementCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3">
+                  <div id="offdayManagerReplacementCalendar" class="grid grid-cols-7 gap-1 text-center mb-2"></div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-[#90cf53]/15 border-b border-[#90cf53]/25 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-1 rounded-sm bg-[#90cf53]" style="box-shadow: 0 0 3px #90cf53;"></span>
+                    <span class="text-xs font-bold text-slate-800">Assistant Manager (AM) Replacement</span>
+                  </div>
+                  <span id="amReplacementCount" class="text-[10px] font-semibold text-slate-500">0 dates</span>
+                </div>
+                <div class="p-3">
+                  <div id="offdayAMReplacementCalendar" class="grid grid-cols-7 gap-1 text-center mb-2"></div>
+                </div>
+              </div>
+
+              <div class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div class="text-[9px] font-bold text-slate-500 uppercase mb-2">Legend</div>
+                <div class="grid grid-cols-2 gap-2 text-[10px]">
+                  <div class="flex items-center gap-2">
+                    <span class="w-4 h-3 rounded bg-[#00aff0]"></span>
+                    <span class="text-slate-600">M Offday (click to toggle)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-4 h-3 rounded bg-[#90cf53]"></span>
+                    <span class="text-slate-600">AM Offday (click to toggle)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-4 h-1.5 rounded bg-[#00aff0]" style="box-shadow: 0 0 2px #00aff0;"></span>
+                    <span class="text-slate-600">M Replacement</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-4 h-1.5 rounded bg-[#90cf53]" style="box-shadow: 0 0 2px #90cf53;"></span>
+                    <span class="text-slate-600">AM Replacement</span>
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-[9px] text-slate-400 text-center">Click on dates to toggle offdays. Selected dates will appear on the calendar.</p>
+            </div>
+
+            <div class="px-4 py-4 border-t border-slate-100 bg-slate-50 flex justify-end mt-auto">
+              <button
+                onclick="saveOffdaySettings()"
+                class="px-5 py-1.5 bg-nadi hover:bg-[#1b1d8a] text-white text-xs font-bold rounded shadow transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+
+          <div id="holidaySettingsView" class="hidden flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-600">
+                  <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 class="text-base font-bold text-slate-900">Public Holidays</h3>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-slate-400"></span>
+                    <span class="text-xs font-bold text-slate-800">Add New Holiday</span>
+                  </div>
+                  <span id="holidayCount" class="text-[10px] font-semibold text-slate-500">0 holidays</span>
+                </div>
+                <div class="p-3 space-y-2">
+                  <div>
+                    <label for="holidayName" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
+                    <input
+                      type="text"
+                      id="holidayName"
+                      name="holidayName"
+                      autocomplete="off"
+                      class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                      placeholder="e.g. Hari Raya Puasa"
+                    />
+                  </div>
+                  <div class="grid grid-cols-2 gap-2 items-end">
+                    <div>
+                      <label for="holidayDate" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Date</label>
+                      <input
+                        type="date"
+                        id="holidayDate"
+                        name="holidayDate"
+                        autocomplete="off"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                      />
+                    </div>
+                    <button
+                      onclick="addPublicHoliday()"
+                      class="py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold rounded transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-slate-100 border-b border-slate-200">
+                  <span class="text-xs font-bold text-slate-800">Holiday List</span>
+                </div>
+                <div class="p-3">
+                  <div id="holidayList" class="space-y-1 max-h-[200px] overflow-y-auto"></div>
+                  <div id="noHolidayMessage" class="text-center py-4 text-[10px] text-slate-400">
+                    No holidays added yet.
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-[9px] text-slate-400 text-center">Holidays will appear on the calendar with a gray circle indicator.</p>
+            </div>
+
+            <div class="px-4 py-4 border-t border-slate-100 bg-slate-50 flex justify-end mt-auto">
+              <button
+                onclick="saveHolidaySettings()"
+                class="px-5 py-1.5 bg-nadi hover:bg-[#1b1d8a] text-white text-xs font-bold rounded shadow transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+
+          <div id="schoolHolidaySettingsView" class="hidden flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-600">
+                  <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 class="text-base font-bold text-slate-900">School Holidays</h3>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-amber-100 border-b border-amber-200 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-400"></span>
+                    <span class="text-xs font-bold text-amber-800">Add New School Holiday</span>
+                  </div>
+                  <span id="schoolHolidayCount" class="text-[10px] font-semibold text-amber-600">0 holidays</span>
+                </div>
+                <div class="p-3 space-y-2">
+                  <div>
+                    <label for="schoolHolidayName" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
+                    <input
+                      type="text"
+                      id="schoolHolidayName"
+                      name="schoolHolidayName"
+                      autocomplete="off"
+                      class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                      placeholder="e.g. Cuti Penggal 1"
+                    />
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label for="schoolHolidayStart" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        id="schoolHolidayStart"
+                        name="schoolHolidayStart"
+                        autocomplete="off"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label for="schoolHolidayEnd" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">End Date</label>
+                      <input
+                        type="date"
+                        id="schoolHolidayEnd"
+                        name="schoolHolidayEnd"
+                        autocomplete="off"
+                        class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onclick="addSchoolHoliday()"
+                    class="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold rounded transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div class="px-3 py-2 bg-amber-100 border-b border-amber-200">
+                  <span class="text-xs font-bold text-amber-800">School Holiday List</span>
+                </div>
+                <div class="p-3">
+                  <div id="schoolHolidayList" class="space-y-1 max-h-[200px] overflow-y-auto"></div>
+                  <div id="noSchoolHolidayMessage" class="text-center py-4 text-[10px] text-slate-400">
+                    No school holidays added yet.
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-[9px] text-slate-400 text-center">School holidays will appear on the calendar with a yellow background.</p>
+            </div>
+
+            <div class="px-4 py-4 border-t border-slate-100 bg-slate-50 flex justify-end mt-auto">
+              <button
+                onclick="saveSchoolHolidaySettings()"
+                class="px-5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded shadow"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="eventModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" id="modalBackdrop"></div>
+      <div class="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-10 px-4 overflow-y-auto">
+        <div
+          class="bg-white rounded-xl shadow-xl w-full max-w-sm transform transition-all scale-95 opacity-0 flex flex-col mb-10"
+          id="modalPanel"
+        >
+          <div
+            class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-xl"
+          >
+            <h3 class="text-base font-bold text-slate-900" id="modalTitle">New Program</h3>
+            <button
+              onclick="closeModal()"
+              class="w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500"
+            >
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+          <div class="p-4 space-y-3">
+            <!-- Warning Message Container -->
+            <div id="categoryWarning" class="hidden warning-message">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>Please select a category before saving</span>
+            </div>
+            
+            <form id="eventForm" class="space-y-3">
+              <input type="hidden" id="eventId" name="eventId" />
+              <div id="categorySection">
+                <label aria-label="Program Category" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1.5">Category</label>
+                <div class="grid grid-cols-2 gap-1.5" id="categoryGrid">
+                  <label class="relative cursor-pointer group block">
+                    <input type="radio" id="categoryEntrepreneur" name="category" value="entrepreneur" class="peer sr-only cat-radio" />
+                    <div
+                      class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-yellow-700 peer-checked:border-yellow-400 peer-checked:bg-yellow-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
+                    >
+                      <div class="flex items-center gap-1.5 mb-0.5 relative z-10">
+                        <span class="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>
+                        <span class="text-[10px] font-bold uppercase leading-none">Usahawan</span>
+                      </div>
+                      <span class="block text-[8px] opacity-70 leading-tight pl-3">Entrepreneurship</span>
+                      <i
+                        class="fa-solid fa-check text-yellow-500 text-[10px] opacity-0 check-icon absolute top-1 right-1"
+                      ></i>
+                    </div>
+                  </label>
+                  <label class="relative cursor-pointer group block">
+                    <input type="radio" id="categoryWellbeing" name="category" value="wellbeing" class="peer sr-only cat-radio" />
+                    <div
+                      class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-emerald-600 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
+                    >
+                      <div class="flex items-center gap-1.5 mb-0.5 relative z-10">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                        <span class="text-[10px] font-bold uppercase leading-none">Kesejahteraan Kendiri</span>
+                      </div>
+                      <span class="block text-[8px] opacity-70 leading-tight pl-3">Wellbeing</span>
+                      <i
+                        class="fa-solid fa-check text-emerald-500 text-[10px] opacity-0 check-icon absolute top-1 right-1"
+                      ></i>
+                    </div>
+                  </label>
+                  <label class="relative cursor-pointer group block">
+                    <input type="radio" id="categoryAwareness" name="category" value="awareness" class="peer sr-only cat-radio" />
+                    <div
+                      class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-violet-600 peer-checked:border-violet-400 peer-checked:bg-violet-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
+                    >
+                      <div class="flex items-center gap-1.5 mb-0.5 relative z-10">
+                        <span class="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0"></span>
+                        <span class="text-[10px] font-bold uppercase leading-none">Kesedaran</span>
+                      </div>
+                      <span class="block text-[8px] opacity-70 leading-tight pl-3">Awareness</span>
+                      <i
+                        class="fa-solid fa-check text-violet-500 text-[10px] opacity-0 check-icon absolute top-1 right-1"
+                      ></i>
+                    </div>
+                  </label>
+                  <label class="relative cursor-pointer group block">
+                    <input type="radio" id="categoryGov" name="category" value="gov" class="peer sr-only cat-radio" />
+                    <div
+                      class="px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-red-600 peer-checked:border-red-400 peer-checked:bg-red-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
+                    >
+                      <div class="flex items-center gap-1.5 mb-0.5 relative z-10">
+                        <span class="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>
+                        <span class="text-[10px] font-bold uppercase leading-none">Inisiatif Kerajaan</span>
+                      </div>
+                      <span class="block text-[8px] opacity-70 leading-tight pl-3">Gov Initiative</span>
+                      <i
+                        class="fa-solid fa-check text-red-500 text-[10px] opacity-0 check-icon absolute top-1 right-1"
+                      ></i>
+                    </div>
+                  </label>
+                  <label class="relative cursor-pointer group block col-span-2 flex justify-center">
+                    <input type="radio" id="categoryLearning" name="category" value="learning" class="peer sr-only cat-radio" />
+                    <div
+                      class="w-[220px] px-2 py-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 peer-checked:text-blue-600 peer-checked:border-blue-400 peer-checked:bg-blue-50 transition-all h-full flex flex-col justify-center relative overflow-hidden"
+                    >
+                      <div class="flex items-center gap-1.5 mb-0.5 relative z-10">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                        <span class="text-[10px] font-bold uppercase leading-none whitespace-nowrap"
+                          >Pembelajaran Sepanjang Hayat</span
+                        >
+                      </div>
+                      <span class="block text-[8px] opacity-70 leading-tight pl-3">Lifelong Learning</span>
+                      <i
+                        class="fa-solid fa-check text-blue-500 text-[10px] opacity-0 check-icon absolute top-1 right-1"
+                      ></i>
+                    </div>
+                  </label>
+                </div>
+              </div> <!-- End of categorySection -->
+              <div id="subcategorySection" class="mt-2 hidden col-span-2">
+                <label for="subcategory" class="text-[8px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                  >Sub-Category</label
+                >
+                <select
+                  id="subcategory"
+                  name="subcategory"
+                  class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-semibold text-slate-600 focus:border-slate-400 outline-none"
+                >
+                  <option value="">-- Select Sub-Category --</option>
+                </select>
+              </div>
+              <div>
+                <label for="eventTitle" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                  >Title <span class="text-red-500">*</span></label
+                >
+                <input
+                  type="text"
+                  id="eventTitle"
+                  name="eventTitle"
+                  required
+                  autocomplete="off"
+                  class="w-full px-3 py-2 bg-[#eff6ff] border border-slate-200 rounded text-sm font-semibold text-slate-800 focus:border-slate-400 focus:ring-0 outline-none"
+                  placeholder="Nama Program"
+                />
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onclick="toggleProgramInfo()"
+                  class="w-full text-left flex items-center justify-between px-2 py-1.5 bg-slate-50 hover:bg-slate-100 rounded border border-slate-200 transition-colors mb-1"
+                >
+                  <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide"
+                    >Program Info (Optional)</span
+                  >
+                  <i
+                    id="infoToggleIcon"
+                    class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform"
+                  ></i>
+                </button>
+                <div id="programInfoContainer" class="hidden">
+                  <button
+                    type="button"
+                    onclick="openRichTextEditor()"
+                    class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs text-slate-600 hover:bg-slate-50 text-left flex items-center justify-between"
+                  >
+                    <span id="programInfoPreview" class="truncate flex-1">Click to edit details</span>
+                    <i class="fa-solid fa-pen-to-square text-slate-400 text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label for="startDate" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1"
+                    >Start Date</label
+                  >
+                  <input
+                    type="date"
+                    id="startDate"
+                    name="startDate"
+                    autocomplete="off"
+                    class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:border-slate-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label for="endDate" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">End Date</label>
+                  <input
+                    type="date"
+                    id="endDate"
+                    name="endDate"
+                    autocomplete="off"
+                    class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:border-slate-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label aria-label="Time Selection" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Time</label>
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] text-slate-500 font-semibold w-10">Start</span>
+                    <label for="timeHour" class="sr-only">Start Hour</label>
+                    <select
+                      id="timeHour"
+                      name="timeHour"
+                      onchange="updateEndTime()"
+                      class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                    ></select>
+                    <span class="text-slate-400 text-xs">:</span>
+                    <label for="timeMinute" class="sr-only">Start Minute</label>
+                    <select
+                      id="timeMinute"
+                      name="timeMinute"
+                      onchange="updateEndTime()"
+                      class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                    >
+                      <option value="00">00</option>
+                      <option value="15">15</option>
+                      <option value="30">30</option>
+                      <option value="45">45</option>
+                    </select>
+                    <label for="timeAMPM" class="sr-only">AM/PM</label>
+                    <select
+                      id="timeAMPM"
+                      name="timeAMPM"
+                      onchange="updateEndTime()"
+                      class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
+                    <label for="endTimeHour" class="sr-only">End Hour</label>
+                    <select
+                      id="endTimeHour"
+                      name="endTimeHour"
+                      class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                    >
+                      <option value="" selected>-</option>
+                    </select>
+                    <span class="text-slate-400 text-xs">:</span>
+                    <label for="endTimeMinute" class="sr-only">End Minute</label>
+                    <select
+                      id="endTimeMinute"
+                      name="endTimeMinute"
+                      class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                    >
+                      <option value="00">00</option>
+                      <option value="15">15</option>
+                      <option value="30">30</option>
+                      <option value="45">45</option>
+                    </select>
+                    <label for="endTimeAMPM" class="sr-only">AM/PM</label>
+                    <select
+                      id="endTimeAMPM"
+                      name="endTimeAMPM"
+                      class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
+                    >
+                      <option value="" selected>-</option>
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                  
+                  <div class="mt-1 pt-1 border-t border-dashed border-slate-200">
+                    <label class="flex items-center gap-2 cursor-pointer mb-1.5">
+                      <input
+                        type="checkbox"
+                        id="hasSecondSession"
+                        name="hasSecondSession"
+                        onchange="toggleSecondSession()"
+                        class="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span class="text-[9px] font-semibold text-slate-600">Add Second Session</span>
+                    </label>
+                    <div id="secondSessionContainer" class="flex flex-col gap-2 pl-4 hidden">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[9px] text-slate-500 font-semibold w-10">Start</span>
+                        <label for="time2Hour" class="sr-only">Session 2 Start Hour</label>
+                        <select
+                          id="time2Hour"
+                          name="time2Hour"
+                          onchange="updateEndTime2()"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="" selected>-</option>
+                        </select>
+                        <span class="text-slate-400 text-xs">:</span>
+                        <label for="time2Minute" class="sr-only">Session 2 Start Minute</label>
+                        <select
+                          id="time2Minute"
+                          name="time2Minute"
+                          onchange="updateEndTime2()"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="00">00</option>
+                          <option value="15">15</option>
+                          <option value="30">30</option>
+                          <option value="45">45</option>
+                        </select>
+                        <label for="time2AMPM" class="sr-only">Session 2 AM/PM</label>
+                        <select
+                          id="time2AMPM"
+                          name="time2AMPM"
+                          onchange="updateEndTime2()"
+                          class="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
+                        <label for="endTime2Hour" class="sr-only">Session 2 End Hour</label>
+                        <select
+                          id="endTime2Hour"
+                          name="endTime2Hour"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="" selected>-</option>
+                        </select>
+                        <span class="text-slate-400 text-xs">:</span>
+                        <label for="endTime2Minute" class="sr-only">Session 2 End Minute</label>
+                        <select
+                          id="endTime2Minute"
+                          name="endTime2Minute"
+                          class="px-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                        >
+                          <option value="00">00</option>
+                          <option value="15">15</option>
+                          <option value="30">30</option>
+                          <option value="45">45</option>
+                        </select>
+                        <label for="endTime2AMPM" class="sr-only">Session 2 End AM/PM</label>
+                        <select
+                          id="endTime2AMPM"
+                          name="endTime2AMPM"
+                          class="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-3">
+                <label aria-label="Links Section" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Links</label>
+                <div id="linksContainer" class="space-y-1.5 mb-2"></div>
+                <button
+                  type="button"
+                  onclick="addLinkRow()"
+                  class="w-full py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-100 transition-colors"
+                >
+                  + Add Link
+                </button>
+              </div>
+            </form>
+          </div>
+          <div class="px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
+            <button
+              type="button"
+              onclick="closeModal()"
+              class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onclick="saveEvent()"
+              class="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition-transform active:scale-95"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="richTextModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeRichTextModal()"></div>
+      <div class="fixed inset-0 z-50 flex items-start justify-center pt-10 px-4 overflow-y-auto">
+        <div
+          class="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col mb-10 transform transition-all scale-95 opacity-0"
+          id="richTextPanel"
+        >
+          <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-xl">
+            <h3 class="text-base font-bold text-slate-900">Edit Program Info</h3>
+            <button
+              onclick="closeRichTextModal()"
+              class="w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500"
+            >
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+
+          <div class="px-4 py-2 border-b border-slate-100 bg-white">
+            <div class="flex flex-wrap gap-1 items-center">
+              <button
+                type="button"
+                onclick="execFormat('bold')"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
+                title="Bold"
+              >
+                <i class="fa-solid fa-bold text-xs"></i>
+              </button>
+              <button
+                type="button"
+                onclick="execFormat('italic')"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
+                title="Italic"
+              >
+                <i class="fa-solid fa-italic text-xs"></i>
+              </button>
+              <button
+                type="button"
+                onclick="execFormat('underline')"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
+                title="Underline"
+              >
+                <i class="fa-solid fa-underline text-xs"></i>
+              </button>
+              <button
+                type="button"
+                onclick="execFormat('strikeThrough')"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
+                title="Strikethrough"
+              >
+                <i class="fa-solid fa-strikethrough text-xs"></i>
+              </button>
+              <div class="w-px h-6 bg-slate-200 mx-1"></div>
+              <div class="relative">
+                <label for="programInfoFontSize" class="sr-only">Font Size</label>
+                <select
+                  id="programInfoFontSize"
+                  name="programInfoFontSize"
+                  onchange="changeFontSize(this.value)"
+                  class="px-2 py-1 h-7 bg-white border border-slate-200 rounded text-[10px] font-semibold outline-none cursor-pointer text-slate-600"
+                >
+                  <option value="" disabled>Size</option>
+                  <option value="8">8px</option>
+                  <option value="8.5">8.5px</option>
+                  <option value="9">9px</option>
+                  <option value="10" selected>10px (Default)</option>
+                  <option value="10.5">10.5px</option>
+                  <option value="11">11px</option>
+                  <option value="11.5">11.5px</option>
+                  <option value="12">12px</option>
+                </select>
+              </div>
+              <div class="w-px h-6 bg-slate-200 mx-1"></div>
+              <button
+                type="button"
+                onclick="execFormat('insertUnorderedList')"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
+                title="Bullet List"
+              >
+                <i class="fa-solid fa-list-ul text-xs"></i>
+              </button>
+              <button
+                type="button"
+                onclick="execFormat('insertOrderedList')"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
+                title="Numbered List"
+              >
+                <i class="fa-solid fa-list-ol text-xs"></i>
+              </button>
+              <div class="w-px h-6 bg-slate-200 mx-1"></div>
+              <button
+                type="button"
+                onclick="insertLink()"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-blue-600 flex items-center justify-center transition-colors"
+                title="Insert Link"
+              >
+                <i class="fa-solid fa-link text-xs"></i>
+              </button>
+              <div class="w-px h-6 bg-slate-200 mx-1"></div>
+              <button
+                type="button"
+                onclick="clearFormatting()"
+                class="px-2 h-7 rounded hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors text-[10px] font-semibold"
+                title="Clear Formatting"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onclick="confirmRemoveInfo()"
+                class="ml-auto px-2 h-7 rounded hover:bg-red-50 text-red-500 flex items-center justify-center transition-colors text-[10px] font-semibold"
+                title="Remove All"
+              >
+                <i class="fa-solid fa-trash-can mr-1"></i> Remove
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4">
+            <div
+              id="richTextEditor"
+              contenteditable="true"
+              role="textbox"
+              aria-multiline="true"
+              aria-label="Program details editor"
+              class="w-full min-h-[150px] max-h-[300px] px-3 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:border-blue-400 outline-none overflow-y-auto"
+              placeholder="Enter program details here..."
+            ></div>
+            <p class="text-[9px] text-slate-400 mt-1">Tip: Use the toolbar above to format your text</p>
+          </div>
+
+          <div class="px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
+            <button
+              type="button"
+              onclick="closeRichTextModal()"
+              class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onclick="saveRichText()"
+              class="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition-transform active:scale-95"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="deleteModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeDeleteModal()"></div>
+      <div class="fixed inset-0 z-50 flex items-start justify-center pt-10 px-4 overflow-y-auto">
+        <div
+          class="bg-white rounded-xl shadow-xl w-full max-w-xs transform transition-all scale-95 opacity-0"
+          id="deleteModalPanel"
+        >
+          <div class="p-5 text-center">
+            <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
+              <i class="fa-solid fa-trash text-red-600 text-lg"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-900 mb-1">Delete Program?</h3>
+            <p class="text-xs text-slate-500 mb-4">This action cannot be undone.</p>
+
+            <div class="flex gap-2">
+              <button
+                onclick="closeDeleteModal()"
+                class="flex-1 px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onclick="confirmDelete()"
+                class="flex-1 px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirmModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeConfirmModal()"></div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div
+          class="bg-white rounded-xl shadow-xl w-full max-w-xs transform transition-all scale-95 opacity-0"
+          id="confirmModalPanel"
+        >
+          <div class="p-5 text-center">
+            <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+              <i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-900 mb-1">Remove Program Info?</h3>
+            <p class="text-xs text-slate-500 mb-4">This will delete all program information.</p>
+
+            <div class="flex gap-2">
+              <button
+                onclick="closeConfirmModal()"
+                class="flex-1 px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onclick="removeInfoConfirmed()"
+                class="flex-1 px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="urlInputModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeUrlInputModal()"></div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div
+          class="bg-white rounded-xl shadow-xl w-full max-w-sm transform transition-all scale-95 opacity-0"
+          id="urlInputPanel"
+        >
+          <div class="px-4 py-3 border-b border-b-2 border-slate-200 flex justify-between items-center bg-slate-50/50 rounded-t-xl">
+            <h3 class="text-base font-bold text-slate-900">Insert Link</h3>
+            <button
+              onclick="closeUrlInputModal()"
+              class="w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500"
+            >
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+          <div class="p-4 space-y-3">
+            <div>
+              <label for="linkTextField" class="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Display Text</label>
+              <input
+                type="text"
+                id="linkTextField"
+                name="linkTextField"
+                autocomplete="off"
+                class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-blue-400"
+                placeholder="Click here (leave empty to use URL)"
+              />
+            </div>
+            <div>
+              <label for="urlInputField" class="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">URL <span class="text-red-500">*</span></label>
+              <input
+                type="url"
+                id="urlInputField"
+                name="urlInputField"
+                autocomplete="off"
+                class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-blue-400"
+                placeholder="https://example.com"
+                onkeydown="if(event.key==='Enter') confirmInsertLink()"
+              />
+            </div>
+          </div>
+          <div class="px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
+            <button
+              type="button"
+              onclick="closeUrlInputModal()"
+              class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onclick="confirmInsertLink()"
+              class="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded shadow"
+            >
+              Insert
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
