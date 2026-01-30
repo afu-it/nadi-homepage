@@ -162,12 +162,11 @@ async function loadEventsForMonth(year, month) {
   }
   
   if (window.DEBUG_MODE) console.log('📥 Loading events for', monthKey, '...');
-  
+
   const { data, error } = await supabaseClient
     .from('events')
     .select('*')
-    .gte('start', firstDay)
-    .lte('end', lastDay)
+    .or(`start.lte.${lastDay},end.gte.${firstDay}`)
     .order('start', { ascending: true });
   
   if (error) {
