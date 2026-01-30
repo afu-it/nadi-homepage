@@ -218,7 +218,7 @@
                   <i class="fa-solid fa-arrow-down-a-z text-[10px]"></i>
                 </button>
                 <button
-                  onclick="openModal(null, selectedFilterDate)"
+                  onclick="openModalWithSelectedDate()"
                   class="text-[10px] font-bold text-white bg-slate-900 hover:bg-slate-700 px-3 py-1.5 rounded shadow flex items-center gap-1"
                 >
                   <i class="fa-solid fa-plus"></i> Add
@@ -942,7 +942,7 @@
                   <button
                     type="button"
                     onclick="openRichTextEditor()"
-                    class="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs text-slate-600 hover:bg-slate-50 text-left flex items-center justify-between"
+                    class="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-600 hover:bg-blue-100 text-left flex items-center justify-between"
                   >
                     <span id="programInfoPreview" class="truncate flex-1">Click to edit details</span>
                     <i class="fa-solid fa-pen-to-square text-slate-400 text-[10px]"></i>
@@ -991,7 +991,6 @@
                     <select
                       id="timeMinute"
                       name="timeMinute"
-                      onchange="updateEndTime()"
                       class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     >
                       <option value="00">00</option>
@@ -1003,23 +1002,20 @@
                     <select
                       id="timeAMPM"
                       name="timeAMPM"
-                      onchange="updateEndTime()"
                       class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
                     >
-                      <option value="AM">AM</option>
+                      <option value="AM" selected>AM</option>
                       <option value="PM">PM</option>
                     </select>
                   </div>
                   <div class="flex items-center gap-1.5">
                     <span class="text-[9px] text-slate-500 font-semibold w-10">End</span>
                     <label for="endTimeHour" class="sr-only">End Hour</label>
-                    <select
-                      id="endTimeHour"
-                      name="endTimeHour"
-                      class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
-                    >
-                      <option value="" selected>-</option>
-                    </select>
+                     <select
+                       id="endTimeHour"
+                       name="endTimeHour"
+                       class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
+                     ></select>
                     <span class="text-slate-400 text-xs">:</span>
                     <label for="endTimeMinute" class="sr-only">End Minute</label>
                     <select
@@ -1033,15 +1029,14 @@
                       <option value="45">45</option>
                     </select>
                     <label for="endTimeAMPM" class="sr-only">AM/PM</label>
-                    <select
-                      id="endTimeAMPM"
-                      name="endTimeAMPM"
-                      class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
-                    >
-                      <option value="" selected>-</option>
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
+                     <select
+                       id="endTimeAMPM"
+                       name="endTimeAMPM"
+                       class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
+                     >
+                       <option value="AM">AM</option>
+                       <option value="PM" selected>PM</option>
+                     </select>
                   </div>
                   
                   <div class="mt-1 pt-1 border-t border-dashed border-slate-200">

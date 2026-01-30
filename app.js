@@ -100,7 +100,7 @@ function toggleChevron(icon, isOpen) {
 let today = new Date();
 let currentMonth = today.getMonth();
 let currentYear = today.getFullYear();
-let selectedFilterDate = toLocalISOString(today);
+window.selectedFilterDate = toLocalISOString(today);
 let rangeFilter = { start: null, end: null };
 
 let events = [];
@@ -782,6 +782,7 @@ function markAnnouncementsAsRead() {
       const opt2 = document.createElement("option");
       opt2.value = val;
       opt2.text = val;
+      if (val === "06") opt2.selected = true;
       endHourSelect.appendChild(opt2);
       const opt3 = document.createElement("option");
       opt3.value = val;
@@ -2032,7 +2033,7 @@ function renderCalendar() {
     const dayDate = new Date(currentYear, currentMonth, i);
     const dateStr = toLocalISOString(dayDate);
     const isToday = dateStr === toLocalISOString(today);
-    const isSelected = selectedFilterDate === dateStr;
+    const isSelected = window.selectedFilterDate === dateStr;
     const userHolidayObj = siteSettings.publicHolidays && siteSettings.publicHolidays[dateStr];
     const userHoliday = userHolidayObj !== undefined ? userHolidayObj : "";
     const defaultHoliday = defaultHolidays[dateStr] || "";
@@ -2185,13 +2186,13 @@ function renderCalendar() {
 
     cell.onclick = () => {
       clearRangeFilter(false);
-      if (selectedFilterDate === dateStr) {
-        selectedFilterDate = null;
+      if (window.selectedFilterDate === dateStr) {
+        window.selectedFilterDate = null;
         refreshEventsFromSupabase().then(() => {
           renderEventList();
         });
       } else {
-        selectedFilterDate = dateStr;
+        window.selectedFilterDate = dateStr;
         refreshEventsFromSupabase().then(() => {
           renderEventList();
         });
@@ -2209,11 +2210,15 @@ function applyRangeFilter() {
 
   if (start && end) {
     rangeFilter = { start, end };
-    selectedFilterDate = null;
+    window.selectedFilterDate = null;
     renderCalendar();
     renderEventList();
     document.getElementById("clearRangeBtn").classList.remove("hidden");
   }
+}
+
+function openModalWithSelectedDate() {
+  openModal(null, window.selectedFilterDate || "");
 }
 
 function clearRangeFilter(shouldRender = true) {
@@ -2228,7 +2233,7 @@ function renderCategoryCounts() {
   const container = document.getElementById("categoryCounts");
   if (!container) return;
 
-  if (!selectedFilterDate) {
+  if (!window.selectedFilterDate) {
     container.innerHTML = "";
     return;
   }
@@ -2244,7 +2249,7 @@ function renderCategoryCounts() {
   events.forEach((event) => {
     const start = new Date(event.start);
     const end = new Date(event.end || event.start);
-    const selected = new Date(selectedFilterDate);
+    const selected = new Date(window.selectedFilterDate);
 
     if (selected >= start && selected <= end) {
       if (counts.hasOwnProperty(event.category)) {
@@ -2319,9 +2324,9 @@ function renderEventList() {
 
   let displayEvents = [];
 
-  if (selectedFilterDate) {
+  if (window.selectedFilterDate) {
     displayEvents = events.filter((e) => {
-      const isValid = selectedFilterDate >= e.start && selectedFilterDate <= e.end;
+      const isValid = window.selectedFilterDate >= e.start && window.selectedFilterDate <= e.end;
       return isValid;
     });
   } else if (rangeFilter.start && rangeFilter.end) {
@@ -2529,8 +2534,8 @@ function changeEventPage(direction) {
   let displayEvents = events;
   const todayStr = toLocalISOString(today);
   
-  if (selectedFilterDate) {
-    displayEvents = events.filter((e) => selectedFilterDate >= e.start && selectedFilterDate <= e.end);
+  if (window.selectedFilterDate) {
+    displayEvents = events.filter((e) => window.selectedFilterDate >= e.start && window.selectedFilterDate <= e.end);
   } else if (rangeFilter.start && rangeFilter.end) {
     displayEvents = events.filter((e) => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
   } else {
@@ -2591,14 +2596,12 @@ function openModal(id = null, dateHint = null) {
     updateProgramInfoPreview();
     const hasInfo = !!ev.info;
     const infoContainer = document.getElementById("programInfoContainer");
-    const infoIcon = document.getElementById("infoToggleIcon");
 
     if (hasInfo) {
       infoContainer.classList.remove("hidden");
     } else {
       infoContainer.classList.add("hidden");
     }
-    toggleChevron(infoIcon, hasInfo);
 
     const catRadio = document.querySelector(`input[name="category"][value="${ev.category}"]`);
     if (catRadio) {
@@ -2689,21 +2692,27 @@ function openModal(id = null, dateHint = null) {
       });
     }
   } else {
-    document.getElementById("eventForm").reset();
+    document.getElementById("eventId").value = "";
+    document.getElementById("eventTitle").value = "";
+    document.getElementById("startDate").value = "";
+    document.getElementById("endDate").value = "";
     document.getElementById("linksContainer").innerHTML = "";
-    document.getElementById("programInfoContainer").classList.add("hidden");
-    document.getElementById("infoToggleIcon").classList.remove("fa-chevron-up");
-    document.getElementById("infoToggleIcon").classList.add("fa-chevron-down");
+    document.getElementById("programInfoContainer").classList.remove("hidden");
     document.getElementById("subcategorySection").classList.add("hidden");
 
     programInfoContent = "";
     updateProgramInfoPreview();
 
-    const dateToUse = dateHint || selectedFilterDate || toLocalISOString(today);
+    let dateToUse = dateHint || window.selectedFilterDate;
+    if (!dateToUse) {
+      dateToUse = toLocalISOString(today);
+    }
     document.getElementById("modalTitle").textContent = "New Program";
     document.getElementById("eventId").value = "";
-    document.getElementById("startDate").value = dateToUse;
-    document.getElementById("endDate").value = dateToUse;
+    const startDateInput = document.getElementById("startDate");
+    const endDateInput = document.getElementById("endDate");
+    if (startDateInput) startDateInput.value = dateToUse;
+    if (endDateInput) endDateInput.value = dateToUse;
     document.getElementById("timeHour").value = "09";
     document.getElementById("timeMinute").value = "00";
     document.getElementById("timeAMPM").value = "AM";
@@ -2741,7 +2750,7 @@ function updateEndTime() {
 }
 
 function updateEndTime2() {
-  const startHour = parseInt(document.getElementById("time2Hour").value) || 0;
+  const startHour = parseInt(document.getElementById("time2Hour").value);
   const startMinute = document.getElementById("time2Minute").value || "00";
   const startAMPM = document.getElementById("time2AMPM").value;
 
@@ -2751,7 +2760,7 @@ function updateEndTime2() {
   let endAMPM = startAMPM;
 
   if (endHour > 12) {
-    endHour = endHour - 12;
+    endHour = 1;
     endAMPM = startAMPM === "AM" ? "PM" : "AM";
   }
 
