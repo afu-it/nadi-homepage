@@ -275,8 +275,8 @@ function showUserMenu() {
 }
 
 // Logout
-function handleLeaveLogout() {
-  if (confirm('Are you sure you want to logout?')) {
+async function handleLeaveLogout() {
+  if (await customConfirm('Are you sure you want to logout?')) {
     localStorage.removeItem('leave_user');
     currentLeaveUser = null;
     updateLoginButton();
@@ -293,6 +293,41 @@ let leaveCalendarFilters = {
   showSchoolHolidays: true
 };
 
+// Custom confirm dialog (works in sandboxed iframes)
+function customConfirm(message) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-[70] flex items-start justify-center pt-20 px-4';
+    modal.innerHTML = `
+      <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 animate-slideIn">
+        <div class="text-center mb-6">
+          <i class="fa-solid fa-circle-question text-5xl text-blue-500 mb-3"></i>
+          <p class="text-slate-800 font-semibold">${message}</p>
+        </div>
+        <div class="flex gap-3">
+          <button id="confirmCancel" class="flex-1 btn btn-secondary">Cancel</button>
+          <button id="confirmOk" class="flex-1 btn btn-primary">Confirm</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    document.getElementById('confirmOk').onclick = () => {
+      modal.remove();
+      resolve(true);
+    };
+    document.getElementById('confirmCancel').onclick = () => {
+      modal.remove();
+      resolve(false);
+    };
+    modal.querySelector('.fixed.inset-0').onclick = () => {
+      modal.remove();
+      resolve(false);
+    };
+  });
+}
+
 // Show leave request panel with calendar
 function showLeavePanel() {
   console.log('📅 showLeavePanel() called');
@@ -303,10 +338,10 @@ function showLeavePanel() {
   console.log('  Month:', leaveCalendarDate.getMonth(), 'Year:', leaveCalendarDate.getFullYear());
   
   const panel = document.createElement('div');
-  panel.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
-    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
         <h2 class="text-xl font-bold text-slate-800">Request Leave - ${currentLeaveUser.site_name || ''}</h2>
         <p class="text-sm text-slate-500">${currentLeaveUser.full_name} (${currentLeaveUser.role})</p>
@@ -970,7 +1005,7 @@ async function requestLeaveForDate(dateStr) {
   const existingRequest = leaveRequestsCache.find(r => r.leave_date === dateStr);
   if (existingRequest) {
     if (existingRequest.status === 'Pending') {
-      const cancelConfirm = confirm(`You have a pending ${existingRequest.request_type} request for this date. Cancel it?`);
+      const cancelConfirm = await customConfirm(`You have a pending ${existingRequest.request_type} request for this date. Cancel it?`);
       if (cancelConfirm) {
         await cancelLeaveRequest(existingRequest.request_id);
       }
@@ -1124,7 +1159,7 @@ async function submitLeaveRequest(dateStr) {
 
 // Cancel leave request
 async function cancelLeaveRequest(requestId) {
-  if (!confirm('Cancel this leave request?')) return;
+  if (!await customConfirm('Cancel this leave request?')) return;
   
   try {
     const { error } = await supabaseClient
@@ -1223,10 +1258,10 @@ async function showNADIAvailability() {
   
   // Create modal
   const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+  modal.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   modal.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
-    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-3xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
         <h2 class="text-base font-bold text-slate-800">NADI Availability Today</h2>
         <p class="text-xs text-slate-500">${new Date().toLocaleDateString('en-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
@@ -1235,7 +1270,7 @@ async function showNADIAvailability() {
         <div class="grid grid-cols-3 gap-2">
           ${siteAvailability.map(site => `
             <div class="bg-slate-50 rounded-lg border border-slate-200 p-2.5">
-              <h3 class="text-xs font-bold text-slate-800 mb-2">${site.siteName}</h3>
+              <h3 class="text-xs font-bold text-slate-800 mb-2">NADI ${site.siteName}</h3>
               <div class="flex items-center gap-3">
                 <div class="flex items-center gap-1.5">
                   <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${site.managerAvailable ? 'bg-green-500' : 'bg-red-500'}"></span>
@@ -1276,10 +1311,10 @@ function showAdminPanel() {
   document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => el.remove());
   
   const panel = document.createElement('div');
-  panel.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
-    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-purple-50 to-white">
         <div class="flex items-center justify-between">
           <div>
@@ -1454,7 +1489,7 @@ async function updateLeaveStatus(requestId, status) {
 
 // Delete leave history (supervisor only) with logging
 async function deleteLeaveHistory(requestId, staffName, leaveDate, requestType) {
-  if (!confirm(`Delete this ${requestType} request for ${staffName} on ${leaveDate}?\n\nThis action will be logged.`)) {
+  if (!await customConfirm(`Delete this ${requestType} request for ${staffName} on ${leaveDate}?\n\nThis action will be logged.`)) {
     return;
   }
   
