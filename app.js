@@ -463,6 +463,9 @@ async function savePublicHolidays() {
   if (window.DEBUG_MODE) console.log('✅ Saved public holidays to ID 20');
   
   await updateFullBackup();
+  
+  // Dispatch event to notify other components (e.g., leave calendar)
+  document.dispatchEvent(new CustomEvent('holidaysUpdated'));
 }
 
 async function saveSchoolHolidays() {
@@ -478,6 +481,9 @@ async function saveSchoolHolidays() {
   if (window.DEBUG_MODE) console.log('✅ Saved school holidays to ID 21');
   
   await updateFullBackup();
+  
+  // Dispatch event to notify other components (e.g., leave calendar)
+  document.dispatchEvent(new CustomEvent('holidaysUpdated'));
 }
 
 async function saveCustomSections() {
@@ -1300,6 +1306,8 @@ function saveOffdaySettings() {
     .then(() => {
       backToMenu();
       renderCalendar();
+      // Notify leave management system that offdays were updated
+      document.dispatchEvent(new CustomEvent('offdaysUpdated'));
     })
     .catch(err => {
       console.error("Failed to save offday settings:", err);

@@ -32,6 +32,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="leave-system.css" />
     <script src="supabase.js"></script>
   </head>
   <body class="min-h-screen flex flex-col text-slate-800 font-sans">
@@ -52,6 +53,16 @@
           </div>
         </div>
           <div class="flex items-center gap-3">
+            <!-- Leave Management Button -->
+            <button
+              id="leaveLoginBtn"
+              onclick="showLeaveLogin()"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors"
+              title="Leave Management"
+            >
+              <i class="fa-solid fa-calendar-check text-[#2228a4]"></i>
+            </button>
+            
             <a
               href="announcements.html"
               id="announcementBtn"
@@ -1433,7 +1444,92 @@
       </div>
     </div>
 
+    <!-- Leave Management Login Modal -->
+    <div id="leaveLoginModal" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveLogin()"></div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
+            <div class="flex items-center justify-between">
+              <h2 class="text-xl font-bold text-slate-800">Leave Management Login</h2>
+              <button onclick="closeLeaveLogin()" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+          </div>
+          
+          <form id="staffLoginForm" onsubmit="handleStaffLogin(event)" class="p-6 space-y-4">
+            <div>
+              <label class="form-label mb-2">Select Your Site</label>
+              <div id="loginSiteGrid" class="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto p-2 bg-slate-50 rounded-lg border border-slate-200">
+                <!-- Sites will be loaded here as radio buttons -->
+              </div>
+            </div>
+            
+            <div>
+              <label class="form-label">Select Your Role</label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="relative cursor-pointer">
+                  <input type="radio" name="loginRole" value="Manager" class="sr-only peer" required />
+                  <div class="border-2 border-slate-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 rounded-lg p-3 text-center transition-all">
+                    <i class="fa-solid fa-user-tie text-2xl text-blue-600 mb-2"></i>
+                    <div class="text-sm font-bold">Manager</div>
+                  </div>
+                </label>
+                <label class="relative cursor-pointer">
+                  <input type="radio" name="loginRole" value="Assistant Manager" class="sr-only peer" required />
+                  <div class="border-2 border-slate-200 peer-checked:border-green-500 peer-checked:bg-green-50 rounded-lg p-3 text-center transition-all">
+                    <i class="fa-solid fa-user-check text-2xl text-green-600 mb-2"></i>
+                    <div class="text-sm font-bold">Asst. Manager</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+            
+            <button type="submit" class="w-full btn btn-primary btn-lg">
+              <i class="fa-solid fa-right-to-bracket"></i> Login
+            </button>
+            
+            <div class="relative">
+              <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-slate-200"></div>
+              </div>
+              <div class="relative flex justify-center text-xs">
+                <span class="bg-white px-2 text-slate-500 font-semibold">or</span>
+              </div>
+            </div>
+            
+            <button type="button" onclick="showSupervisorLogin()" class="w-full text-sm text-slate-600 hover:text-nadi font-semibold py-2 hover:bg-slate-50 rounded transition-colors">
+              <i class="fa-solid fa-user-shield mr-1"></i> Login as Supervisor
+            </button>
+          </form>
+          
+          <!-- Supervisor Login Form (Hidden by default) -->
+          <form id="supervisorLoginForm" onsubmit="handleSupervisorLogin(event)" class="p-6 space-y-4 hidden" autocomplete="off">
+            <div>
+              <label class="form-label">Supervisor Username</label>
+              <input type="text" id="supervisorUsername" class="form-input" placeholder="Enter username" required autocomplete="off" />
+            </div>
+            
+            <div>
+              <label class="form-label">Password</label>
+              <input type="password" id="supervisorPassword" class="form-input" placeholder="Enter password" required autocomplete="off" />
+            </div>
+            
+            <button type="submit" class="w-full btn btn-primary btn-lg">
+              <i class="fa-solid fa-shield-halved"></i> Login as Supervisor
+            </button>
+            
+            <button type="button" onclick="showStaffLogin()" class="w-full text-sm text-slate-600 hover:text-blue-600 font-semibold py-2">
+              <i class="fa-solid fa-arrow-left text-xs mr-1"></i> Back to Staff Login
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <script src="config.js"></script>
     <script src="app.js"></script>
+    <script src="leave-integrated.js"></script>
   </body>
 </html>

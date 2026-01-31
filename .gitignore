@@ -1,2 +1,41 @@
-# GitHub upload ignore
-/init
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Environment files (contains sensitive keys)
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Documentation drafts (not needed in repo)
+HOLIDAYS-ADDED.md
+
+# Supabase client (sensitive, regenerate from CDN)
+# supabase.js contains API keys - should use env vars in production
