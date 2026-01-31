@@ -1622,3 +1622,22 @@ if (document.readyState === 'loading') {
 } else {
   initLeaveManagement();
 }
+
+// Additional fallback for iframe contexts (Google Sites)
+window.addEventListener('load', function() {
+  // Re-initialize if button doesn't have content
+  const loginBtn = document.getElementById('leaveLoginBtn');
+  if (loginBtn && !loginBtn.innerHTML.trim()) {
+    console.log('Leave button empty - reinitializing...');
+    initLeaveManagement();
+  }
+});
+
+// Force update button on any interaction (backup for iframe)
+setTimeout(() => {
+  const loginBtn = document.getElementById('leaveLoginBtn');
+  if (loginBtn && !loginBtn.innerHTML.trim()) {
+    console.log('Leave button still empty after timeout - forcing update...');
+    updateLoginButton();
+  }
+}, 500);
