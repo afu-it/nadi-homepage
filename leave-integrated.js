@@ -1270,7 +1270,7 @@ async function showNADIAvailability() {
         <div class="grid grid-cols-3 gap-2">
           ${siteAvailability.map(site => `
             <div class="bg-slate-50 rounded-lg border border-slate-200 p-2.5">
-              <h3 class="text-xs font-bold text-slate-800 mb-2">NADI ${site.siteName}</h3>
+              <h3 class="text-xs font-bold mb-2"><span style="color: #2228a4;">NADI</span> <span class="text-slate-800">${site.siteName}</span></h3>
               <div class="flex items-center gap-3">
                 <div class="flex items-center gap-1.5">
                   <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${site.managerAvailable ? 'bg-green-500' : 'bg-red-500'}"></span>
