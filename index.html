@@ -971,6 +971,7 @@
                     id="startDate"
                     name="startDate"
                     autocomplete="off"
+                    placeholder="YYYY-MM-DD"
                     class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:border-slate-400 outline-none"
                   />
                 </div>
@@ -981,6 +982,7 @@
                     id="endDate"
                     name="endDate"
                     autocomplete="off"
+                    placeholder="YYYY-MM-DD"
                     class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:border-slate-400 outline-none"
                   />
                 </div>
@@ -1135,15 +1137,29 @@
                 </div>
               </div>
 
+              <!-- Registration Link Section -->
               <div class="mt-3">
-                <label aria-label="Links Section" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Links</label>
-                <div id="linksContainer" class="space-y-1.5 mb-2"></div>
+                <label aria-label="Registration Link Section" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Registration Link</label>
+                <div id="registrationLinksContainer" class="space-y-1.5 mb-2"></div>
                 <button
                   type="button"
-                  onclick="addLinkRow()"
+                  onclick="addRegistrationLink()"
                   class="w-full py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-100 transition-colors"
                 >
-                  + Add Link
+                  + Add Registration Link
+                </button>
+              </div>
+
+              <!-- Submit Link Section -->
+              <div class="mt-3">
+                <label aria-label="Submit Link Section" class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Submit Link</label>
+                <div id="submitLinksContainer" class="space-y-1.5 mb-2"></div>
+                <button
+                  type="button"
+                  onclick="addSubmitLink()"
+                  class="w-full py-1 text-[10px] font-bold text-green-600 bg-green-50 hover:bg-green-100 rounded border border-green-100 transition-colors"
+                >
+                  + Add Submit Link
                 </button>
               </div>
             </form>

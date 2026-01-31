@@ -2485,6 +2485,48 @@ function renderEventList() {
       linksHtml += "</div>";
     }
 
+    // Add Registration and Submit Link buttons
+    let actionLinksHtml = "";
+    const hasRegistrationLinks = ev.registrationLinks && ev.registrationLinks.length > 0;
+    const hasSubmitLinks = ev.submitLinks && ev.submitLinks.length > 0;
+    
+    if (hasRegistrationLinks || hasSubmitLinks) {
+      actionLinksHtml = '<div class="mt-2 flex gap-2 flex-wrap">';
+      
+      // Add all registration links
+      if (hasRegistrationLinks) {
+        ev.registrationLinks.forEach((link) => {
+          if (link.url) {
+            actionLinksHtml += `
+              <a href="${link.url}" target="_blank" rel="noopener noreferrer" 
+                 class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors">
+                <i class="fa-solid fa-user-plus text-[9px]"></i>
+                Registration
+              </a>
+            `;
+          }
+        });
+      }
+      
+      // Add all submit links
+      if (hasSubmitLinks) {
+        ev.submitLinks.forEach((link) => {
+          if (link.url) {
+            actionLinksHtml += `
+              <a href="${link.url}" target="_blank" rel="noopener noreferrer" 
+                 class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors">
+                <i class="fa-solid fa-paper-plane text-[9px]"></i>
+                Submit
+              </a>
+            `;
+          }
+        });
+      }
+      
+      actionLinksHtml += "</div>";
+    }
+
+
     card.innerHTML = `
       <div class="flex flex-col gap-1 relative">
         <div class="flex justify-between items-start">
@@ -2511,6 +2553,7 @@ function renderEventList() {
           <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content overflow-hidden">${sanitizeHTMLWithLinks(ev.info)}</div>
         ` : ""}
         ${linksHtml}
+        ${actionLinksHtml}
         <div class="absolute top-0 right-0 flex gap-2 ${showEditDeleteButtons ? "opacity-100" : "opacity-0"} transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
           <button onclick="openModal('${ev.id}')" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
             <i class="fa-solid fa-pen text-xs"></i>
@@ -2558,21 +2601,45 @@ function changeEventPage(direction) {
 }
 
 function addLinkRow(platform = "NES", url = "") {
-  const container = document.getElementById("linksContainer");
+  // Legacy function - no longer used since we use registrationLinks and submitLinks
+  // Keeping for backward compatibility but does nothing
+}
+
+
+function addRegistrationLink(platform = "Gform", url = "") {
+  const container = document.getElementById("registrationLinksContainer");
   const id = Date.now() + Math.random();
   const div = document.createElement("div");
   div.className = "flex gap-2 items-center";
-  div.id = `link-${id}`;
+  div.id = `reglink-${id}`;
 
   const options = platformOptions.map((opt) => `<option value="${opt}" ${platform === opt ? "selected" : ""}>${opt}</option>`).join("");
 
   div.innerHTML = `
-    <select class="w-1/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none link-platform cursor-pointer">${options}</select>
-    <input type="text" placeholder="URL" value="${url}" onchange="fixLinkUrl(this)" class="w-2/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none link-url">
-    <button type="button" onclick="removeLinkRow('${id}')" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-xmark text-xs"></i></button>
+    <select class="w-1/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none reg-link-platform cursor-pointer">${options}</select>
+    <input type="text" placeholder="URL" value="${url}" onchange="fixLinkUrl(this)" class="w-2/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none reg-link-url">
+    <button type="button" onclick="removeRegistrationLink('${id}')" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-xmark text-xs"></i></button>
   `;
   container.appendChild(div);
 }
+
+function addSubmitLink(platform = "Gform", url = "") {
+  const container = document.getElementById("submitLinksContainer");
+  const id = Date.now() + Math.random();
+  const div = document.createElement("div");
+  div.className = "flex gap-2 items-center";
+  div.id = `sublink-${id}`;
+
+  const options = platformOptions.map((opt) => `<option value="${opt}" ${platform === opt ? "selected" : ""}>${opt}</option>`).join("");
+
+  div.innerHTML = `
+    <select class="w-1/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none sub-link-platform cursor-pointer">${options}</select>
+    <input type="text" placeholder="URL" value="${url}" onchange="fixLinkUrl(this)" class="w-2/3 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none sub-link-url">
+    <button type="button" onclick="removeSubmitLink('${id}')" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-xmark text-xs"></i></button>
+  `;
+  container.appendChild(div);
+}
+
 
 function fixLinkUrl(input) {
   let url = input.value.trim();
@@ -2585,19 +2652,36 @@ function removeLinkRow(id) {
   document.getElementById(`link-${id}`).remove();
 }
 
+function removeRegistrationLink(id) {
+  document.getElementById(`reglink-${id}`).remove();
+}
+
+function removeSubmitLink(id) {
+  document.getElementById(`sublink-${id}`).remove();
+}
+
+
 function openModal(id = null, dateHint = null) {
   showModal("eventModal", "modalPanel", "eventTitle");
 
   if (id) {
+    // Editing existing event
     const ev = events.find((e) => e.id === id);
     if (!ev) return;
 
-    document.getElementById("linksContainer").innerHTML = "";
+    // Clear all link containers
+    const regContainer = document.getElementById("registrationLinksContainer");
+    const subContainer = document.getElementById("submitLinksContainer");
+    if (regContainer) regContainer.innerHTML = "";
+    if (subContainer) subContainer.innerHTML = "";
+    
     document.getElementById("modalTitle").textContent = "Edit Program";
     document.getElementById("eventId").value = ev.id;
     document.getElementById("eventTitle").value = ev.title;
     document.getElementById("startDate").value = ev.start;
     document.getElementById("endDate").value = ev.end;
+
+
 
     programInfoContent = ev.info || "";
     updateProgramInfoPreview();
@@ -2683,43 +2767,57 @@ function openModal(id = null, dateHint = null) {
         }
       }
     } else {
-      document.getElementById("hasSecondSession").checked = false;
-      document.getElementById("secondSessionContainer").classList.add("hidden");
-      document.getElementById("time2Hour").value = "";
-      document.getElementById("time2Minute").value = "00";
-      document.getElementById("time2AMPM").value = "AM";
-      document.getElementById("endTime2Hour").value = "";
-      document.getElementById("endTime2Minute").value = "00";
-      document.getElementById("endTime2AMPM").value = "AM";
+    document.getElementById("hasSecondSession").checked = false;
+    document.getElementById("secondSessionContainer").classList.add("hidden");
+    document.getElementById("time2Hour").value = "";
+    document.getElementById("time2Minute").value = "00";
+    document.getElementById("time2AMPM").value = "AM";
+    document.getElementById("endTime2Hour").value = "";
+    document.getElementById("endTime2Minute").value = "00";
+    document.getElementById("endTime2AMPM").value = "AM";
+  }
+
+
+    // Populate Registration Links (array)
+    if (ev.registrationLinks && ev.registrationLinks.length > 0) {
+      ev.registrationLinks.forEach((link) => {
+        addRegistrationLink(link.platform || "NES", link.url || "");
+      });
+    } else {
+      // Default: add 1 empty registration link
+      addRegistrationLink("NES", "");
     }
 
-    if (ev.links && ev.links.length > 0) {
-      ev.links.forEach((link) => {
-        addLinkRow(link.platform || "NES", link.url || "");
+
+    // Populate Submit Links (array)
+    if (ev.submitLinks && ev.submitLinks.length > 0) {
+      ev.submitLinks.forEach((link) => {
+        addSubmitLink(link.platform || "Gform", link.url || "");
       });
+    } else {
+      // Default: add 1 empty submit link
+      addSubmitLink("Gform", "");
     }
   } else {
+    // New Program - set defaults
     document.getElementById("eventId").value = "";
     document.getElementById("eventTitle").value = "";
-    document.getElementById("startDate").value = "";
-    document.getElementById("endDate").value = "";
-    document.getElementById("linksContainer").innerHTML = "";
     document.getElementById("programInfoContainer").classList.remove("hidden");
     document.getElementById("subcategorySection").classList.add("hidden");
 
     programInfoContent = "";
     updateProgramInfoPreview();
 
+    // Set date to today or clicked date
     let dateToUse = dateHint || window.selectedFilterDate;
     if (!dateToUse) {
       dateToUse = toLocalISOString(today);
     }
+    
     document.getElementById("modalTitle").textContent = "New Program";
-    document.getElementById("eventId").value = "";
-    const startDateInput = document.getElementById("startDate");
-    const endDateInput = document.getElementById("endDate");
-    if (startDateInput) startDateInput.value = dateToUse;
-    if (endDateInput) endDateInput.value = dateToUse;
+    document.getElementById("startDate").value = dateToUse;
+    document.getElementById("endDate").value = dateToUse;
+    
     document.getElementById("timeHour").value = "09";
     document.getElementById("timeMinute").value = "00";
     document.getElementById("timeAMPM").value = "AM";
@@ -2735,8 +2833,21 @@ function openModal(id = null, dateHint = null) {
     document.getElementById("endTime2Hour").value = "";
     document.getElementById("endTime2Minute").value = "00";
     document.getElementById("endTime2AMPM").value = "AM";
+
+    // Clear and auto-add default links
+    const regContainer = document.getElementById("registrationLinksContainer");
+    const subContainer = document.getElementById("submitLinksContainer");
+    
+    if (regContainer) regContainer.innerHTML = "";
+    if (subContainer) subContainer.innerHTML = "";
+    
+    // Auto-add 1 Registration Link (NES) and 1 Submit Link (Gform)
+    addRegistrationLink("NES", "");
+    addSubmitLink("Gform", "");
   }
 }
+
+
 
 function updateEndTime() {
   const startHour = parseInt(document.getElementById("timeHour").value) || 9;
@@ -3127,18 +3238,38 @@ async function saveEvent() {
     }
   }
 
-  const linkRows = document.querySelectorAll("#linksContainer > div");
+  // Old links container no longer used - keeping empty array for backward compatibility
   const links = [];
-  linkRows.forEach((row) => {
-    const p = row.querySelector(".link-platform").value.trim();
-    let u = row.querySelector(".link-url").value.trim();
+
+  // Get Registration Links (multiple)
+
+  const registrationLinkRows = document.querySelectorAll("#registrationLinksContainer > div");
+  const registrationLinks = [];
+  registrationLinkRows.forEach((row) => {
+    const p = row.querySelector(".reg-link-platform").value.trim();
+    let u = row.querySelector(".reg-link-url").value.trim();
     if (u && !u.match(/^https?:\/\//i)) {
       u = "https://" + u;
     }
     if (u) {
-      links.push({ platform: p || "Link", url: u });
+      registrationLinks.push({ platform: p || "Gform", url: u });
     }
   });
+
+  // Get Submit Links (multiple)
+  const submitLinkRows = document.querySelectorAll("#submitLinksContainer > div");
+  const submitLinks = [];
+  submitLinkRows.forEach((row) => {
+    const p = row.querySelector(".sub-link-platform").value.trim();
+    let u = row.querySelector(".sub-link-url").value.trim();
+    if (u && !u.match(/^https?:\/\//i)) {
+      u = "https://" + u;
+    }
+    if (u) {
+      submitLinks.push({ platform: p || "Gform", url: u });
+    }
+  });
+
 
   // Validation with visual feedback
   if (!start || !title) {
@@ -3170,7 +3301,10 @@ async function saveEvent() {
     time: timeStr,
     secondTime: secondTimeStr,
     links: links,
+    registrationLinks: registrationLinks,
+    submitLinks: submitLinks,
   };
+
 
   if (id) {
     // Update existing event - update directly in events table
