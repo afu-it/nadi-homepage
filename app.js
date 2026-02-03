@@ -97,6 +97,13 @@ function toggleChevron(icon, isOpen) {
   icon.classList.toggle("fa-chevron-down", !isOpen);
 }
 
+function isMissingColumnError(error) {
+  if (!error) return false;
+  if (error.code === "42703") return true;
+  const message = typeof error.message === "string" ? error.message : "";
+  return /column .* does not exist/i.test(message);
+}
+
 let today = new Date();
 let currentMonth = today.getMonth();
 let currentYear = today.getFullYear();
@@ -147,10 +154,10 @@ let eventsCache = {
 // =====================================================
 // OPTIMIZATION: Load events for specific month
 // =====================================================
-async function loadEventsForMonth(year, month) {
-  const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
-  const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
-  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+  async function loadEventsForMonth(year, month) {
+    const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+    const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
   
   // Check cache first
   if (eventsCache.monthKey === monthKey && 
@@ -163,16 +170,23 @@ async function loadEventsForMonth(year, month) {
   
   if (window.DEBUG_MODE) console.log('📥 Loading events for', monthKey, '...');
 
-  const { data, error } = await supabaseClient
-    .from('events')
-    .select('id, title, start, end, category, subcategory, time_start, time_end, location, notes')
-    .or(`start.lte.${lastDay},end.gte.${firstDay}`)
-    .order('start', { ascending: true });
-  
-  if (error) {
-    console.error('❌ Error loading events for month:', error);
-    return [];
-  }
+    const queryEventsForMonth = (columns) => supabaseClient
+      .from('events')
+      .select(columns)
+      .or(`start.lte.${lastDay},end.gte.${firstDay}`)
+      .order('start', { ascending: true });
+
+    let { data, error } = await queryEventsForMonth('id, title, start, end, category, subcategory, time_start, time_end, location, notes');
+
+    if (error && isMissingColumnError(error)) {
+      if (window.DEBUG_MODE) console.warn('⚠️ Missing columns in events table, falling back to select("*"):', error.message);
+      ({ data, error } = await queryEventsForMonth('*'));
+    }
+
+    if (error) {
+      console.error('❌ Error loading events for month:', error);
+      return [];
+    }
   
   const eventsArray = data || [];
   
@@ -656,7 +670,14 @@ async function loadFromSupabase() {
     supabaseClient
       .from('announcements')
       .select('id, title, content, category, subcategory, created_at')
-      .then(({ data: announcementsData, error: announcementsError }) => {
+      .then(async ({ data: announcementsData, error: announcementsError }) => {
+        if (announcementsError && isMissingColumnError(announcementsError)) {
+          if (window.DEBUG_MODE) console.warn('⚠️ Missing columns in announcements table, falling back to select("*"):', announcementsError.message);
+          const fallback = await supabaseClient.from('announcements').select('*');
+          announcementsData = fallback.data;
+          announcementsError = fallback.error;
+        }
+
         if (announcementsError) {
           console.error("Error loading announcements:", announcementsError);
           announcements = [];
@@ -725,8 +746,8 @@ function checkNewAnnouncements() {
   }
   
   const latestAnnouncement = currentAnnouncements.reduce((latest, ann) => {
-    const annDate = new Date(ann.createdAt);
-    const latestDate = latest ? new Date(latest.createdAt) : new Date(0);
+    const annDate = new Date(ann.createdAt || ann.created_at || 0);
+    const latestDate = latest ? new Date(latest.createdAt || latest.created_at || 0) : new Date(0);
     return annDate > latestDate ? ann : latest;
   }, null);
   
@@ -750,8 +771,8 @@ function markAnnouncementsAsRead() {
   const currentAnnouncements = announcements || [];
   if (currentAnnouncements.length > 0) {
     const latestAnnouncement = currentAnnouncements.reduce((latest, ann) => {
-      const annDate = new Date(ann.createdAt);
-      const latestDate = latest ? new Date(latest.createdAt) : new Date(0);
+      const annDate = new Date(ann.createdAt || ann.created_at || 0);
+      const latestDate = latest ? new Date(latest.createdAt || latest.created_at || 0) : new Date(0);
       return annDate > latestDate ? ann : latest;
     }, null);
     if (latestAnnouncement) {
