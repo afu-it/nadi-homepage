@@ -3,7 +3,13 @@
 // Works with both index.html and leave-management.html
 // =====================================================
 
-const safeStorage = window.safeStorage || localStorage;
+const leaveStorage = window.safeStorage || {
+  getItem() {
+    return null;
+  },
+  setItem() {},
+  removeItem() {}
+};
 
 // Global leave management state
 let currentLeaveUser = null;
@@ -73,14 +79,14 @@ async function initLeaveSystem() {
   await loadSitesAndUsersForLogin();
   
   // Check if user is logged in (from localStorage)
-  const savedUser = safeStorage.getItem('leave_user');
+  const savedUser = leaveStorage.getItem('leave_user');
   if (savedUser) {
     try {
       currentLeaveUser = JSON.parse(savedUser);
       await showDashboard();
     } catch (error) {
       console.error('Error loading saved user:', error);
-      safeStorage.removeItem('leave_user');
+      leaveStorage.removeItem('leave_user');
     }
   }
 }
@@ -162,7 +168,7 @@ async function loginAsUser() {
   currentLeaveUser.site_name = site?.site_name || '-';
   
   // Save to localStorage
-  safeStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
+  leaveStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
   
   // Show dashboard
   await showDashboard();
@@ -288,7 +294,7 @@ function initLeaveManagement() {
   });
   
   // Check if user is logged in
-  const savedUser = safeStorage.getItem('leave_user');
+  const savedUser = leaveStorage.getItem('leave_user');
   if (savedUser) {
     try {
       currentLeaveUser = JSON.parse(savedUser);
@@ -297,7 +303,7 @@ function initLeaveManagement() {
       subscribeToLeaveUpdates();
     } catch (error) {
       console.error('Error loading saved user:', error);
-      safeStorage.removeItem('leave_user');
+      leaveStorage.removeItem('leave_user');
     }
   }
   
@@ -433,7 +439,7 @@ async function handleStaffLogin(e) {
       site_name: user.sites?.site_name
     };
     
-    safeStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
+    leaveStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
     
     // Update UI
     updateLoginButton();
@@ -510,7 +516,7 @@ async function handleSupervisorLogin(e) {
       site_name: 'All Sites'
     };
     
-    safeStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
+    leaveStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
     
     // Update UI
     updateLoginButton();
@@ -584,7 +590,7 @@ async function handleLeaveLogout() {
     // Clear cache
     leaveRequestsCache = { data: [], timestamp: null, userId: null };
     
-    safeStorage.removeItem('leave_user');
+    leaveStorage.removeItem('leave_user');
     currentLeaveUser = null;
     updateLoginButton();
     location.reload();

@@ -25,6 +25,28 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <script>
+      (function () {
+        try {
+          if (window.top !== window.self) {
+            const memory = new Map();
+            const shim = {
+              getItem(key) {
+                return memory.has(key) ? memory.get(key) : null;
+              },
+              setItem(key, value) {
+                memory.set(key, String(value));
+              },
+              removeItem(key) {
+                memory.delete(key);
+              }
+            };
+            Object.defineProperty(window, "localStorage", { value: shim, configurable: true });
+            Object.defineProperty(window, "sessionStorage", { value: shim, configurable: true });
+          }
+        } catch (error) {}
+      })();
+    </script>
     <script src="supabase.js"></script>
   </head>
   <body class="min-h-screen flex flex-col text-slate-800 font-sans bg-slate-50">

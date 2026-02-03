@@ -53,54 +53,13 @@ function sanitizeHTMLWithLinks(html) {
   return sanitized.replace(/<a\s+/gi, '<a target="_blank" rel="noopener noreferrer" ');
 }
 
-function isInIframe() {
-  try {
-    return window.top !== window.self;
-  } catch (error) {
-    return true;
-  }
-}
-
-const safeStorage = window.safeStorage || (() => {
-  const shouldDisableIframeStorage = window.DISABLE_IFRAME_STORAGE !== false;
-  const storageBlocked = shouldDisableIframeStorage && isInIframe();
-  const storageMemory = new Map();
-
-  return {
-    getItem(key) {
-      if (storageBlocked) return storageMemory.get(key) ?? null;
-      try {
-        return localStorage.getItem(key);
-      } catch (error) {
-        return storageMemory.get(key) ?? null;
-      }
-    },
-    setItem(key, value) {
-      if (storageBlocked) {
-        storageMemory.set(key, value);
-        return;
-      }
-      try {
-        localStorage.setItem(key, value);
-      } catch (error) {
-        storageMemory.set(key, value);
-      }
-    },
-    removeItem(key) {
-      if (storageBlocked) {
-        storageMemory.delete(key);
-        return;
-      }
-      try {
-        localStorage.removeItem(key);
-      } catch (error) {
-        storageMemory.delete(key);
-      }
-    }
-  };
-})();
-
-window.safeStorage = safeStorage;
+const appStorage = window.safeStorage || {
+  getItem() {
+    return null;
+  },
+  setItem() {},
+  removeItem() {}
+};
 
 function formatDate(dateStr, options = { weekday: "short", day: "numeric", month: "short", year: "numeric" }) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-GB", options);
@@ -225,12 +184,7 @@ let eventsCache = {
       .or(`start.lte.${lastDay},end.gte.${firstDay}`)
       .order('start', { ascending: true });
 
-    let { data, error } = await queryEventsForMonth('id, title, start, end, category, subcategory, location, notes');
-
-    if (error && isMissingColumnError(error)) {
-      if (window.DEBUG_MODE) console.warn('⚠️ Missing columns in events table, falling back to select("*"):', error.message);
-      ({ data, error } = await queryEventsForMonth('*'));
-    }
+    let { data, error } = await queryEventsForMonth('*');
 
     if (error) {
       console.error('❌ Error loading events for month:', error);
@@ -248,7 +202,7 @@ let eventsCache = {
   
   // Also save to localStorage for persistence across sessions
   try {
-    safeStorage.setItem('events_cache', JSON.stringify({
+    appStorage.setItem('events_cache', JSON.stringify({
       data: eventsArray,
       timestamp: Date.now(),
       monthKey: monthKey
@@ -273,7 +227,7 @@ async function forceRefreshEvents() {
     timestamp: null,
     monthKey: null
   };
-  safeStorage.removeItem('events_cache');
+  appStorage.removeItem('events_cache');
   
   // Load events for current month
   const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
@@ -291,7 +245,7 @@ async function forceRefreshEvents() {
 async function loadEventsWithCache() {
   // Try to load from localStorage cache first
   try {
-    const cached = safeStorage.getItem('events_cache');
+    const cached = appStorage.getItem('events_cache');
     if (cached) {
       const cache = JSON.parse(cached);
       const cacheAge = Date.now() - (cache.timestamp || 0);
@@ -332,7 +286,7 @@ async function backupSiteSettings() {
   siteSettingsBackup = JSON.parse(JSON.stringify(siteSettings));
   // Also save to localStorage as secondary backup
   try {
-    safeStorage.setItem("nadi_siteSettings_backup", JSON.stringify(siteSettings));
+    appStorage.setItem("nadi_siteSettings_backup", JSON.stringify(siteSettings));
   } catch (e) {
     if (window.DEBUG_MODE) console.warn("Could not save backup to localStorage:", e);
   }
@@ -362,7 +316,7 @@ async function restoreSiteSettings() {
       siteSettings = backupData.settings;
       siteSettingsBackup = backupData.settings;
       try {
-        safeStorage.setItem("nadi_siteSettings_backup", JSON.stringify(backupData.settings));
+        appStorage.setItem("nadi_siteSettings_backup", JSON.stringify(backupData.settings));
       } catch (e) {}
       renderCustomLinks();
       renderCalendar();
@@ -385,7 +339,7 @@ async function restoreSiteSettings() {
   }
   // Try localStorage backup
   try {
-    const localBackup = safeStorage.getItem("nadi_siteSettings_backup");
+    const localBackup = appStorage.getItem("nadi_siteSettings_backup");
     if (localBackup) {
       const parsed = JSON.parse(localBackup);
       if (parsed.sections?.length > 0 || parsed.managerOffdays?.length > 0) {
@@ -718,15 +672,8 @@ async function loadFromSupabase() {
     // Load announcements asynchronously (doesn't block UI)
     supabaseClient
       .from('announcements')
-      .select('id, title, content, category, created_at')
+      .select('*')
       .then(async ({ data: announcementsData, error: announcementsError }) => {
-        if (announcementsError && isMissingColumnError(announcementsError)) {
-          if (window.DEBUG_MODE) console.warn('⚠️ Missing columns in announcements table, falling back to select("*"):', announcementsError.message);
-          const fallback = await supabaseClient.from('announcements').select('*');
-          announcementsData = fallback.data;
-          announcementsError = fallback.error;
-        }
-
         if (announcementsError) {
           console.error("Error loading announcements:", announcementsError);
           announcements = [];
@@ -785,7 +732,7 @@ function updateUIFromSettings() {
 }
 
 function checkNewAnnouncements() {
-  const lastReadAnnouncement = safeStorage.getItem("lastReadAnnouncementId");
+  const lastReadAnnouncement = appStorage.getItem("lastReadAnnouncementId");
   const currentAnnouncements = announcements || [];
   
   if (currentAnnouncements.length === 0) {
@@ -825,7 +772,7 @@ function markAnnouncementsAsRead() {
       return annDate > latestDate ? ann : latest;
     }, null);
     if (latestAnnouncement) {
-      safeStorage.setItem("lastReadAnnouncementId", latestAnnouncement.id);
+      appStorage.setItem("lastReadAnnouncementId", latestAnnouncement.id);
       const dot = document.getElementById("newAnnouncementDot");
       if (dot) dot.classList.add("hidden");
     }
@@ -1845,7 +1792,7 @@ window.checkAllBackups = function() {
   // localStorage backup
   let localBackup = "none";
   try {
-    const local = safeStorage.getItem("nadi_siteSettings_backup");
+    const local = appStorage.getItem("nadi_siteSettings_backup");
     if (local) {
       localBackup = "exists";
     }
