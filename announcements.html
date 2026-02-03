@@ -504,6 +504,49 @@
         return result;
       }
 
+      const announcementStorage = (() => {
+        const memory = new Map();
+        const isIframe = (() => {
+          try {
+            return window.top !== window.self;
+          } catch (error) {
+            return true;
+          }
+        })();
+        return {
+          getItem(key) {
+            if (isIframe) return memory.get(key) ?? null;
+            try {
+              return localStorage.getItem(key);
+            } catch (error) {
+              return memory.get(key) ?? null;
+            }
+          },
+          setItem(key, value) {
+            if (isIframe) {
+              memory.set(key, String(value));
+              return;
+            }
+            try {
+              localStorage.setItem(key, String(value));
+            } catch (error) {
+              memory.set(key, String(value));
+            }
+          },
+          removeItem(key) {
+            if (isIframe) {
+              memory.delete(key);
+              return;
+            }
+            try {
+              localStorage.removeItem(key);
+            } catch (error) {
+              memory.delete(key);
+            }
+          }
+        };
+      })();
+
       function sanitizeHTML(html) {
         if (typeof DOMPurify !== "undefined") return DOMPurify.sanitize(html, {
           ADD_TAGS: ["iframe"],
@@ -624,7 +667,7 @@
         }, null);
         if (!latestAnnouncement) return;
         try {
-          localStorage.setItem("lastReadAnnouncementId", String(latestAnnouncement.id));
+          announcementStorage.setItem("lastReadAnnouncementId", String(latestAnnouncement.id));
         } catch (error) {}
       }
 
@@ -839,7 +882,7 @@
         try {
           const { data: announcementsData, error } = await supabaseClient
             .from('announcements')
-            .select('*');
+            .select('id,title,content,category,ssoMain,ssoSub,dueDate,isUrgent,created_at');
           
           if (error) {
             console.error("Error loading announcements:", error);

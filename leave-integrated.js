@@ -20,6 +20,50 @@ let leaveRequestsCache = {
   userId: null
 };
 let siteAvailabilityCache = [];
+let adminRequestsCache = [];
+let adminAllStaffCache = [];
+
+function buildLeavePanelMenu(activeKey) {
+  const isSupervisor = currentLeaveUser?.role === 'Supervisor';
+  const leaveLabel = isSupervisor ? 'View Staff Calendar' : 'Leave';
+  const items = [
+    { key: 'availability', label: 'Availability', icon: 'fa-building', show: true },
+    { key: 'leave', label: leaveLabel, icon: 'fa-calendar-days', show: true },
+    { key: 'admin', label: 'Manage', icon: 'fa-clipboard-check', show: isSupervisor },
+    { key: 'close', label: 'Close', icon: 'fa-xmark', show: true }
+  ];
+
+  const buttons = items
+    .filter(item => item.show)
+    .map(item => `
+      <button type="button" class="lm-tab ${activeKey === item.key ? 'active' : ''}" onclick="handleLeaveMenuAction('${item.key}', this)">
+        <i class="fa-solid ${item.icon}"></i>
+        <span>${item.label}</span>
+      </button>
+    `)
+    .join('');
+
+  return `<div class="leave-panel-menu lm-tabs">${buttons}</div>`;
+}
+
+function handleLeaveMenuAction(action, btn) {
+  if (action === 'leave') {
+    showLeavePanel();
+    return;
+  }
+  if (action === 'availability') {
+    showNADIAvailability();
+    return;
+  }
+  if (action === 'admin') {
+    showAdminPanel();
+    return;
+  }
+  if (action === 'close') {
+    const modal = btn.closest('.leave-modal');
+    if (modal) modal.remove();
+  }
+}
 
 function toLocalISOString(date) {
   const y = date.getFullYear();
@@ -103,7 +147,7 @@ async function loadSitesAndUsersForLogin() {
   try {
     const { data: sites, error: sitesError } = await supabaseClient
       .from('sites')
-      .select('*')
+      .select('site_id, site_name')
       .order('site_name');
     
     if (sitesError) throw sitesError;
@@ -168,7 +212,7 @@ async function loginAsUser() {
   // Get site info
   const { data: site } = await supabaseClient
     .from('sites')
-    .select('*')
+    .select('site_id, site_name')
     .eq('site_id', currentLeaveUser.site_id)
     .single();
   
@@ -358,8 +402,8 @@ function updateLoginButton() {
 // Show login modal
 function showLeaveLogin() {
   if (currentLeaveUser) {
-    // Already logged in - show user menu
-    showUserMenu();
+    // Already logged in - open availability panel directly
+    showNADIAvailability();
   } else {
     // Show login modal
     document.getElementById('leaveLoginModal').classList.remove('hidden');
@@ -377,7 +421,7 @@ async function loadSitesForLogin() {
   try {
     const { data: sites, error } = await supabaseClient
       .from('sites')
-      .select('*')
+      .select('site_id, site_name')
       .order('site_name');
     
     if (error) throw error;
@@ -428,7 +472,7 @@ async function handleStaffLogin(e) {
     // Query user by site and role (no password check)
     const { data: user, error } = await supabaseClient
       .from('leave_users')
-      .select('*, sites(*)')
+      .select('user_id, username, full_name, role, site_id, sites(site_name)')
       .eq('site_id', siteId)
       .eq('role', role)
       .eq('is_active', true)
@@ -456,8 +500,7 @@ async function handleStaffLogin(e) {
     
     showToast(`Welcome, ${user.full_name}!`, 'success');
     
-    // Show NADI Availability panel on first login
-    showNADIAvailability();
+    // Manual: do not auto-open panels on login
     
   } catch (error) {
     alert(error.message || 'Login failed');
@@ -487,7 +530,7 @@ async function handleSupervisorLogin(e) {
     // Query supervisor user
     const { data: user, error } = await supabaseClient
       .from('leave_users')
-      .select('*')
+      .select('user_id, username, full_name, role, password_hash')
       .eq('username', username)
       .eq('role', 'Supervisor')
       .eq('is_active', true)
@@ -535,10 +578,7 @@ async function handleSupervisorLogin(e) {
       showToast(`Welcome, ${user.full_name}!`, 'success');
     }, 100);
     
-    // Show admin panel for supervisors (NOT the calendar)
-    setTimeout(() => {
-      showAdminPanel();
-    }, 150);
+    // Manual: do not auto-open panels on login
     
   } catch (error) {
     alert(error.message || 'Login failed');
@@ -650,6 +690,10 @@ function customConfirm(message) {
 
 // Show leave request panel with calendar
 function showLeavePanel() {
+  if (currentLeaveUser?.role === 'Supervisor') {
+    showStaffCalendarsPanel();
+    return;
+  }
   document.querySelectorAll('.leave-modal').forEach(el => el.remove());
   
   const panel = document.createElement('div');
@@ -657,9 +701,12 @@ function showLeavePanel() {
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-7xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
-      <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
-        <h2 class="text-xl font-bold text-slate-800">Request Leave - ${currentLeaveUser.site_name || ''}</h2>
-        <p class="text-sm text-slate-500">${currentLeaveUser.full_name} (${currentLeaveUser.role})</p>
+      <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-800">Request Leave - ${currentLeaveUser.site_name || ''}</h2>
+          <p class="text-sm text-slate-500">${currentLeaveUser.full_name} (${currentLeaveUser.role})</p>
+        </div>
+        ${buildLeavePanelMenu('leave')}
       </div>
       
       <div class="flex-1 overflow-y-auto p-6">
@@ -745,7 +792,9 @@ function showLeavePanel() {
         <div class="text-xs text-slate-500">
           <i class="fa-solid fa-info-circle mr-1"></i> Click on a date to request leave
         </div>
-        <button onclick="this.closest('.fixed').remove()" class="btn btn-secondary btn-sm">Close</button>
+        <button onclick="handleLeaveLogout()" class="btn btn-danger btn-sm">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+        </button>
       </div>
     </div>
   `;
@@ -1928,9 +1977,12 @@ async function showNADIAvailability() {
   modal.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-3xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
-      <div class="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
-        <h2 class="text-base font-bold text-slate-800">NADI Availability Today</h2>
-        <p class="text-xs text-slate-500">${new Date().toLocaleDateString('en-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <div class="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-800">NADI Availability Today</h2>
+          <p class="text-xs text-slate-500">${new Date().toLocaleDateString('en-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+        ${buildLeavePanelMenu('availability')}
       </div>
       <div class="flex-1 overflow-y-auto p-4">
         <div class="grid grid-cols-3 gap-2">
@@ -1962,7 +2014,9 @@ async function showNADIAvailability() {
             <span>Off/Leave</span>
           </div>
         </div>
-        <button onclick="this.closest('.fixed').remove()" class="btn btn-secondary btn-sm text-xs px-3 py-1">Close</button>
+        <button onclick="handleLeaveLogout()" class="btn btn-danger btn-sm text-xs px-3 py-1">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+        </button>
       </div>
     </div>
   `;
@@ -1982,14 +2036,17 @@ function showAdminPanel() {
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-purple-50 to-white">
-        <div class="flex items-center justify-between">
+        <div class="flex items-start justify-between gap-4">
           <div>
             <h2 class="text-xl font-bold text-slate-800">Manage Leave Requests</h2>
             <p class="text-sm text-slate-500">Review and approve staff leave requests</p>
           </div>
-          <button onclick="showDeletionLog()" class="btn btn-secondary btn-sm">
-            <i class="fa-solid fa-history"></i> View Deletion Log
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="showDeletionLog()" class="btn btn-secondary btn-sm">
+              <i class="fa-solid fa-history"></i> View Deletion Log
+            </button>
+            ${buildLeavePanelMenu('admin')}
+          </div>
         </div>
       </div>
       <div class="flex-1 overflow-y-auto p-6">
@@ -1998,7 +2055,9 @@ function showAdminPanel() {
         </div>
       </div>
       <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
-        <button onclick="this.closest('.fixed').remove()" class="btn btn-secondary btn-sm">Close</button>
+        <button onclick="handleLeaveLogout()" class="btn btn-danger btn-sm">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+        </button>
       </div>
     </div>
   `;
@@ -2013,7 +2072,7 @@ async function loadAllLeaveRequests() {
     // First, get all leave requests
     const { data: requests, error: requestsError } = await supabaseClient
       .from('leave_requests')
-      .select('*')
+      .select('request_id, user_id, site_id, leave_date, request_type, status, notes, replacement_offday_date, requested_at')
       .order('requested_at', { ascending: false });
     
     if (requestsError) throw requestsError;
@@ -2024,35 +2083,36 @@ async function loadAllLeaveRequests() {
       return;
     }
     
-    // Get user IDs from requests
-    const userIds = [...new Set(requests.map(r => r.user_id))];
-    const siteIds = [...new Set(requests.map(r => r.site_id))];
-    
-    // Fetch users and sites separately
+    // Fetch all active staff (exclude supervisors) with site names
     const { data: users, error: usersError } = await supabaseClient
       .from('leave_users')
-      .select('user_id, full_name, role, site_id')
-      .in('user_id', userIds);
+      .select('user_id, full_name, role, site_id, sites(site_name)')
+      .eq('is_active', true)
+      .neq('role', 'Supervisor')
+      .order('full_name');
     
     if (usersError) throw usersError;
     
-    const { data: sites, error: sitesError } = await supabaseClient
-      .from('sites')
-      .select('site_id, site_name')
-      .in('site_id', siteIds);
+    // Create lookup map
+    const userMap = new Map((users || []).map(u => [u.user_id, u]));
     
-    if (sitesError) throw sitesError;
-    
-    // Create lookup maps
-    const userMap = new Map(users.map(u => [u.user_id, u]));
-    const siteMap = new Map(sites.map(s => [s.site_id, s]));
+    adminAllStaffCache = (users || []).map(u => ({
+      user_id: u.user_id,
+      full_name: u.full_name,
+      role: u.role,
+      site_id: u.site_id,
+      site_name: u.sites?.site_name || 'Unknown'
+    }));
     
     // Merge data into requests
-    const mergedRequests = requests.map(req => ({
-      ...req,
-      leave_users: userMap.get(req.user_id) || { full_name: 'Unknown', role: 'Unknown' },
-      sites: siteMap.get(req.site_id) || { site_name: 'Unknown' }
-    }));
+    const mergedRequests = (requests || []).map(req => {
+      const user = userMap.get(req.user_id);
+      return {
+        ...req,
+        leave_users: user || { full_name: 'Unknown', role: 'Unknown' },
+        sites: { site_name: user?.sites?.site_name || 'Unknown' }
+      };
+    });
     
     displayAdminRequests(mergedRequests);
     
@@ -2072,25 +2132,64 @@ function displayAdminRequests(requests) {
   const container = document.getElementById('adminRequestsList');
   if (!container) return;
   
-  const pending = requests.filter(r => r.status === 'Pending');
-  const others = requests.filter(r => r.status !== 'Pending');
-  
+  adminRequestsCache = Array.isArray(requests) ? requests : [];
+  const staffList = Array.isArray(adminAllStaffCache) ? adminAllStaffCache : [];
+
+  if (staffList.length === 0) {
+    container.innerHTML = '<p class="text-slate-500 text-sm text-center py-6">No staff found</p>';
+    return;
+  }
+
+  const staffSummaries = staffList.map((staff) => {
+    const staffRequests = adminRequestsCache.filter(r => r.user_id === staff.user_id);
+    const pendingCount = staffRequests.filter(r => r.status === 'Pending').length;
+    return {
+      ...staff,
+      totalCount: staffRequests.length,
+      pendingCount
+    };
+  });
+
+  const siteMap = new Map();
+  staffSummaries.forEach((staff) => {
+    const siteKey = staff.site_id || staff.site_name || 'unknown';
+    const existing = siteMap.get(siteKey) || {
+      site_id: staff.site_id,
+      site_name: staff.site_name || 'Unknown',
+      staff: []
+    };
+    existing.staff.push(staff);
+    siteMap.set(siteKey, existing);
+  });
+
+  const roleOrder = { Manager: 1, "Assistant Manager": 2 };
+  const siteGroups = Array.from(siteMap.values())
+    .map(group => ({
+      ...group,
+      staff: group.staff.sort((a, b) => {
+        const aOrder = roleOrder[a.role] || 99;
+        const bOrder = roleOrder[b.role] || 99;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.full_name.localeCompare(b.full_name);
+      })
+    }))
+    .sort((a, b) => a.site_name.localeCompare(b.site_name));
+
   container.innerHTML = `
-    <div class="mb-6">
-      <h3 class="text-lg font-bold text-slate-800 mb-3">Pending Requests (${pending.length})</h3>
-      ${pending.length === 0 ? '<p class="text-slate-500 text-sm">No pending requests</p>' : `
-        <div class="space-y-2">
-          ${pending.map(req => renderAdminRequestCard(req)).join('')}
-        </div>
-      `}
-    </div>
-    <div>
-      <h3 class="text-lg font-bold text-slate-800 mb-3">Recent History</h3>
-      <div class="space-y-2">
-        ${others.slice(0, 10).map(req => renderAdminRequestCard(req)).join('')}
+    <div class="grid md:grid-cols-[1fr_320px] gap-3">
+      <div class="bg-slate-50 border border-slate-200 rounded-lg p-2">
+        <div class="text-[10px] font-bold text-slate-600 uppercase mb-1">All Staff</div>
+        <div id="adminStaffGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1"></div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-lg p-3">
+        <div class="text-[10px] font-bold text-slate-600 uppercase mb-2">Requests</div>
+        <div id="adminRequestsByStaff" class="space-y-2 max-h-[520px] overflow-y-auto pr-1"></div>
       </div>
     </div>
   `;
+
+  renderAdminStaffGrid(siteGroups);
+  renderAdminRequestsGrouped(staffSummaries);
 }
 
 // Render admin request card
@@ -2127,6 +2226,106 @@ function renderAdminRequestCard(req) {
       </div>
     </div>
   `;
+}
+
+function renderAdminStaffGrid(siteGroups) {
+  const grid = document.getElementById('adminStaffGrid');
+  if (!grid) return;
+
+  grid.innerHTML = siteGroups.map((group) => {
+    const staffRows = group.staff.map((staff) => {
+      let displayName = staff.full_name || '';
+      if (group.site_name) {
+        const suffix = ` - ${group.site_name}`;
+        if (displayName.includes(suffix)) {
+          displayName = displayName.replace(suffix, '').trim();
+        }
+      }
+      return `
+      <div class="relative rounded-md border border-slate-200 bg-white px-1.5 py-1">
+        <div class="text-[10px] font-bold text-slate-800 truncate leading-tight">${displayName || 'Unknown'}</div>
+        ${staff.pendingCount > 0 ? '<span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>' : ''}
+      </div>
+    `;
+    }).join('');
+
+    return `
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-1.5">
+        <div class="text-[9px] font-bold text-slate-600 uppercase mb-1 truncate">${group.site_name}</div>
+        <div class="space-y-1">
+          ${staffRows}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderAdminRequestsGrouped(staffSummaries) {
+  const container = document.getElementById('adminRequestsByStaff');
+  if (!container) return;
+
+  const staffWithRequests = staffSummaries.filter(s => s.totalCount > 0);
+  if (staffWithRequests.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No requests yet</p>';
+    return;
+  }
+
+  container.innerHTML = staffWithRequests.map((staff) => {
+    const staffRequests = adminRequestsCache
+      .filter(r => r.user_id === staff.user_id)
+      .sort((a, b) => {
+        const aPending = a.status === 'Pending' ? 0 : 1;
+        const bPending = b.status === 'Pending' ? 0 : 1;
+        if (aPending !== bPending) return aPending - bPending;
+        const aDate = new Date(a.requested_at || a.leave_date || 0);
+        const bDate = new Date(b.requested_at || b.leave_date || 0);
+        return bDate - aDate;
+      });
+
+    const requestsHtml = staffRequests.map((req) => {
+      const dateLabel = new Date(req.leave_date).toLocaleDateString('en-MY', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+      const notesBlock = req.notes
+        ? `<div class="text-[10px] text-slate-500 mt-1"><i class="fa-solid fa-note-sticky mr-1"></i> ${req.notes.replace(/\n/g, '<br>')}</div>`
+        : '<div class="text-[10px] text-slate-400 mt-1">&nbsp;</div>';
+
+      return `
+        <div class="bg-white border border-slate-200 rounded-lg p-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-[11px] font-bold text-slate-800">${dateLabel}</div>
+            <span class="status-badge badge-${req.status.toLowerCase().replace(' ', '-')} text-[8px]">${req.status}</span>
+          </div>
+          <div class="text-[10px] text-slate-500">${req.request_type}</div>
+          <div class="flex items-start justify-between gap-2">
+            ${notesBlock}
+            <button onclick="deleteLeaveHistory('${req.request_id}', '${staff.full_name}', '${req.leave_date}', '${req.request_type}')" class="btn btn-secondary btn-sm" title="Delete from history">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+          ${req.status === 'Pending' ? `
+            <div class="flex gap-2 mt-2">
+              <button onclick="updateLeaveStatus('${req.request_id}', 'Approved')" class="btn btn-success btn-sm">
+                <i class="fa-solid fa-check"></i> Approve
+              </button>
+              <button onclick="updateLeaveStatus('${req.request_id}', 'Rejected')" class="btn btn-danger btn-sm">
+                <i class="fa-solid fa-times"></i> Reject
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[11px] font-bold text-slate-800">${staff.full_name}</div>
+        </div>
+        <div class="space-y-2">
+          ${requestsHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // Update leave status (admin)
@@ -2348,7 +2547,7 @@ async function loadStaffViewForm() {
     // Fetch all sites
     const { data: sites, error: sitesError } = await supabaseClient
       .from('sites')
-      .select('*')
+      .select('site_id, site_name')
       .order('site_name');
     
     if (sitesError) throw sitesError;
@@ -2482,7 +2681,7 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="document.getElementById('staffCalendarViewPanel').remove()"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-6xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
-      <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-center">
+      <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-start justify-between gap-4">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full flex items-center justify-center ${roleColor}">
             <i class="fa-solid fa-user"></i>
@@ -2492,6 +2691,7 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
             <p class="text-sm text-slate-500">${role} - ${siteName}</p>
           </div>
         </div>
+        ${buildLeavePanelMenu('leave')}
       </div>
       <div class="flex-1 overflow-y-auto p-6">
         <div class="flex flex-col xl:flex-row gap-6">
@@ -2897,12 +3097,12 @@ function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   const icons = { success: 'check-circle', error: 'exclamation-circle', info: 'info-circle' };
-  toast.innerHTML = `<i class="fa-solid fa-${icons[type] || 'info-circle'}"></i><span class="text-sm font-semibold">${message}</span>`;
+  toast.innerHTML = `<i class="fa-solid fa-${icons[type] || 'info-circle'}"></i><span class="text-xs font-semibold">${message}</span>`;
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+    setTimeout(() => toast.remove(), 200);
+  }, 1600);
 }
 
 // Initialize when DOM is ready

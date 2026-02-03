@@ -184,7 +184,7 @@ let eventsCache = {
       .or(`start.lte.${lastDay},end.gte.${firstDay}`)
       .order('start', { ascending: true });
 
-    let { data, error } = await queryEventsForMonth('*');
+    let { data, error } = await queryEventsForMonth(EVENT_SELECT_COLUMNS);
 
     if (error) {
       console.error('❌ Error loading events for month:', error);
@@ -348,7 +348,11 @@ window.restoreData = function() {
   }
 };
 
+const EVENT_SELECT_COLUMNS = "id,title,start,end,category,subcategory,time,secondTime,links,registrationLinks,submitLinks,info";
+const ANNOUNCEMENT_SELECT_COLUMNS = "id,title,content,category,ssoMain,ssoSub,dueDate,isUrgent,created_at";
+const LATEST_ANNOUNCEMENT_SELECT_COLUMNS = "id,created_at";
 let announcements = [];
+let latestAnnouncementMeta = null;
 let programInfoContent = "";
 let currentSort = "startTime";
 let deleteEventId = null;
@@ -527,16 +531,6 @@ async function saveAllSettings() {
       await supabaseClient.from('events').delete().neq('id', 0);
     }
 
-    // Save announcements to separate announcements table
-    if (announcements && announcements.length > 0) {
-      const { error: deleteAnnError } = await supabaseClient.from('announcements').delete().neq('id', 0);
-      if (deleteAnnError && window.DEBUG_MODE) console.warn("Warning deleting announcements:", deleteAnnError);
-      const { error: insertAnnError } = await supabaseClient.from('announcements').insert(announcements);
-      if (insertAnnError) throw insertAnnError;
-    } else {
-      await supabaseClient.from('announcements').delete().neq('id', 0);
-    }
-
     // Save all settings using specialized functions
     await saveBasicConfig();
     await saveManagerOffdays();
@@ -565,7 +559,7 @@ async function refreshEventsFromSupabase() {
     // CRITICAL FIX: Refresh from separate events table
     const { data: eventsData, error } = await supabaseClient
       .from('events')
-      .select('*');
+      .select(EVENT_SELECT_COLUMNS);
     
     if (error) throw error;
 
@@ -642,33 +636,9 @@ async function loadFromSupabase() {
     renderEventList();
     
     // =====================================================
-    // OPTIMIZATION: Load announcements AFTER events are displayed
+    // OPTIMIZATION: Load only latest announcement meta (for red dot)
     // =====================================================
-    
-    // Load announcements asynchronously (doesn't block UI)
-    supabaseClient
-      .from('announcements')
-      .select('*')
-      .then(async ({ data: announcementsData, error: announcementsError }) => {
-        if (announcementsError) {
-          console.error("Error loading announcements:", announcementsError);
-          announcements = [];
-        } else {
-          announcements = announcementsData || [];
-          if (!Array.isArray(announcements)) {
-            announcements = [];
-          }
-        }
-        if (window.DEBUG_MODE) console.log(`✅ Loaded ${announcements.length} announcements`);
-        
-        // Update announcements UI if on announcements page
-        if (typeof renderAnnouncementList === 'function') {
-          renderAnnouncementList();
-        }
-        
-        // Check for new announcements
-        checkNewAnnouncements();
-      });
+    loadLatestAnnouncementMeta();
     
     // Update backup with loaded data
     await backupSiteSettings();
@@ -738,27 +708,7 @@ function initGlowCards() {
 
 function checkNewAnnouncements() {
   const lastReadAnnouncement = appStorage.getItem("lastReadAnnouncementId");
-  const currentAnnouncements = announcements || [];
-  
-  if (currentAnnouncements.length === 0) {
-    const dot = document.getElementById("newAnnouncementDot");
-    if (dot) dot.classList.add("hidden");
-    return;
-  }
-  
-  const latestAnnouncement = currentAnnouncements.reduce((latest, ann) => {
-    const annDate = new Date(ann.createdAt || ann.created_at || 0);
-    const latestDate = latest ? new Date(latest.createdAt || latest.created_at || 0) : new Date(0);
-    return annDate > latestDate ? ann : latest;
-  }, null);
-  
-  if (!latestAnnouncement) {
-    const dot = document.getElementById("newAnnouncementDot");
-    if (dot) dot.classList.add("hidden");
-    return;
-  }
-  
-  const latestId = latestAnnouncement?.id != null ? String(latestAnnouncement.id) : null;
+  const latestId = latestAnnouncementMeta?.id != null ? String(latestAnnouncementMeta.id) : null;
   const dot = document.getElementById("newAnnouncementDot");
   if (dot) {
     if (latestId && lastReadAnnouncement !== latestId) {
@@ -770,19 +720,32 @@ function checkNewAnnouncements() {
 }
 
 function markAnnouncementsAsRead() {
-  const currentAnnouncements = announcements || [];
-  if (currentAnnouncements.length > 0) {
-    const latestAnnouncement = currentAnnouncements.reduce((latest, ann) => {
-      const annDate = new Date(ann.createdAt || ann.created_at || 0);
-      const latestDate = latest ? new Date(latest.createdAt || latest.created_at || 0) : new Date(0);
-      return annDate > latestDate ? ann : latest;
-    }, null);
-    if (latestAnnouncement) {
-      appStorage.setItem("lastReadAnnouncementId", String(latestAnnouncement.id));
-      const dot = document.getElementById("newAnnouncementDot");
-      if (dot) dot.classList.add("hidden");
+  const latestId = latestAnnouncementMeta?.id != null ? String(latestAnnouncementMeta.id) : null;
+  if (!latestId) return;
+  appStorage.setItem("lastReadAnnouncementId", latestId);
+  const dot = document.getElementById("newAnnouncementDot");
+  if (dot) dot.classList.add("hidden");
+}
+
+async function loadLatestAnnouncementMeta() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('announcements')
+      .select(LATEST_ANNOUNCEMENT_SELECT_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    if (error) throw error;
+    latestAnnouncementMeta = Array.isArray(data) && data.length > 0 ? data[0] : null;
+    if (window.DEBUG_MODE) {
+      console.log("✅ Loaded latest announcement meta:", latestAnnouncementMeta?.id || "none");
     }
+  } catch (error) {
+    console.error("Error loading latest announcement:", error);
+    latestAnnouncementMeta = null;
   }
+  
+  checkNewAnnouncements();
 }
 
 (function init() {
