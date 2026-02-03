@@ -73,6 +73,52 @@ const announcementSubcategories = {
   "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
 };
 
+const DISABLE_IFRAME_STORAGE = true;
+
+function isInIframe() {
+  try {
+    return window.top !== window.self;
+  } catch (error) {
+    return true;
+  }
+}
+
+const shouldDisableIframeStorage = DISABLE_IFRAME_STORAGE && isInIframe();
+const storageMemory = new Map();
+
+const safeStorage = {
+  getItem(key) {
+    if (shouldDisableIframeStorage) return storageMemory.get(key) ?? null;
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      return storageMemory.get(key) ?? null;
+    }
+  },
+  setItem(key, value) {
+    if (shouldDisableIframeStorage) {
+      storageMemory.set(key, value);
+      return;
+    }
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      storageMemory.set(key, value);
+    }
+  },
+  removeItem(key) {
+    if (shouldDisableIframeStorage) {
+      storageMemory.delete(key);
+      return;
+    }
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      storageMemory.delete(key);
+    }
+  }
+};
+
 // Make all constants available globally
 window.categories = categories;
 window.subcategories = subcategories;
@@ -80,6 +126,8 @@ window.defaultHolidays = defaultHolidays;
 window.defaultSchoolHolidays = defaultSchoolHolidays;
 window.platformOptions = platformOptions;
 window.announcementSubcategories = announcementSubcategories;
+window.DISABLE_IFRAME_STORAGE = DISABLE_IFRAME_STORAGE;
+window.safeStorage = safeStorage;
 
 // =====================================================
 // Supabase Configuration
@@ -91,6 +139,7 @@ if (typeof window.supabaseClient === 'undefined' && typeof window.supabase !== '
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhwcnp0d2NoaG9vcGtwbW9pd2RoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1ODQxNjEsImV4cCI6MjA4NTE2MDE2MX0.bS8bl0wBsTYxms-fFt3Qv8SIjiliNtkkbnimM8VLmuw',
     {
       auth: {
+        storage: safeStorage,
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false
