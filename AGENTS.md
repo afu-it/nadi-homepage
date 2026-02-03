@@ -3,6 +3,11 @@
 ## Project Overview
 A vanilla JavaScript calendar and leave management system for NADI Pulau Pinang sites (18 locations). Uses Supabase as backend. No build tools or package manager - static files served directly.
 
+**Primary Deployment:** Embedded as iframe/URL in **Google Sites**
+- Hosted on GitHub Pages: `https://afu-it.github.io/nadi-homepage/`
+- Embedded in Google Sites for easy access by staff
+- Must work within Google Sites iframe constraints (no modals, sandboxed environment)
+
 ## Technology Stack
 - **Frontend:** HTML5, Vanilla JavaScript (ES6+), Tailwind CSS (CDN)
 - **Backend:** Supabase (PostgreSQL + Realtime)

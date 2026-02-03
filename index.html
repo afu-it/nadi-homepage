@@ -1545,17 +1545,14 @@
       </div>
     </div>
 
-    <!-- Load scripts in security-conscious order -->
-    <!-- 1. Supabase credentials (git-ignored file) -->
-    <script src="supabase.config.js"></script>
-    
-    <!-- 2. Security utilities -->
+    <!-- Load scripts -->
+    <!-- 1. Security utilities -->
     <script src="password-utils.js"></script>
     
-    <!-- 3. Application configuration -->
+    <!-- 2. Application configuration (includes Supabase credentials) -->
     <script src="config.js"></script>
     
-    <!-- 4. Application logic -->
+    <!-- 3. Application logic -->
     <script src="app.js"></script>
     <script src="leave-integrated.js"></script>
   </body>

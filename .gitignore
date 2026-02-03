@@ -10,14 +10,9 @@ build/
 .env.local
 .env.*.local
 
-# Configuration files with sensitive data
+# Configuration files with sensitive data (local development only)
 config.private.js
 supabase.config.js
-
-# Documentation files (keep docs out of repo)
-*.md
-!README.md
-!AGENTS.md
 
 # IDE and editor files
 .idea/
