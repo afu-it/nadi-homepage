@@ -615,6 +615,19 @@
         renderAnnouncementList();
       }
 
+      function markAnnouncementsReadLocal() {
+        if (!Array.isArray(announcements) || announcements.length === 0) return;
+        const latestAnnouncement = announcements.reduce((latest, ann) => {
+          const annDate = new Date(ann.created_at || ann.createdAt || 0);
+          const latestDate = latest ? new Date(latest.created_at || latest.createdAt || 0) : new Date(0);
+          return annDate > latestDate ? ann : latest;
+        }, null);
+        if (!latestAnnouncement) return;
+        try {
+          localStorage.setItem("lastReadAnnouncementId", String(latestAnnouncement.id));
+        } catch (error) {}
+      }
+
       function renderAnnouncementList() {
         const container = document.getElementById("announcementListContainer");
         if (!container) return;
@@ -703,6 +716,7 @@
             </div>
           `;
         }).join("");
+        markAnnouncementsReadLocal();
       }
 
       async function annSaveAnnouncement() {

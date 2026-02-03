@@ -758,9 +758,10 @@ function checkNewAnnouncements() {
     return;
   }
   
+  const latestId = latestAnnouncement?.id != null ? String(latestAnnouncement.id) : null;
   const dot = document.getElementById("newAnnouncementDot");
   if (dot) {
-    if (lastReadAnnouncement !== latestAnnouncement.id) {
+    if (latestId && lastReadAnnouncement !== latestId) {
       dot.classList.remove("hidden");
     } else {
       dot.classList.add("hidden");
@@ -777,7 +778,7 @@ function markAnnouncementsAsRead() {
       return annDate > latestDate ? ann : latest;
     }, null);
     if (latestAnnouncement) {
-      appStorage.setItem("lastReadAnnouncementId", latestAnnouncement.id);
+      appStorage.setItem("lastReadAnnouncementId", String(latestAnnouncement.id));
       const dot = document.getElementById("newAnnouncementDot");
       if (dot) dot.classList.add("hidden");
     }
