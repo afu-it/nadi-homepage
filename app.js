@@ -2491,32 +2491,38 @@ function renderEventList() {
     const hasSubmitLinks = ev.submitLinks && ev.submitLinks.length > 0;
     
     if (hasRegistrationLinks || hasSubmitLinks) {
-      actionLinksHtml = '<div class="mt-2 flex flex-col gap-1">';
+      actionLinksHtml = '<div class="mt-2 space-y-2">';
       
       // Add all registration links
       if (hasRegistrationLinks) {
+        actionLinksHtml += '<div class="flex flex-col gap-1">';
+        actionLinksHtml += '<label class="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Registration Link</label>';
         ev.registrationLinks.forEach((link) => {
           if (link.url) {
             actionLinksHtml += `
-            <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
+            <div class="flex items-center gap-2 text-[9px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
               <span class="font-bold text-slate-600 w-12 truncate shrink-0">${link.platform || 'NES'}</span>
               <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline truncate flex-1 block">${link.url}</a>
             </div>`;
           }
         });
+        actionLinksHtml += '</div>';
       }
       
       // Add all submit links
       if (hasSubmitLinks) {
+        actionLinksHtml += '<div class="flex flex-col gap-1">';
+        actionLinksHtml += '<label class="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Submit Link</label>';
         ev.submitLinks.forEach((link) => {
           if (link.url) {
             actionLinksHtml += `
-            <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
+            <div class="flex items-center gap-2 text-[9px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
               <span class="font-bold text-slate-600 w-12 truncate shrink-0">${link.platform || 'Jotform'}</span>
               <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline truncate flex-1 block">${link.url}</a>
             </div>`;
           }
         });
+        actionLinksHtml += '</div>';
       }
       
       actionLinksHtml += "</div>";
@@ -2541,7 +2547,7 @@ function renderEventList() {
         ${ev.time || ev.secondTime ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time || ""}${ev.secondTime ? `<br><i class="fa-regular fa-clock mr-1"></i>${ev.secondTime}` : ""}</div>` : ""}
         ${ev.info ? `
           <div class="mt-1 flex justify-end">
-            <button type="button" onclick="toggleEventInfo('${ev.id}')" class="text-[8px] text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors">
+            <button type="button" onclick="toggleEventInfo('${ev.id}')" class="text-[8px] text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer">
               <span class="font-semibold" style="color: #cb233b;">Program Info</span>
               <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]" style="color: #cb233b;"></i>
             </button>
