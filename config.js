@@ -88,7 +88,7 @@ window.announcementSubcategories = announcementSubcategories;
 if (typeof window.supabaseClient === 'undefined' && typeof window.supabase !== 'undefined') {
   window.supabaseClient = window.supabase.createClient(
     'https://xprztwchhoopkpmoiwdh.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhwcnp0d2NoaG9vcGtwbW9pd2RoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcyODgzODksImV4cCI6MjA1Mjg2NDM4OX0.mCRSd1LpDqGLKL3YqJFLkbh1rCeZ0d6xO7N1Ak2MBUA',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhwcnp0d2NoaG9vcGtwbW9pd2RoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1ODQxNjEsImV4cCI6MjA4NTE2MDE2MX0.bS8bl0wBsTYxms-fFt3Qv8SIjiliNtkkbnimM8VLmuw',
     {
       auth: {
         persistSession: false,
