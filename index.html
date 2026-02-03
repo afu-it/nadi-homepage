@@ -63,11 +63,14 @@
       <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
         <div
           id="editableHeader"
-          class="flex items-center gap-3 cursor-pointer select-none group"
-          title="Triple click to edit"
+          class="flex items-center gap-3 select-none group"
         >
           <div>
-            <h1 id="siteTitle" class="text-base font-bold leading-tight text-white group-hover:text-slate-200">
+            <h1
+              id="siteTitle"
+              class="text-base font-bold leading-tight text-shimmer"
+              style="--base-color:#ffffff; --base-gradient-color:#2228a4; --shimmer-duration:2s;"
+            >
               NADI SCSB
             </h1>
             <p id="siteSubtitle" class="text-[9px] font-bold text-slate-300 tracking-wider group-hover:text-slate-200">
@@ -80,11 +83,18 @@
             <button
               id="leaveLoginBtn"
               onclick="showLeaveLogin()"
-              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors cursor-pointer"
+              class="interactive-hover-btn"
               title="Leave Management"
             >
-              <i class="fa-solid fa-calendar-check text-[#2228a4]"></i>
-              <span class="hidden sm:inline text-[9px]">Leave</span>
+              <span class="interactive-hover-btn__text">
+                <i class="fa-solid fa-calendar-days"></i>
+                Leave
+              </span>
+              <span class="interactive-hover-btn__overlay">
+                <span>Leave</span>
+                <i class="fa-solid fa-arrow-right"></i>
+              </span>
+              <span class="interactive-hover-btn__bg"></span>
             </button>
             
             <a
@@ -225,20 +235,6 @@
             <div class="flex items-center justify-between mb-2">
               <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
               <div class="flex gap-2">
-                <button
-                  onclick="syncEventsFromSupabase()"
-                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-green-600 hover:border-green-300 shadow-sm"
-                  title="Sync Events from Supabase"
-                >
-                  <i class="fa-solid fa-rotate text-[10px]"></i>
-                </button>
-                <button
-                  onclick="forceRefreshEvents()"
-                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-orange-600 hover:border-orange-300 shadow-sm"
-                  title="Force Refresh from Supabase"
-                >
-                  <i class="fa-solid fa-arrow-rotate-right text-[10px]"></i>
-                </button>
                 <button
                   onclick="toggleFilter()"
                   class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm"
@@ -466,20 +462,6 @@
               </div>
 
               <div class="flex gap-2">
-                <button
-                  onclick="syncSectionsFromSupabase()"
-                  class="text-xs font-bold text-nadi bg-white hover:bg-slate-50 border border-nadi px-3 py-2 rounded-lg shadow-md flex items-center gap-2"
-                  title="Sync sections from Supabase"
-                >
-                  <i class="fa-solid fa-rotate"></i> Sync
-                </button>
-                <button
-                  onclick="recoverSections()"
-                  class="text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-2 rounded-lg shadow-md flex items-center gap-2"
-                  title="Recover lost sections from backup"
-                >
-                  <i class="fa-solid fa-rotate-left"></i> Recover
-                </button>
                 <button
                   onclick="openSectionEditor()"
                   class="text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-4 py-2 rounded-lg shadow-md flex items-center gap-2"

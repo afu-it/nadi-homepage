@@ -21,6 +21,13 @@ let leaveRequestsCache = {
 };
 let siteAvailabilityCache = [];
 
+function toLocalISOString(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 // Rate limiting for login attempts (prevent brute force)
 const loginAttempts = {
   count: 0,
@@ -541,7 +548,7 @@ async function handleSupervisorLogin(e) {
 // Show user menu
 function showUserMenu() {
   const menu = document.createElement('div');
-  menu.className = 'fixed inset-0 z-50 flex items-start justify-end pt-16 pr-4';
+  menu.className = 'leave-modal fixed inset-0 z-50 flex items-start justify-end pt-16 pr-4';
   
   // Different menu for supervisors vs staff
   const isSupervisor = currentLeaveUser.role === 'Supervisor';
@@ -643,10 +650,10 @@ function customConfirm(message) {
 
 // Show leave request panel with calendar
 function showLeavePanel() {
-  document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => el.remove());
+  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
   
   const panel = document.createElement('div');
-  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
+  panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-7xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
@@ -1784,7 +1791,7 @@ async function cancelLeaveRequest(requestId) {
 // Show NADI Availability across all sites
 async function showNADIAvailability() {
   // Get today's date in YYYY-MM-DD format
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalISOString(new Date());
   
   // Fetch all sites
     const { data: sites, error: sitesError } = await supabaseClient
@@ -1797,11 +1804,11 @@ async function showNADIAvailability() {
     return;
   }
   
-  // Fetch all leave requests for today (approved only)
+  // Fetch leave & replacement requests for today (approved only)
   const { data: leaveRequests, error: leaveError } = await supabaseClient
     .from('leave_requests')
-    .select('user_id, site_id')
-    .eq('leave_date', today)
+    .select('user_id, site_id, leave_date, request_type, replacement_offday_date')
+    .or(`leave_date.eq.${today},replacement_offday_date.eq.${today}`)
     .eq('status', 'Approved');
     
   if (leaveError) {
@@ -1818,23 +1825,18 @@ async function showNADIAvailability() {
     console.error('Failed to load users:', usersError);
   }
   
-  // Fetch site settings to get offdays (optimized: select only id and settings)
+  // Fetch offdays, replacements, and public holidays
   const { data: settings } = await supabaseClient
     .from('site_settings')
     .select('id, settings')
-    .in('id', [1, 10, 11, 12, 13, 20]);
-    
-  const basicSettings = settings?.find(s => s.id === 1) || {};
+    .in('id', [10, 11, 20]);
+  
   const managerOffdaySettings = settings?.find(s => s.id === 10) || {};
   const amOffdaySettings = settings?.find(s => s.id === 11) || {};
-  const managerReplacementSettings = settings?.find(s => s.id === 12) || {};
-  const amReplacementSettings = settings?.find(s => s.id === 13) || {};
   const publicHolidaySettings = settings?.find(s => s.id === 20) || {};
   
   const managerOffdays = managerOffdaySettings.settings?.managerOffdays || [];
   const amOffdays = amOffdaySettings.settings?.assistantManagerOffdays || [];
-  const managerReplacements = managerReplacementSettings.settings?.managerReplacements || [];
-  const amReplacements = amReplacementSettings.settings?.assistantManagerReplacements || [];
   const publicHolidays = publicHolidaySettings.settings?.publicHolidays || {};
   
   // Check if today is a public holiday
@@ -1846,30 +1848,69 @@ async function showNADIAvailability() {
     const manager = users?.find(u => u.site_id === site.site_id && u.role === 'Manager');
     const am = users?.find(u => u.site_id === site.site_id && u.role === 'Assistant Manager');
     
-    // Check if manager is available
+    // Check if manager is available (admin offdays + replacement requests)
     const managerOffToday = managerOffdays.includes(today);
-    const managerReplacementToday = managerReplacements.includes(today);
-    const managerOnLeave = leaveRequests?.some(r => r.user_id === manager?.user_id && r.site_id === site.site_id);
+    const managerBaseAvailable = !managerOffToday;
     
-    // Replacement logic:
-    // - If today is in BOTH offdays AND replacements → working on off day → AVAILABLE
-    // - If today is in offdays but NOT in replacements → regular off day → UNAVAILABLE
-    // - If today is NOT in offdays but in replacements → replacement off day → UNAVAILABLE
-    const managerWorkingOnOffday = managerOffToday && managerReplacementToday;
-    const managerRegularOffday = managerOffToday && !managerReplacementToday;
-    const managerReplacementOffday = !managerOffToday && managerReplacementToday;
-    const managerAvailable = !managerRegularOffday && !managerReplacementOffday && !managerOnLeave && !isPublicHolidayToday;
+    const managerLeaveToday = leaveRequests?.some(r =>
+      r.user_id === manager?.user_id &&
+      r.site_id === site.site_id &&
+      r.request_type === 'Leave' &&
+      r.leave_date === today
+    );
+    const managerReplacementOffToday = leaveRequests?.some(r =>
+      r.user_id === manager?.user_id &&
+      r.site_id === site.site_id &&
+      r.request_type === 'Replacement Day' &&
+      r.leave_date === today
+    );
+    const managerWorkedOffdayToday = leaveRequests?.some(r =>
+      r.user_id === manager?.user_id &&
+      r.site_id === site.site_id &&
+      r.request_type === 'Replacement Day' &&
+      r.replacement_offday_date === today
+    );
     
-    // Check if AM is available
+    let managerAvailable = managerBaseAvailable;
+    if (isPublicHolidayToday) {
+      managerAvailable = false;
+    } else if (managerLeaveToday || managerReplacementOffToday) {
+      managerAvailable = false;
+    } else if (managerWorkedOffdayToday) {
+      managerAvailable = true;
+    }
+    
+    // Check if AM is available (admin offdays + replacement requests)
     const amOffToday = amOffdays.includes(today);
-    const amReplacementToday = amReplacements.includes(today);
-    const amOnLeave = leaveRequests?.some(r => r.user_id === am?.user_id && r.site_id === site.site_id);
+    const amBaseAvailable = !amOffToday;
     
-    // Replacement logic (same as manager):
-    const amWorkingOnOffday = amOffToday && amReplacementToday;
-    const amRegularOffday = amOffToday && !amReplacementToday;
-    const amReplacementOffday = !amOffToday && amReplacementToday;
-    const amAvailable = !amRegularOffday && !amReplacementOffday && !amOnLeave && !isPublicHolidayToday;
+    const amLeaveToday = leaveRequests?.some(r =>
+      r.user_id === am?.user_id &&
+      r.site_id === site.site_id &&
+      r.request_type === 'Leave' &&
+      r.leave_date === today
+    );
+    const amReplacementOffToday = leaveRequests?.some(r =>
+      r.user_id === am?.user_id &&
+      r.site_id === site.site_id &&
+      r.request_type === 'Replacement Day' &&
+      r.leave_date === today
+    );
+    const amWorkedOffdayToday = leaveRequests?.some(r =>
+      r.user_id === am?.user_id &&
+      r.site_id === site.site_id &&
+      r.request_type === 'Replacement Day' &&
+      r.replacement_offday_date === today
+    );
+    
+    let amAvailable = amBaseAvailable;
+    if (isPublicHolidayToday) {
+      amAvailable = false;
+    } else if (amLeaveToday || amReplacementOffToday) {
+      amAvailable = false;
+    } else if (amWorkedOffdayToday) {
+      amAvailable = true;
+    }
     
     return {
       siteName: site.site_name,
@@ -1879,11 +1920,11 @@ async function showNADIAvailability() {
   });
   
   // Remove any existing modals
-  document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => el.remove());
+  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
   
   // Create modal
   const modal = document.createElement('div');
-  modal.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
+  modal.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   modal.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-3xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
@@ -1933,10 +1974,10 @@ async function showNADIAvailability() {
 function showAdminPanel() {
   if (currentLeaveUser?.role !== 'Supervisor') return;
   
-  document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => el.remove());
+  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
   
   const panel = document.createElement('div');
-  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
+  panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
@@ -2277,10 +2318,10 @@ let staffViewSites = [];
 async function showStaffCalendarsPanel() {
   if (currentLeaveUser?.role !== 'Supervisor') return;
   
-  document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => el.remove());
+  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
   
   const panel = document.createElement('div');
-  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
+  panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.id = 'staffCalendarsPanel';
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="document.getElementById('staffCalendarsPanel').remove()"></div>
@@ -2436,7 +2477,7 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
   
   // Create calendar panel
   const panel = document.createElement('div');
-  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
+  panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.id = 'staffCalendarViewPanel';
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="document.getElementById('staffCalendarViewPanel').remove()"></div>

@@ -216,30 +216,6 @@ let eventsCache = {
 }
 
 // =====================================================
-// OPTIMIZATION: Force refresh events from Supabase
-// =====================================================
-async function forceRefreshEvents() {
-  if (window.DEBUG_MODE) console.log('🔄 Force refreshing events from Supabase...');
-  
-  // Clear cache
-  eventsCache = {
-    data: null,
-    timestamp: null,
-    monthKey: null
-  };
-  appStorage.removeItem('events_cache');
-  
-  // Load events for current month
-  const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
-  events = monthEvents;
-  
-  renderCalendar();
-  renderEventList();
-  
-  if (window.DEBUG_MODE) console.log('✅ Events force refreshed!');
-}
-
-// =====================================================
 // OPTIMIZATION: Load from cache or Supabase
 // =====================================================
 async function loadEventsWithCache() {
@@ -729,6 +705,35 @@ async function loadFromSupabase() {
 function updateUIFromSettings() {
   document.getElementById("siteTitle").textContent = siteSettings.title;
   document.getElementById("siteSubtitle").textContent = siteSettings.subtitle;
+  updateSiteTitleShimmer();
+}
+
+function updateSiteTitleShimmer() {
+  const titleEl = document.getElementById("siteTitle");
+  if (!titleEl) return;
+  const text = (titleEl.textContent || "").trim();
+  const spread = Math.max(24, text.length * 4);
+  titleEl.style.setProperty("--spread", `${spread}px`);
+}
+
+function initGlowCards() {
+  const root = document.documentElement;
+  if (!root) return;
+
+  const updatePointer = (event) => {
+    const { clientX, clientY } = event;
+    root.style.setProperty("--glow-x", clientX.toFixed(2));
+    root.style.setProperty("--glow-y", clientY.toFixed(2));
+  };
+
+  const setCenter = () => {
+    root.style.setProperty("--glow-x", (window.innerWidth / 2).toFixed(2));
+    root.style.setProperty("--glow-y", (window.innerHeight / 2).toFixed(2));
+  };
+
+  setCenter();
+  document.addEventListener("pointermove", updatePointer, { passive: true });
+  window.addEventListener("resize", setCenter);
 }
 
 function checkNewAnnouncements() {
@@ -780,6 +785,7 @@ function markAnnouncementsAsRead() {
 }
 
 (function init() {
+  initGlowCards();
   const dateHeader = document.getElementById("current-date-header");
   if (dateHeader) {
     const dayName = today.toLocaleDateString("en-MY", { weekday: "long" });
@@ -1611,75 +1617,6 @@ function deleteSection() {
   }, 10);
 }
 
-async function syncSectionsFromSupabase() {
-  if (window.DEBUG_MODE) console.log("🔄 Syncing sections from Supabase...");
-
-  try {
-    const { data: settingsData, error } = await supabaseClient
-      .from('site_settings')
-      .select('settings')
-      .eq('id', 1)
-      .single();
-
-    if (error) throw error;
-
-    const sections = settingsData?.settings?.sections;
-
-    if (sections && Array.isArray(sections) && sections.length > 0) {
-      // Verify sections have valid data
-      const validSections = sections.filter(sec =>
-        sec && typeof sec === 'object' && sec.header && sec.buttons
-      );
-
-      if (validSections.length > 0) {
-        siteSettings.sections = validSections;
-        // Update backup after syncing
-        await backupSiteSettings();
-        renderCustomLinks();
-        renderSettingsSectionList();
-        updateSectionCountBadge();
-      } else {
-        if (window.DEBUG_MODE) console.log("⚠ No valid sections found in Supabase (empty or malformed data)");
-      }
-    } else {
-      if (window.DEBUG_MODE) console.log("⚠ No sections found in Supabase - data might have been lost");
-      if (siteSettingsBackup && siteSettingsBackup.sections && siteSettingsBackup.sections.length > 0) {
-        // Restore from backup
-        siteSettings.sections = siteSettingsBackup.sections;
-        // Push backup to Supabase
-        const { error: updateError } = await supabaseClient
-          .from('site_settings')
-          .upsert({
-            id: 1,
-            settings: siteSettings
-          }, { onConflict: 'id' });
-
-        if (updateError) throw updateError;
-
-        if (window.DEBUG_MODE) console.log("✓ Restored", siteSettings.sections.length, "sections from backup to Supabase");
-        renderCustomLinks();
-        renderSettingsSectionList();
-        updateSectionCountBadge();
-      } else {
-        if (window.DEBUG_MODE) console.log("⚠ No backup available to restore");
-      }
-    }
-  } catch (error) {
-    console.error("✗ Error syncing sections:", error);
-    alert("Failed to sync sections. Please check your connection.");
-  }
-}
-
-async function syncEventsFromSupabase() {
-  if (window.DEBUG_MODE) console.log("🔄 Syncing events from Supabase...");
-  try {
-    await refreshEventsFromSupabase();
-  } catch (error) {
-    console.error("✗ Error syncing events:", error);
-    alert("Failed to sync events. Please check your connection.");
-  }
-}
-
 async function verifySectionsInSupabase() {
   try {
     const { data: settingsData, error } = await supabaseClient
@@ -1728,38 +1665,6 @@ async function verifyEventsInSupabase() {
     if (window.DEBUG_MODE) console.error("Error verifying events:", error);
   }
 }
-
-// Recovery function for sections
-window.recoverSections = async function() {
-  // Restore from backup
-  if (siteSettingsBackup && siteSettingsBackup.sections && siteSettingsBackup.sections.length > 0) {
-    siteSettings.sections = siteSettingsBackup.sections;
-
-    // Save backup to Supabase
-    try {
-      const { error } = await supabaseClient
-        .from('site_settings')
-        .upsert({
-          id: 1,
-          settings: siteSettings
-        }, { onConflict: 'id' });
-
-      if (error) throw error;
-
-      renderCustomLinks();
-      renderSettingsSectionList();
-      updateSectionCountBadge();
-      alert(`Recovered ${siteSettings.sections.length} sections from backup!`);
-    } catch (err) {
-      console.error("Failed to save recovered sections:", err);
-      alert("Failed to save recovered sections. Check console for details.");
-    }
-    return true;
-  }
-
-  alert("No backup found. Cannot recover sections.");
-  return false;
-};
 
 // Status check function
 window.sectionsStatus = function() {
@@ -1951,7 +1856,7 @@ function renderCustomLinks() {
 
       for (let c = 1; c <= cols; c++) {
         const columnDiv = document.createElement("div");
-        columnDiv.className = "flex flex-col gap-3";
+        columnDiv.className = "flex flex-col gap-3 min-w-0";
 
         const colButtons = sec.buttons
           ? sec.buttons.filter((b) => b.col === c).sort((a, b) => a.row - b.row)
@@ -1964,8 +1869,8 @@ function renderCustomLinks() {
             a.target = "_blank";
             a.rel = "noopener noreferrer";
             a.className =
-              "flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-nadi hover:text-nadi hover:shadow text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg transition-all";
-            a.innerHTML = `<span>${btnData.label}</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>`;
+              "flex flex-wrap items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-nadi hover:text-nadi hover:shadow text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg transition-all text-center leading-snug break-words w-full min-w-0";
+            a.innerHTML = `<span class="break-words whitespace-normal min-w-0">${btnData.label}</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px] shrink-0"></i>`;
             columnDiv.appendChild(a);
           });
         }
@@ -2479,7 +2384,7 @@ function renderEventList() {
     }
 
     const card = document.createElement("div");
-    card.className = "event-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative";
+    card.className = "event-card glow-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative";
 
     const startParts = ev.start.split("-");
     const endParts = ev.end.split("-");
