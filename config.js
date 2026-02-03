@@ -81,12 +81,22 @@ window.defaultSchoolHolidays = defaultSchoolHolidays;
 window.platformOptions = platformOptions;
 window.announcementSubcategories = announcementSubcategories;
 
-// Initialize Supabase client
-// Note: auth.storageKey is set to avoid tracking prevention issues
-if (typeof window.supabaseClient === 'undefined') {
+// =====================================================
+// SECURITY WARNING: 
+// Supabase credentials have been moved to supabase.config.js
+// Load supabase.config.js in your HTML BEFORE this file
+// See supabase.config.example.js for template
+// =====================================================
+
+// Fallback initialization if supabase.config.js was not loaded
+if (typeof window.supabaseClient === 'undefined' && typeof window.supabase !== 'undefined') {
+  console.warn('⚠️ SECURITY WARNING: supabase.config.js not loaded! Using fallback credentials.');
+  console.warn('Please create supabase.config.js from supabase.config.example.js');
+  
+  // Fallback - FOR DEVELOPMENT ONLY
   window.supabaseClient = window.supabase.createClient(
-    'https://xprztwchhoopkpmoiwdh.supabase.co',
-    'sb_publishable_1yNJb7umrgVZ_ihVSe6Qsg_Wv29Q_Ap',
+    'YOUR_SUPABASE_URL',  // Replace with your URL or load from supabase.config.js
+    'YOUR_ANON_KEY',      // Replace with your key or load from supabase.config.js
     {
       auth: {
         persistSession: false,
@@ -99,4 +109,3 @@ if (typeof window.supabaseClient === 'undefined') {
     }
   );
 }
-

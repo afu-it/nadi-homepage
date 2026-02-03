@@ -57,7 +57,7 @@
             <button
               id="leaveLoginBtn"
               onclick="showLeaveLogin()"
-              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors cursor-pointer"
               title="Leave Management"
             >
               <i class="fa-solid fa-calendar-check text-[#2228a4]"></i>
@@ -1545,7 +1545,17 @@
       </div>
     </div>
 
+    <!-- Load scripts in security-conscious order -->
+    <!-- 1. Supabase credentials (git-ignored file) -->
+    <script src="supabase.config.js"></script>
+    
+    <!-- 2. Security utilities -->
+    <script src="password-utils.js"></script>
+    
+    <!-- 3. Application configuration -->
     <script src="config.js"></script>
+    
+    <!-- 4. Application logic -->
     <script src="app.js"></script>
     <script src="leave-integrated.js"></script>
   </body>

@@ -843,15 +843,20 @@ function markAnnouncementsAsRead() {
 
   let headerClicks = 0;
   let headerTimer;
-  document.getElementById("editableHeader").addEventListener("click", () => {
-    headerClicks++;
-    clearTimeout(headerTimer);
-    headerTimer = setTimeout(() => (headerClicks = 0), 500);
-    if (headerClicks === 3) {
-      openSettings();
-      headerClicks = 0;
-    }
-  });
+  const editableHeader = document.getElementById("editableHeader");
+  if (editableHeader) {
+    editableHeader.addEventListener("click", () => {
+      headerClicks++;
+      clearTimeout(headerTimer);
+      headerTimer = setTimeout(() => (headerClicks = 0), 500);
+      if (headerClicks === 3) {
+        openSettings();
+        headerClicks = 0;
+      }
+    });
+  } else {
+    console.error("editableHeader element not found!");
+  }
 
   document.getElementById("startDate").addEventListener("change", function () {
     const startDate = this.value;
@@ -915,7 +920,18 @@ function showView(viewId) {
 }
 
 function openSettings() {
-  document.getElementById("settingsModal").classList.remove("hidden");
+  // Wait for DOM to be ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => openSettings());
+    return;
+  }
+  
+  const settingsModal = document.getElementById("settingsModal");
+  if (!settingsModal) {
+    console.error("settingsModal element not found!");
+    return;
+  }
+  settingsModal.classList.remove("hidden");
   showView("settingsMenuView");
 }
 

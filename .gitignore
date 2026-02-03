@@ -10,6 +10,15 @@ build/
 .env.local
 .env.*.local
 
+# Configuration files with sensitive data
+config.private.js
+supabase.config.js
+
+# Documentation files (keep docs out of repo)
+*.md
+!README.md
+!AGENTS.md
+
 # IDE and editor files
 .idea/
 .vscode/
@@ -34,8 +43,6 @@ coverage/
 *.temp
 .cache/
 
-# Documentation drafts (not needed in repo)
-HOLIDAYS-ADDED.md
-
-# Supabase client (sensitive, regenerate from CDN)
-# supabase.js contains API keys - should use env vars in production
+# Backup files
+*.backup
+*.bak

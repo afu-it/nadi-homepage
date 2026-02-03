@@ -112,7 +112,7 @@ body {
   border-radius: 2px;
 }
 
-/* Replacement day indicators (dashed line) */
+/* Replacement day indicators (dashed line) - for Site Settings */
 .replacement-line-m {
   position: absolute;
   bottom: 1px;
@@ -137,6 +137,66 @@ body {
   background-size: 5px 100%;
   border-radius: 2px;
   box-shadow: 0 0 3px #90cf53;
+}
+
+/* Replacement day indicators (orange) - for Request Leave calendar ONLY */
+.replacement-line-m-orange {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 2.5px;
+  background-color: #ff8c00;
+  border-radius: 0;
+}
+
+.replacement-line-am-orange {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 2.5px;
+  background-color: #ff8c00;
+  border-radius: 0;
+}
+
+/* Orange line above green offday line (for worked offdays) */
+.replacement-line-m-orange-upper {
+  position: absolute;
+  bottom: 5px; /* Above the green line at bottom: 1px */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 2.5px;
+  background-color: #ff8c00;
+  border-radius: 0;
+  z-index: 10;
+}
+
+.replacement-line-am-orange-upper {
+  position: absolute;
+  bottom: 5px; /* Above the green line at bottom: 1px */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 2.5px;
+  background-color: #ff8c00;
+  border-radius: 0;
+  z-index: 10;
+}
+
+/* Calendar grid positioning for connectors */
+#leaveCalendarGrid {
+  position: relative;
+  overflow: visible;
+}
+
+/* Replacement connector styling - plain line, no animation */
+.replacement-connector {
+  pointer-events: none;
+  z-index: 999;
 }
 
 /* Holiday indicators */
@@ -302,44 +362,70 @@ body {
 .toast {
   position: fixed;
   top: 20px;
-  right: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   background: white;
-  padding: 16px 20px;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.2);
+  padding: 12px 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   z-index: 9999;
-  animation: slideInRight 0.3s ease-out;
-  max-width: 400px;
+  animation: slideInDown 0.3s ease-out;
+  max-width: 90%;
+  min-width: 200px;
 }
 
-@keyframes slideInRight {
+@keyframes slideInDown {
   from {
-    transform: translateX(400px);
+    transform: translateX(-50%) translateY(-100px);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translateX(-50%) translateY(0);
     opacity: 1;
   }
 }
 
 .toast-success {
-  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid #10b981;
+  color: #065f46;
+}
+
+.toast-success i {
+  color: #10b981;
 }
 
 .toast-error {
-  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 1px solid #ef4444;
+  color: #991b1b;
+}
+
+.toast-error i {
+  color: #ef4444;
 }
 
 .toast-warning {
-  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #f59e0b;
+  color: #92400e;
+}
+
+.toast-warning i {
+  color: #f59e0b;
 }
 
 .toast-info {
-  border-left: 4px solid #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #3b82f6;
+  color: #1e40af;
+}
+
+.toast-info i {
+  color: #3b82f6;
 }
 
 /* ===================================================== 
@@ -655,9 +741,10 @@ body {
   }
   
   .toast {
-    left: 20px;
-    right: 20px;
-    max-width: none;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    max-width: calc(100% - 40px);
   }
   
   .modal-panel {

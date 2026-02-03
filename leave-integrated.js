@@ -1,6 +1,6 @@
 // =====================================================
 // NADI Leave Management - Integrated System
-// Add this to your existing index.html
+// Works with both index.html and leave-management.html
 // =====================================================
 
 // Global leave management state
@@ -8,7 +8,270 @@ let currentLeaveUser = null;
 let leaveRequestsCache = [];
 let siteAvailabilityCache = [];
 
-// Initialize leave management system
+// Rate limiting for login attempts (prevent brute force)
+const loginAttempts = {
+  count: 0,
+  lastAttempt: null,
+  lockoutUntil: null,
+  
+  canAttempt() {
+    const now = Date.now();
+    
+    // Check if locked out
+    if (this.lockoutUntil && now < this.lockoutUntil) {
+      const remainingSeconds = Math.ceil((this.lockoutUntil - now) / 1000);
+      return { allowed: false, remainingSeconds };
+    }
+    
+    // Reset if last attempt was more than 15 minutes ago
+    if (this.lastAttempt && (now - this.lastAttempt) > 15 * 60 * 1000) {
+      this.count = 0;
+    }
+    
+    return { allowed: true };
+  },
+  
+  recordAttempt(success) {
+    const now = Date.now();
+    this.lastAttempt = now;
+    
+    if (success) {
+      // Reset on successful login
+      this.count = 0;
+      this.lockoutUntil = null;
+    } else {
+      this.count++;
+      
+      // Lockout after 5 failed attempts
+      if (this.count >= 5) {
+        this.lockoutUntil = now + (15 * 60 * 1000); // 15 minutes
+        if (window.DEBUG_MODE) console.log('🔒 Account locked for 15 minutes');
+      }
+    }
+  }
+};
+
+// Initialize leave system for standalone page (leave-management.html)
+async function initLeaveSystem() {
+  console.log('🚀 Initializing standalone leave management system...');
+  
+  // Suppress browser extension async errors
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason?.message?.includes('message channel closed')) {
+      event.preventDefault();
+    }
+  });
+  
+  // Load sites and users for login
+  await loadSitesAndUsersForLogin();
+  
+  // Check if user is logged in (from localStorage)
+  const savedUser = localStorage.getItem('leave_user');
+  if (savedUser) {
+    try {
+      currentLeaveUser = JSON.parse(savedUser);
+      await showDashboard();
+    } catch (error) {
+      console.error('Error loading saved user:', error);
+      localStorage.removeItem('leave_user');
+    }
+  }
+}
+
+// Load sites and users for standalone login
+async function loadSitesAndUsersForLogin() {
+  try {
+    const { data: sites, error: sitesError } = await supabaseClient
+      .from('sites')
+      .select('*')
+      .order('site_name');
+    
+    if (sitesError) throw sitesError;
+    
+    const siteSelect = document.getElementById('loginSiteSelect');
+    if (siteSelect) {
+      siteSelect.innerHTML = '<option value="">Choose your site...</option>';
+      sites.forEach(site => {
+        const option = document.createElement('option');
+        option.value = site.site_id;
+        option.textContent = site.site_name;
+        siteSelect.appendChild(option);
+      });
+      
+      // When site is selected, load users
+      siteSelect.addEventListener('change', async (e) => {
+        const siteId = e.target.value;
+        const userSelect = document.getElementById('loginUserSelect');
+        
+        if (!siteId) {
+          userSelect.disabled = true;
+          userSelect.innerHTML = '<option value="">Select site first...</option>';
+          return;
+        }
+        
+        const { data: users, error: usersError } = await supabaseClient
+          .from('leave_users')
+          .select('*')
+          .eq('site_id', siteId)
+          .order('role');
+        
+        if (usersError) throw usersError;
+        
+        userSelect.disabled = false;
+        userSelect.innerHTML = '<option value="">Choose your name...</option>';
+        users.forEach(user => {
+          const option = document.createElement('option');
+          option.value = user.user_id;
+          option.textContent = `${user.full_name} (${user.role})`;
+          option.dataset.user = JSON.stringify(user);
+          userSelect.appendChild(option);
+        });
+      });
+    }
+  } catch (error) {
+    console.error('Error loading sites/users:', error);
+  }
+}
+
+// Login as selected user (standalone page)
+async function loginAsUser() {
+  const userSelect = document.getElementById('loginUserSelect');
+  const selectedOption = userSelect.options[userSelect.selectedIndex];
+  
+  if (!selectedOption || !selectedOption.dataset.user) {
+    alert('Please select a staff member');
+    return;
+  }
+  
+  currentLeaveUser = JSON.parse(selectedOption.dataset.user);
+  
+  // Get site info
+  const { data: site } = await supabaseClient
+    .from('sites')
+    .select('*')
+    .eq('site_id', currentLeaveUser.site_id)
+    .single();
+  
+  currentLeaveUser.site_name = site?.site_name || '-';
+  
+  // Save to localStorage
+  localStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
+  
+  // Show dashboard
+  await showDashboard();
+}
+
+// Show dashboard and load data
+async function showDashboard() {
+  document.getElementById('leaveLoginView').classList.add('hidden');
+  document.getElementById('leaveDashboardView').classList.remove('hidden');
+  
+  // Update dashboard header
+  document.getElementById('dashboardUserName').textContent = currentLeaveUser.full_name;
+  document.getElementById('dashboardUserRole').textContent = currentLeaveUser.role;
+  document.getElementById('dashboardUserSite').textContent = currentLeaveUser.site_name;
+  
+  // Load data
+  await Promise.all([
+    loadUserLeaveRequests(),
+    syncMainCalendarOffdays()
+  ]);
+  
+  // Render calendar and stats
+  renderLeaveCalendar();
+  updateLeaveStats();
+  renderLeaveRequestsList();
+  
+  // Subscribe to realtime updates
+  subscribeToLeaveUpdates();
+}
+
+// Update leave statistics
+function updateLeaveStats() {
+  const pending = leaveRequestsCache.filter(r => r.status === 'Pending').length;
+  const approved = leaveRequestsCache.filter(r => r.status === 'Approved').length;
+  const rejected = leaveRequestsCache.filter(r => r.status === 'Rejected').length;
+  const total = leaveRequestsCache.length;
+  
+  const statPending = document.getElementById('statPending');
+  const statApproved = document.getElementById('statApproved');
+  const statRejected = document.getElementById('statRejected');
+  const statTotal = document.getElementById('statTotal');
+  
+  if (statPending) statPending.textContent = pending;
+  if (statApproved) statApproved.textContent = approved;
+  if (statRejected) statRejected.textContent = rejected;
+  if (statTotal) statTotal.textContent = total;
+}
+
+// Render leave requests list
+function renderLeaveRequestsList() {
+  const container = document.getElementById('leaveRequestsList');
+  if (!container) return;
+  
+  if (leaveRequestsCache.length === 0) {
+    container.innerHTML = '<p class="text-gray-500 text-center py-8">No leave requests yet</p>';
+    return;
+  }
+  
+  // Sort by date (newest first)
+  const sorted = [...leaveRequestsCache].sort((a, b) => 
+    new Date(b.leave_date) - new Date(a.leave_date)
+  );
+  
+  container.innerHTML = sorted.map(request => {
+    const date = new Date(request.leave_date);
+    const dateStr = date.toLocaleDateString('en-MY', { 
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+    
+    const statusColors = {
+      'Pending': 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      'Approved': 'bg-green-100 text-green-800 border-green-300',
+      'Rejected': 'bg-red-100 text-red-800 border-red-300'
+    };
+    
+    const statusIcons = {
+      'Pending': 'fa-clock',
+      'Approved': 'fa-check-circle',
+      'Rejected': 'fa-times-circle'
+    };
+    
+    return `
+      <div class="border-2 ${statusColors[request.status]} rounded-lg p-4">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fas ${statusIcons[request.status]}"></i>
+              <span class="font-bold">${dateStr}</span>
+            </div>
+            <div class="text-sm mb-1">
+              <strong>Type:</strong> ${request.request_type}
+            </div>
+            ${request.notes ? `
+              <div class="text-sm text-gray-700">
+                <strong>Notes:</strong> ${request.notes}
+              </div>
+            ` : ''}
+          </div>
+          <div class="flex flex-col items-end gap-2">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColors[request.status]} border-2">
+              ${request.status}
+            </span>
+            ${request.status === 'Pending' ? `
+              <button onclick="cancelLeaveRequest(${request.request_id})" 
+                      class="text-xs text-red-600 hover:text-red-800 font-semibold">
+                <i class="fas fa-trash mr-1"></i>Cancel
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Initialize leave management system (for index.html integration)
 function initLeaveManagement() {
   // Suppress browser extension async errors
   window.addEventListener('unhandledrejection', (event) => {
@@ -193,6 +456,13 @@ async function handleSupervisorLogin(e) {
     return;
   }
   
+  // Check rate limiting
+  const rateCheck = loginAttempts.canAttempt();
+  if (!rateCheck.allowed) {
+    alert(`Too many failed login attempts. Please try again in ${rateCheck.remainingSeconds} seconds.`);
+    return;
+  }
+  
   try {
     // Query supervisor user
     const { data: user, error } = await supabaseClient
@@ -203,8 +473,25 @@ async function handleSupervisorLogin(e) {
       .eq('is_active', true)
       .single();
     
-    if (error || !user) throw new Error('Invalid supervisor credentials');
-    if (user.password_hash !== password) throw new Error('Invalid password');
+    if (error || !user) {
+      loginAttempts.recordAttempt(false);
+      throw new Error('Invalid supervisor credentials');
+    }
+    
+    // Verify password using secure hashing (supports legacy plain text)
+    const isPasswordValid = await window.PasswordUtils.verifyPassword(password, user.password_hash);
+    if (!isPasswordValid) {
+      loginAttempts.recordAttempt(false);
+      const remaining = 5 - loginAttempts.count;
+      if (remaining > 0) {
+        throw new Error(`Invalid password. ${remaining} attempts remaining.`);
+      } else {
+        throw new Error('Invalid password. Account locked for 15 minutes.');
+      }
+    }
+    
+    // Success - record and reset attempts
+    loginAttempts.recordAttempt(true);
     
     // Save session
     currentLeaveUser = {
@@ -264,6 +551,9 @@ function showUserMenu() {
       ${isSupervisor ? `
       <button onclick="showAdminPanel()" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 rounded flex items-center gap-2">
         <i class="fa-solid fa-clipboard-check text-purple-600"></i> Manage Requests
+      </button>
+      <button onclick="showStaffCalendarsPanel()" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 rounded flex items-center gap-2">
+        <i class="fa-solid fa-users text-blue-600"></i> View Staff Calendars
       </button>` : ''}
       <hr class="my-2">
       <button onclick="handleLeaveLogout()" class="w-full text-left px-3 py-2 text-sm hover:bg-red-50 rounded flex items-center gap-2 text-red-600">
@@ -330,28 +620,23 @@ function customConfirm(message) {
 
 // Show leave request panel with calendar
 function showLeavePanel() {
-  console.log('📅 showLeavePanel() called');
-  console.log('  Removing existing panels...');
   document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => el.remove());
-  
-  console.log('  leaveCalendarDate at panel open:', leaveCalendarDate);
-  console.log('  Month:', leaveCalendarDate.getMonth(), 'Year:', leaveCalendarDate.getFullYear());
   
   const panel = document.createElement('div');
   panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.innerHTML = `
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
-    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-7xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
         <h2 class="text-xl font-bold text-slate-800">Request Leave - ${currentLeaveUser.site_name || ''}</h2>
         <p class="text-sm text-slate-500">${currentLeaveUser.full_name} (${currentLeaveUser.role})</p>
       </div>
       
       <div class="flex-1 overflow-y-auto p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="flex flex-col xl:flex-row gap-6">
           <!-- Calendar Section -->
-          <div class="lg:col-span-2">
-            <div class="bg-white rounded-lg border border-slate-200 p-4">
+          <div class="flex-1 w-full" style="min-width: 660px;">
+            <div class="bg-white rounded-lg border border-slate-200 p-4" style="min-height: 400px; overflow-y: auto;">
                <!-- Month Navigation -->
                <div class="flex items-center justify-between mb-3">
                  <button id="leaveCalendarPrev" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center">
@@ -415,10 +700,10 @@ function showLeavePanel() {
           </div>
           
           <!-- My Requests Section -->
-          <div class="lg:col-span-1">
-            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+          <div class="w-full xl:w-[500px] xl:flex-shrink-0">
+            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4" style="min-height: 400px;">
               <h3 class="text-sm font-bold text-slate-800 mb-3">My Leave Requests</h3>
-              <div id="leaveRequestsList" class="space-y-2 max-h-96 overflow-y-auto">
+              <div id="leaveRequestsList" class="space-y-2 overflow-y-auto" style="max-height: calc(400px - 3rem);">
                 <div class="text-center py-8"><div class="spinner mx-auto"></div></div>
               </div>
             </div>
@@ -441,71 +726,46 @@ function showLeavePanel() {
   const prevBtn = document.getElementById('leaveCalendarPrev');
   const nextBtn = document.getElementById('leaveCalendarNext');
   
-  console.log('🔹 Setting up navigation buttons');
-  console.log('  Current leaveCalendarDate:', leaveCalendarDate);
-  console.log('  Current month:', leaveCalendarDate.getMonth(), '(0=Jan, 1=Feb, etc.)');
-  console.log('  Current year:', leaveCalendarDate.getFullYear());
-  
   if (prevBtn) {
     let isNavigating = false;
     prevBtn.onclick = function(e) {
-      console.log('⬅️ PREV BUTTON CLICKED');
-      console.log('  isNavigating flag:', isNavigating);
       e.stopPropagation();
       if (isNavigating) {
-        console.log('  ❌ Blocked - already navigating');
         return;
       }
       isNavigating = true;
       prevBtn.classList.add('opacity-50', 'cursor-wait');
       
-      console.log('  Before change - Month:', leaveCalendarDate.getMonth());
-      // Fix: Set to day 1 to prevent rollover issues
       leaveCalendarDate.setDate(1);
       leaveCalendarDate.setMonth(leaveCalendarDate.getMonth() - 1);
-      console.log('  After change - Month:', leaveCalendarDate.getMonth());
       
       setTimeout(() => {
         prevBtn.classList.remove('opacity-50', 'cursor-wait');
         isNavigating = false;
-        console.log('  ✅ Navigation cooldown cleared');
       }, 150);
       renderLeaveCalendar();
     };
-    console.log('✅ Prev button handler attached');
-  } else {
-    console.log('❌ Prev button not found!');
   }
   
   if (nextBtn) {
     let isNavigating = false;
     nextBtn.onclick = function(e) {
-      console.log('➡️ NEXT BUTTON CLICKED');
-      console.log('  isNavigating flag:', isNavigating);
       e.stopPropagation();
       if (isNavigating) {
-        console.log('  ❌ Blocked - already navigating');
         return;
       }
       isNavigating = true;
       nextBtn.classList.add('opacity-50', 'cursor-wait');
       
-      console.log('  Before change - Month:', leaveCalendarDate.getMonth(), 'Year:', leaveCalendarDate.getFullYear());
-      // Fix: Set to day 1 to prevent rollover issues (e.g., Jan 31 -> Feb 31 -> Mar 3)
       leaveCalendarDate.setDate(1);
       leaveCalendarDate.setMonth(leaveCalendarDate.getMonth() + 1);
-      console.log('  After change - Month:', leaveCalendarDate.getMonth(), 'Year:', leaveCalendarDate.getFullYear());
       
       setTimeout(() => {
         nextBtn.classList.remove('opacity-50', 'cursor-wait');
         isNavigating = false;
-        console.log('  ✅ Navigation cooldown cleared');
       }, 150);
       renderLeaveCalendar();
     };
-    console.log('✅ Next button handler attached');
-  } else {
-    console.log('❌ Next button not found!');
   }
   
   // Initialize filter checkboxes
@@ -523,7 +783,6 @@ function showLeavePanel() {
 
 // Toggle holiday filter
 function toggleHolidayFilter(type, value) {
-  console.log(`🎛️ Toggle ${type} holiday:`, value);
   if (type === 'public') {
     leaveCalendarFilters.showPublicHolidays = value;
   } else if (type === 'school') {
@@ -548,6 +807,12 @@ async function loadUserLeaveRequests() {
     leaveRequestsCache = data || [];
     displayUserLeaveRequests();
     
+    // Update stats if on standalone page
+    if (document.getElementById('statPending')) {
+      updateLeaveStats();
+      renderLeaveRequestsList();
+    }
+    
     // Refresh calendar if it's open
     if (document.getElementById('leaveCalendarGrid')) {
       renderLeaveCalendar();
@@ -565,7 +830,7 @@ function displayUserLeaveRequests() {
   
   if (leaveRequestsCache.length === 0) {
     container.innerHTML = `
-      <div class="text-center py-8">
+      <div class="text-center py-8 col-span-2">
         <i class="fa-solid fa-calendar-xmark text-3xl text-slate-300 mb-2"></i>
         <p class="text-xs text-slate-500">No requests yet</p>
       </div>
@@ -573,20 +838,67 @@ function displayUserLeaveRequests() {
     return;
   }
   
-  const html = leaveRequestsCache.slice(0, 10).map(req => `
-    <div class="bg-white border border-slate-200 rounded-lg p-3 text-xs">
-      <div class="font-bold text-slate-800 mb-1">${new Date(req.leave_date).toLocaleDateString('en-MY', {month: 'short', day: 'numeric'})}</div>
-      <div class="flex items-center gap-1 mb-1">
-        <span class="status-badge badge-${req.status.toLowerCase().replace(' ', '-')} text-[8px]">${req.status}</span>
-        <span class="text-[8px] text-slate-500">${req.request_type}</span>
-      </div>
-      <button onclick="cancelLeaveRequest('${req.request_id}')" class="text-red-600 hover:bg-red-50 px-2 py-1 rounded text-[8px] mt-1">
-        <i class="fa-solid fa-trash text-[8px]"></i> Cancel
-      </button>
-    </div>
-  `).join('');
+  // Separate requests by type
+  const leaveRequests = leaveRequestsCache.filter(r => r.request_type === 'Leave').slice(0, 10);
+  const replacementRequests = leaveRequestsCache.filter(r => r.request_type === 'Replacement Day').slice(0, 10);
   
-  container.innerHTML = html;
+  // Generate Leave column HTML
+  const leaveHTML = leaveRequests.length > 0 ? leaveRequests.map(req => `
+    <div class="bg-white border border-slate-200 rounded-lg p-3 text-xs relative">
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex-1 pr-2">
+          <div class="font-bold text-slate-800">${new Date(req.leave_date).toLocaleDateString('en-MY', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'})}</div>
+          ${req.notes ? `<div class="text-[10px] text-slate-500 mt-1">${req.notes.replace(/\n/g, '<br>')}</div>` : ''}
+        </div>
+        <span class="status-badge badge-${req.status.toLowerCase().replace(' ', '-')} text-[8px] flex-shrink-0">${req.status}</span>
+      </div>
+      <div class="flex justify-end">
+        <button onclick="cancelLeaveRequest('${req.request_id}')" class="text-red-600 hover:bg-red-50 px-2 py-1 rounded text-[8px]">
+          <i class="fa-solid fa-trash"></i> Delete
+        </button>
+      </div>
+    </div>
+  `).join('') : '<p class="text-xs text-slate-400 text-center py-4">No leave requests</p>';
+  
+  // Generate Replacement Day column HTML
+  const replacementHTML = replacementRequests.length > 0 ? replacementRequests.map(req => `
+    <div class="bg-white border border-slate-200 rounded-lg p-3 text-xs relative">
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex-1 pr-2">
+          <div class="font-bold text-slate-800">${new Date(req.leave_date).toLocaleDateString('en-MY', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'})}</div>
+          ${req.notes ? `<div class="text-[10px] text-slate-500 mt-1">${req.notes.replace(/\n/g, '<br>')}</div>` : ''}
+        </div>
+        <span class="status-badge badge-${req.status.toLowerCase().replace(' ', '-')} text-[8px] flex-shrink-0">${req.status}</span>
+      </div>
+      <div class="flex justify-end">
+        <button onclick="cancelLeaveRequest('${req.request_id}')" class="text-red-600 hover:bg-red-50 px-2 py-1 rounded text-[8px]">
+          <i class="fa-solid fa-trash"></i> Delete
+        </button>
+      </div>
+    </div>
+  `).join('') : '<p class="text-xs text-slate-400 text-center py-4">No replacement requests</p>';
+  
+  // Combine in two-column layout
+  container.innerHTML = `
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <h4 class="text-xs font-bold text-blue-600 mb-2 flex items-center gap-1">
+          <i class="fa-solid fa-calendar-days"></i> Leave
+        </h4>
+        <div class="space-y-2">
+          ${leaveHTML}
+        </div>
+      </div>
+      <div>
+        <h4 class="text-xs font-bold text-green-600 mb-2 flex items-center gap-1">
+          <i class="fa-solid fa-calendar-plus"></i> Replacement Day
+        </h4>
+        <div class="space-y-2">
+          ${replacementHTML}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // Sync offday data from main calendar
@@ -782,12 +1094,9 @@ function isDateInSchoolHoliday(dateStr, schoolHolidays) {
 
 // Render leave calendar
 function renderLeaveCalendar() {
-  console.log('🎨 renderLeaveCalendar() called');
   
   const year = leaveCalendarDate.getFullYear();
   const month = leaveCalendarDate.getMonth();
-  
-  console.log('  Rendering for Year:', year, 'Month:', month, '(' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month] + ')');
   
   // Update month/year labels
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -860,13 +1169,18 @@ function renderLeaveCalendar() {
     
     // Create cell with simplified classes (matching index.html structure)
     const cell = document.createElement('div');
+    
+    // Check if this is a replacement request (not regular leave)
+    const isReplacementRequest = leaveRequest && leaveRequest.request_type === 'Replacement Day';
+    
     cell.className = `min-h-[48px] w-full rounded-lg flex flex-col items-center justify-center transition-all relative py-1 ${
       isPast ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 
       isToday ? 'bg-blue-50 ring-2 ring-blue-500 cursor-pointer' :
-      leaveRequest ? 
+      leaveRequest && !isReplacementRequest ? 
         leaveRequest.status === 'Pending' ? 'bg-yellow-100 border border-yellow-400 cursor-pointer' :
         leaveRequest.status === 'Approved' ? 'bg-green-100 border border-green-400 cursor-pointer' :
         'bg-red-100 border border-red-400 cursor-not-allowed' :
+      isReplacementRequest && leaveRequest.status === 'Pending' ? 'border border-yellow-400 cursor-pointer' :
       isHoliday ? 'cursor-not-allowed' :
       'hover:bg-blue-50 cursor-pointer'
     }`;
@@ -921,16 +1235,6 @@ function renderLeaveCalendar() {
       cell.appendChild(sText);
     }
     
-    // Add leave status indicator dot
-    if (leaveRequest) {
-      const statusDot = document.createElement('span');
-      statusDot.className = `absolute top-1 right-1 w-2 h-2 rounded-full ${
-        leaveRequest.status === 'Pending' ? 'bg-yellow-500' :
-        leaveRequest.status === 'Approved' ? 'bg-green-500' : 'bg-red-500'
-      }`;
-      cell.appendChild(statusDot);
-    }
-    
     // Add offday lines at the bottom
     if (isManagerOff) {
       const line = document.createElement('div');
@@ -942,6 +1246,8 @@ function renderLeaveCalendar() {
       line.className = 'offday-line-am';
       cell.appendChild(line);
     }
+    
+    // Add admin-configured replacement lines (blue/green - from site_settings)
     if (isManagerReplace) {
       const line = document.createElement('div');
       line.className = 'replacement-line-m';
@@ -951,6 +1257,35 @@ function renderLeaveCalendar() {
       const line = document.createElement('div');
       line.className = 'replacement-line-am';
       cell.appendChild(line);
+    }
+    
+    // Add orange line for staff replacement request dates (from leave_requests table)
+    // Orange line appears on the replacement date (e.g., Feb 4)
+    if (isReplacementRequest && leaveRequest.status === 'Approved') {
+      const line = document.createElement('div');
+      line.className = currentLeaveUser.role === 'Manager' ? 'replacement-line-m-orange' : 'replacement-line-am-orange';
+      cell.appendChild(line);
+      
+      // Store replacement date info for connector
+      cell.dataset.replacementDate = dateStr;
+      cell.dataset.workedOffday = leaveRequest.replacement_offday_date;
+    }
+    
+    // Check if this date was worked on (original offday that was replaced)
+    const workedOnThisDate = leaveRequestsCache.find(r => 
+      r.request_type === 'Replacement Day' && 
+      r.replacement_offday_date === dateStr &&
+      r.status === 'Approved'
+    );
+    if (workedOnThisDate) {
+      // Add orange line ABOVE the green offday line (not replacing it)
+      const line = document.createElement('div');
+      line.className = currentLeaveUser.role === 'Manager' ? 'replacement-line-m-orange-upper' : 'replacement-line-am-orange-upper';
+      cell.appendChild(line);
+      
+      // Store info for connector arrow
+      cell.dataset.workedDate = dateStr;
+      cell.dataset.replacementFor = workedOnThisDate.leave_date;
     }
     
     // Add click handler (disabled for past dates and holidays)
@@ -964,7 +1299,190 @@ function renderLeaveCalendar() {
     
     grid.appendChild(cell);
   }
+  
+  // Draw replacement connector arrows after all cells are rendered
+  drawReplacementConnectors();
 }
+
+// Draw connector arrows between worked offday and replacement date
+function drawReplacementConnectors() {
+  const grid = document.getElementById('leaveCalendarGrid');
+  if (!grid) return;
+  
+  // Remove existing connectors
+  document.querySelectorAll('.replacement-connector').forEach(el => el.remove());
+  
+  // Find all worked dates that have replacement links
+  const workedCells = grid.querySelectorAll('[data-worked-date]');
+  
+  workedCells.forEach(workedCell => {
+    const workedDate = workedCell.dataset.workedDate;
+    const replacementDate = workedCell.dataset.replacementFor;
+    
+    // Find the replacement date cell
+    const replacementCell = grid.querySelector(`[data-replacement-date="${replacementDate}"]`);
+    if (!replacementCell) return;
+    
+    // Find the number wrapper elements (the actual date number position)
+    const workedNumWrapper = workedCell.querySelector('.flex.items-center.justify-center.relative');
+    const replacementNumWrapper = replacementCell.querySelector('.flex.items-center.justify-center.relative');
+    
+    // Get positions relative to the grid
+    const gridRect = grid.getBoundingClientRect();
+    const workedCellRect = workedCell.getBoundingClientRect();
+    const replacementCellRect = replacementCell.getBoundingClientRect();
+    
+    // Get number wrapper positions (the actual number)
+    const workedNumRect = workedNumWrapper ? workedNumWrapper.getBoundingClientRect() : workedCellRect;
+    const replacementNumRect = replacementNumWrapper ? replacementNumWrapper.getBoundingClientRect() : replacementCellRect;
+    
+    // Calculate center positions
+    const startCenterX = workedCellRect.left + workedCellRect.width / 2 - gridRect.left;
+    const startTopY = workedCellRect.top - gridRect.top + 8;
+    const endCenterX = replacementCellRect.left + replacementCellRect.width / 2 - gridRect.left;
+    const endTopY = replacementCellRect.top - gridRect.top + 8;
+    
+    // Check if dates are on the same row (same Y position roughly)
+    const sameRow = Math.abs(workedCellRect.top - replacementCellRect.top) < 10;
+    
+    // Check if target is to the right or left
+    const targetIsRight = endCenterX > startCenterX;
+    
+    // Check if target is below (different row)
+    const targetIsBelow = replacementCellRect.top > workedCellRect.top + 10;
+    
+    // Create SVG container
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('replacement-connector');
+    svg.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 999;
+      overflow: visible;
+      opacity: 0.6;
+    `;
+    
+    let pathData;
+    let arrowPoints;
+    const arrowSize = 4;
+    
+    if (sameRow) {
+      // SAME ROW: Simple elbow - up, horizontal, down
+      const elbowY = startTopY - 8;
+      pathData = `
+        M ${startCenterX} ${startTopY}
+        L ${startCenterX} ${elbowY}
+        L ${endCenterX} ${elbowY}
+        L ${endCenterX} ${endTopY}
+      `;
+      // Arrow pointing down
+      arrowPoints = `
+        ${endCenterX},${endTopY}
+        ${endCenterX - arrowSize},${endTopY - arrowSize - 1}
+        ${endCenterX + arrowSize},${endTopY - arrowSize - 1}
+      `;
+    } else if (targetIsBelow && targetIsRight) {
+      // PATTERN 1: Left-to-below-right
+      // Start from LEFT EDGE of the date number (not cell edge)
+      const startX = workedNumRect.left - gridRect.left + 2; // 2px from left edge of number
+      const startY = workedNumRect.top - gridRect.top + workedNumRect.height / 2;
+      const endX = replacementNumRect.left - gridRect.left + 2; // 2px from left edge of number
+      const endY = replacementNumRect.top - gridRect.top + replacementNumRect.height / 2;
+      
+      const midY = (startY + endY) / 2;
+      
+      pathData = `
+        M ${startX} ${startY}
+        L ${startX - 8} ${startY}
+        L ${startX - 8} ${midY}
+        L ${endX - 8} ${midY}
+        L ${endX - 8} ${endY}
+        L ${endX} ${endY}
+      `;
+      // Arrow pointing right
+      arrowPoints = `
+        ${endX},${endY}
+        ${endX - arrowSize - 1},${endY - arrowSize}
+        ${endX - arrowSize - 1},${endY + arrowSize}
+      `;
+    } else if (targetIsBelow && !targetIsRight) {
+      // PATTERN 2: Right-to-below-left
+      // Start from RIGHT EDGE of the date number (not cell edge)
+      const startX = workedNumRect.right - gridRect.left - 2; // 2px from right edge of number
+      const startY = workedNumRect.top - gridRect.top + workedNumRect.height / 2;
+      const endX = replacementNumRect.right - gridRect.left - 2; // 2px from right edge of number
+      const endY = replacementNumRect.top - gridRect.top + replacementNumRect.height / 2;
+      
+      const midY = (startY + endY) / 2;
+      
+      pathData = `
+        M ${startX} ${startY}
+        L ${startX + 8} ${startY}
+        L ${startX + 8} ${midY}
+        L ${endX + 8} ${midY}
+        L ${endX + 8} ${endY}
+        L ${endX} ${endY}
+      `;
+      // Arrow pointing left
+      arrowPoints = `
+        ${endX},${endY}
+        ${endX + arrowSize + 1},${endY - arrowSize}
+        ${endX + arrowSize + 1},${endY + arrowSize}
+      `;
+    } else {
+      // Target is above - use simple elbow going down first
+      const elbowY = Math.max(startTopY, endTopY) + workedCellRect.height + 8;
+      pathData = `
+        M ${startCenterX} ${startTopY + workedCellRect.height - 16}
+        L ${startCenterX} ${elbowY}
+        L ${endCenterX} ${elbowY}
+        L ${endCenterX} ${endTopY + replacementCellRect.height - 16}
+      `;
+      // Arrow pointing up
+      arrowPoints = `
+        ${endCenterX},${endTopY + replacementCellRect.height - 16}
+        ${endCenterX - arrowSize},${endTopY + replacementCellRect.height - 16 + arrowSize + 1}
+        ${endCenterX + arrowSize},${endTopY + replacementCellRect.height - 16 + arrowSize + 1}
+      `;
+    }
+    
+    // Create path
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathData);
+    path.setAttribute('stroke', '#ff8c00');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    
+    // Create arrowhead
+    const arrowhead = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    arrowhead.setAttribute('points', arrowPoints);
+    arrowhead.setAttribute('fill', '#ff8c00');
+    
+    svg.appendChild(path);
+    svg.appendChild(arrowhead);
+    grid.appendChild(svg);
+  });
+}
+
+// Redraw connectors on window resize for responsiveness
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    if (document.getElementById('leaveCalendarGrid')) {
+      drawReplacementConnectors();
+    }
+    if (document.getElementById('viewingCalendarGrid')) {
+      drawViewingReplacementConnectors();
+    }
+  }, 100);
+});
 
 // Subscribe to realtime leave updates
 function subscribeToLeaveUpdates() {
@@ -1017,10 +1535,11 @@ async function requestLeaveForDate(dateStr) {
   
   // Show modal to choose request type
   const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4';
+  modal.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto';
+  modal.id = 'leaveRequestFormModal';
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
-    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+    <div class="fixed inset-0 bg-slate-900/40" onclick="document.getElementById('leaveRequestFormModal').remove()"></div>
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6 my-8" onclick="event.stopPropagation()">
       <h3 class="text-lg font-bold text-slate-800 mb-2">Request Leave</h3>
       <p class="text-sm text-slate-600 mb-4">${new Date(dateStr).toLocaleDateString('en-MY', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>
       
@@ -1047,7 +1566,7 @@ async function requestLeaveForDate(dateStr) {
         <label class="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" id="hrmsConfirmed" class="w-4 h-4 mt-0.5" />
           <div class="text-xs text-slate-700">
-            <span class="font-semibold">I confirm that I have applied in SQL HRMS and been approved by Madam</span>
+            <span class="font-semibold">I confirm that I have applied in SQL HRMS Approved</span>
             <span class="text-red-600">*</span>
           </div>
         </label>
@@ -1068,7 +1587,7 @@ async function requestLeaveForDate(dateStr) {
       </div>
       
       <div class="flex gap-2">
-        <button onclick="this.closest('.fixed').remove()" class="flex-1 btn btn-secondary">Cancel</button>
+        <button onclick="document.getElementById('leaveRequestFormModal').remove()" class="flex-1 btn btn-secondary">Cancel</button>
         <button onclick="submitLeaveRequest('${dateStr}')" class="flex-1 btn btn-primary">Submit Request</button>
       </div>
     </div>
@@ -1101,7 +1620,7 @@ async function submitLeaveRequest(dateStr) {
     // Check SQL HRMS confirmation
     const hrmsConfirmed = document.getElementById('hrmsConfirmed').checked;
     if (!hrmsConfirmed) {
-      alert('Please confirm that you have applied in SQL HRMS and been approved by Madam');
+      alert('Please confirm that you have applied in SQL HRMS Approved');
       return;
     }
   } else if (requestType === 'Replacement Day') {
@@ -1111,23 +1630,18 @@ async function submitLeaveRequest(dateStr) {
       alert('Please select which offday you are replacing');
       return;
     }
-    
-    // Validate that replacement date is in the past
-    const today = new Date().toISOString().split('T')[0];
-    if (replacementDate > today) {
-      alert('Replacement offday must be a past date (the offday you already worked on)');
-      return;
-    }
   }
   
   // Build notes with additional info
   let finalNotes = notes;
+  let replacementOffdayDate = null;
+  
   if (requestType === 'Replacement Day') {
-    const replacementDate = document.getElementById('replacementOffdayDate').value;
-    const formattedDate = new Date(replacementDate).toLocaleDateString('en-MY', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
-    finalNotes = `Replacing offday: ${formattedDate}` + (notes ? `\n${notes}` : '');
+    replacementOffdayDate = document.getElementById('replacementOffdayDate').value;
+    const formattedDate = new Date(replacementOffdayDate).toLocaleDateString('en-MY', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+    finalNotes = `Replacing offday:\n${formattedDate}` + (notes ? `\n${notes}` : '');
   } else if (requestType === 'Leave') {
-    finalNotes = 'SQL HRMS approved by Madam' + (notes ? `\n${notes}` : '');
+    finalNotes = 'SQL HRMS Approved' + (notes ? `\n${notes}` : '');
   }
   
   try {
@@ -1138,15 +1652,19 @@ async function submitLeaveRequest(dateStr) {
         site_id: currentLeaveUser.site_id,
         leave_date: dateStr,
         request_type: requestType,
-        notes: finalNotes || null
+        notes: finalNotes || null,
+        replacement_offday_date: replacementOffdayDate // Store the worked offday date
       });
     
     if (error) throw error;
     
     showToast(`${requestType} request submitted!`, 'success');
     
-    // Close modal
-    document.querySelectorAll('.fixed.inset-0.z-\\[60\\]').forEach(el => el.remove());
+    // Close only the form modal (not the parent leave panel)
+    const formModal = document.getElementById('leaveRequestFormModal');
+    if (formModal) {
+      formModal.remove();
+    }
     
     // Reload data
     await loadUserLeaveRequests();
@@ -1218,14 +1736,20 @@ async function showNADIAvailability() {
   const { data: settings } = await supabaseClient
     .from('site_settings')
     .select('*')
-    .in('id', [1, 20]);
+    .in('id', [1, 10, 11, 12, 13, 20]);
     
-  const offdaySettings = settings?.find(s => s.id === 1) || {};
+  const basicSettings = settings?.find(s => s.id === 1) || {};
+  const managerOffdaySettings = settings?.find(s => s.id === 10) || {};
+  const amOffdaySettings = settings?.find(s => s.id === 11) || {};
+  const managerReplacementSettings = settings?.find(s => s.id === 12) || {};
+  const amReplacementSettings = settings?.find(s => s.id === 13) || {};
   const publicHolidaySettings = settings?.find(s => s.id === 20) || {};
   
-  const managerOffdays = offdaySettings.managerOffdays || [];
-  const amOffdays = offdaySettings.assistantManagerOffdays || [];
-  const publicHolidays = publicHolidaySettings.publicHolidays || {};
+  const managerOffdays = managerOffdaySettings.settings?.managerOffdays || [];
+  const amOffdays = amOffdaySettings.settings?.assistantManagerOffdays || [];
+  const managerReplacements = managerReplacementSettings.settings?.managerReplacements || [];
+  const amReplacements = amReplacementSettings.settings?.assistantManagerReplacements || [];
+  const publicHolidays = publicHolidaySettings.settings?.publicHolidays || {};
   
   // Check if today is a public holiday
   const isPublicHolidayToday = publicHolidays.hasOwnProperty(today);
@@ -1238,13 +1762,28 @@ async function showNADIAvailability() {
     
     // Check if manager is available
     const managerOffToday = managerOffdays.includes(today);
+    const managerReplacementToday = managerReplacements.includes(today);
     const managerOnLeave = leaveRequests?.some(r => r.user_id === manager?.user_id && r.site_id === site.site_id);
-    const managerAvailable = !managerOffToday && !managerOnLeave && !isPublicHolidayToday;
+    
+    // Replacement logic:
+    // - If today is in BOTH offdays AND replacements → working on off day → AVAILABLE
+    // - If today is in offdays but NOT in replacements → regular off day → UNAVAILABLE
+    // - If today is NOT in offdays but in replacements → replacement off day → UNAVAILABLE
+    const managerWorkingOnOffday = managerOffToday && managerReplacementToday;
+    const managerRegularOffday = managerOffToday && !managerReplacementToday;
+    const managerReplacementOffday = !managerOffToday && managerReplacementToday;
+    const managerAvailable = !managerRegularOffday && !managerReplacementOffday && !managerOnLeave && !isPublicHolidayToday;
     
     // Check if AM is available
     const amOffToday = amOffdays.includes(today);
+    const amReplacementToday = amReplacements.includes(today);
     const amOnLeave = leaveRequests?.some(r => r.user_id === am?.user_id && r.site_id === site.site_id);
-    const amAvailable = !amOffToday && !amOnLeave && !isPublicHolidayToday;
+    
+    // Replacement logic (same as manager):
+    const amWorkingOnOffday = amOffToday && amReplacementToday;
+    const amRegularOffday = amOffToday && !amReplacementToday;
+    const amReplacementOffday = !amOffToday && amReplacementToday;
+    const amAvailable = !amRegularOffday && !amReplacementOffday && !amOnLeave && !isPublicHolidayToday;
     
     return {
       siteName: site.site_name,
@@ -1442,7 +1981,7 @@ function renderAdminRequestCard(req) {
             ${new Date(req.leave_date).toLocaleDateString('en-MY', {weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'})}
             • <span class="font-semibold">${req.request_type}</span>
           </div>
-          ${req.notes ? `<div class="text-xs text-slate-500 mb-2"><i class="fa-solid fa-note-sticky mr-1"></i> ${req.notes}</div>` : ''}
+          ${req.notes ? `<div class="text-xs text-slate-500 mb-2"><i class="fa-solid fa-note-sticky mr-1"></i> ${req.notes.replace(/\n/g, '<br>')}</div>` : ''}
           <div class="status-badge badge-${req.status.toLowerCase().replace(' ', '-')}">${req.status}</div>
         </div>
         <div class="flex gap-2">
@@ -1636,6 +2175,594 @@ function setupLeaveSystemListeners() {
       }
     });
   }
+}
+
+// =====================================================
+// SUPERVISOR: View Staff Calendars (View Only Mode)
+// =====================================================
+
+// Global state for staff viewing
+let viewingStaffUser = null;
+let viewingStaffRequests = [];
+let viewingCalendarDate = new Date();
+let staffViewSites = [];
+
+// Show staff calendars panel for supervisor
+async function showStaffCalendarsPanel() {
+  if (currentLeaveUser?.role !== 'Supervisor') return;
+  
+  document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => el.remove());
+  
+  const panel = document.createElement('div');
+  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
+  panel.id = 'staffCalendarsPanel';
+  panel.innerHTML = `
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="document.getElementById('staffCalendarsPanel').remove()"></div>
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-md my-4 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
+        <h2 class="text-xl font-bold text-slate-800">View Staff Calendars</h2>
+        <p class="text-sm text-slate-500">Select site and role to view calendar</p>
+      </div>
+      <div class="p-6">
+        <div id="staffViewContent">
+          <div class="text-center py-8"><div class="spinner mx-auto"></div></div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+  
+  await loadStaffViewForm();
+}
+
+// Load the staff view form (similar to login)
+async function loadStaffViewForm() {
+  try {
+    // Fetch all sites
+    const { data: sites, error: sitesError } = await supabaseClient
+      .from('sites')
+      .select('*')
+      .order('site_name');
+    
+    if (sitesError) throw sitesError;
+    
+    staffViewSites = sites;
+    
+    // Build site grid (same style as login)
+    const siteGrid = sites.map(site => `
+      <label class="relative cursor-pointer">
+        <input type="radio" name="viewSite" value="${site.site_id}" class="sr-only peer" />
+        <div class="border-2 border-slate-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 rounded-lg p-2 text-center transition-all hover:border-slate-300">
+          <div class="text-[10px] font-bold text-slate-800 leading-tight">${site.site_name}</div>
+        </div>
+      </label>
+    `).join('');
+    
+    const container = document.getElementById('staffViewContent');
+    container.innerHTML = `
+      <!-- Site Selection -->
+      <div class="mb-6">
+        <label class="block text-xs font-bold text-slate-600 mb-2">Select Site</label>
+        <div class="grid grid-cols-3 gap-2" id="viewSiteGrid">
+          ${siteGrid}
+        </div>
+      </div>
+      
+      <!-- Role Selection -->
+      <div class="mb-6">
+        <label class="block text-xs font-bold text-slate-600 mb-2">Select Role</label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="relative cursor-pointer">
+            <input type="radio" name="viewRole" value="Manager" class="sr-only peer" />
+            <div class="border-2 border-slate-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 rounded-lg p-3 text-center transition-all hover:border-slate-300">
+              <i class="fa-solid fa-user-tie text-blue-600 text-xl mb-1"></i>
+              <div class="text-xs font-bold text-slate-800">Manager</div>
+            </div>
+          </label>
+          <label class="relative cursor-pointer">
+            <input type="radio" name="viewRole" value="Assistant Manager" class="sr-only peer" />
+            <div class="border-2 border-slate-200 peer-checked:border-green-500 peer-checked:bg-green-50 rounded-lg p-3 text-center transition-all hover:border-slate-300">
+              <i class="fa-solid fa-user text-green-600 text-xl mb-1"></i>
+              <div class="text-xs font-bold text-slate-800">Assistant Manager</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      
+      <!-- View Button -->
+      <button onclick="handleViewStaffCalendar()" class="w-full btn btn-primary">
+        <i class="fa-solid fa-calendar-days mr-2"></i> View Staff Calendar
+      </button>
+    `;
+    
+  } catch (error) {
+    console.error('Error loading staff view form:', error);
+    document.getElementById('staffViewContent').innerHTML = `
+      <div class="text-center py-8 text-red-600">
+        <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
+        <p>Error loading sites</p>
+      </div>
+    `;
+  }
+}
+
+// Handle view staff calendar button click
+async function handleViewStaffCalendar() {
+  const siteId = document.querySelector('input[name="viewSite"]:checked')?.value;
+  const role = document.querySelector('input[name="viewRole"]:checked')?.value;
+  
+  if (!siteId || !role) {
+    showToast('Please select both site and role', 'error');
+    return;
+  }
+  
+  try {
+    // Find the staff member
+    const { data: user, error } = await supabaseClient
+      .from('leave_users')
+      .select('*, sites(*)')
+      .eq('site_id', siteId)
+      .eq('role', role)
+      .eq('is_active', true)
+      .single();
+    
+    if (error || !user) {
+      showToast('No staff found for this site and role', 'error');
+      return;
+    }
+    
+    // Close current panel
+    document.getElementById('staffCalendarsPanel')?.remove();
+    
+    // Open staff calendar view
+    viewStaffCalendarById(user.user_id, user.full_name, user.role, user.sites?.site_name || 'Unknown');
+    
+  } catch (error) {
+    console.error('Error finding staff:', error);
+    showToast('Error loading staff', 'error');
+  }
+}
+
+// View staff calendar by ID (called after selection)
+async function viewStaffCalendarById(userId, fullName, role, siteName) {
+  viewingStaffUser = { user_id: userId, full_name: fullName, role: role, site_name: siteName };
+  viewingCalendarDate = new Date();
+  
+  // Load offday data from site settings (for supervisor viewing)
+  await syncMainCalendarOffdays();
+  
+  // Load staff's leave requests
+  const { data: requests, error } = await supabaseClient
+    .from('leave_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('leave_date', { ascending: false });
+  
+  if (error) {
+    showToast('Error loading staff calendar', 'error');
+    return;
+  }
+  
+  viewingStaffRequests = requests || [];
+  
+  // Determine role color
+  const roleColor = role === 'Manager' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600';
+  
+  // Create calendar panel
+  const panel = document.createElement('div');
+  panel.className = 'fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
+  panel.id = 'staffCalendarViewPanel';
+  panel.innerHTML = `
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="document.getElementById('staffCalendarViewPanel').remove()"></div>
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-6xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
+      <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-center">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center ${roleColor}">
+            <i class="fa-solid fa-user"></i>
+          </div>
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">${fullName}</h2>
+            <p class="text-sm text-slate-500">${role} - ${siteName}</p>
+          </div>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex flex-col xl:flex-row gap-6">
+          <!-- Calendar -->
+          <div class="flex-1" style="min-width: 500px;">
+            <div class="bg-white rounded-lg border border-slate-200 p-4">
+              <!-- Month Navigation -->
+              <div class="flex items-center justify-between mb-3">
+                <button onclick="changeViewingCalendarMonth(-1)" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center">
+                  <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <div class="text-center">
+                  <div id="viewingCalendarMonth" class="text-lg font-bold text-slate-900"></div>
+                  <div id="viewingCalendarYear" class="text-xs font-semibold text-slate-400"></div>
+                </div>
+                <button onclick="changeViewingCalendarMonth(1)" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 flex items-center justify-center">
+                  <i class="fa-solid fa-chevron-right"></i>
+                </button>
+              </div>
+              
+              <!-- Calendar Grid -->
+              <div class="grid grid-cols-7 gap-1 mb-2">
+                <div class="text-center text-[10px] font-bold text-slate-400">SUN</div>
+                <div class="text-center text-[10px] font-bold text-slate-400">MON</div>
+                <div class="text-center text-[10px] font-bold text-slate-400">TUE</div>
+                <div class="text-center text-[10px] font-bold text-slate-400">WED</div>
+                <div class="text-center text-[10px] font-bold text-slate-400">THU</div>
+                <div class="text-center text-[10px] font-bold text-slate-400">FRI</div>
+                <div class="text-center text-[10px] font-bold text-slate-400">SAT</div>
+              </div>
+              <div id="viewingCalendarGrid" class="grid grid-cols-7 gap-1 relative"></div>
+              
+              <!-- Legend -->
+              <div class="mt-3 pt-2 border-t border-slate-100">
+                <div class="grid grid-cols-4 gap-2 text-[8px] font-semibold text-slate-500">
+                  <div class="flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-yellow-400"></span> Pending
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span> Approved
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-red-500"></span> Rejected
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <span class="w-2 h-1 rounded-sm ${role === 'Manager' ? 'bg-[#00aff0]' : 'bg-[#90cf53]'}"></span> ${role === 'Manager' ? 'M Off' : 'AM Off'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Leave Requests List -->
+          <div class="w-full xl:w-[500px] xl:flex-shrink-0">
+            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4" style="min-height: 400px;">
+              <h3 class="text-sm font-bold text-slate-800 mb-3">Leave Requests</h3>
+              <div id="viewingRequestsList" class="space-y-2 overflow-y-auto" style="max-height: calc(400px - 3rem);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between">
+        <button onclick="document.getElementById('staffCalendarViewPanel').remove(); showStaffCalendarsPanel();" class="btn btn-secondary btn-sm">
+          <i class="fa-solid fa-arrow-left mr-1"></i> Back
+        </button>
+        <button onclick="document.getElementById('staffCalendarViewPanel').remove()" class="btn btn-secondary btn-sm">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+  
+  renderViewingCalendar();
+  displayViewingRequestsList();
+}
+
+// Change viewing calendar month
+function changeViewingCalendarMonth(direction) {
+  viewingCalendarDate.setMonth(viewingCalendarDate.getMonth() + direction);
+  renderViewingCalendar();
+}
+
+// Render viewing calendar (view only - no click handlers)
+function renderViewingCalendar() {
+  const year = viewingCalendarDate.getFullYear();
+  const month = viewingCalendarDate.getMonth();
+  
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  document.getElementById('viewingCalendarMonth').textContent = monthNames[month];
+  document.getElementById('viewingCalendarYear').textContent = year;
+  
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const grid = document.getElementById('viewingCalendarGrid');
+  grid.innerHTML = '';
+  
+  // Add empty cells for days before month starts
+  for (let i = 0; i < firstDay; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'h-10';
+    grid.appendChild(cell);
+  }
+  
+  // Add cells for each day
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // Check if this date has a leave request
+    const leaveRequest = viewingStaffRequests.find(r => r.leave_date === dateStr);
+    
+    // Check holidays
+    const publicHoliday = mainCalendarHolidays.public ? mainCalendarHolidays.public[dateStr] : null;
+    let isSchoolHoliday = false;
+    if (mainCalendarHolidays.school) {
+      for (const [startStr, data] of Object.entries(mainCalendarHolidays.school)) {
+        if (data._deleted) continue;
+        const startDate = new Date(data.start || startStr);
+        const endDate = new Date(data.end || data.endDate);
+        if (date >= startDate && date <= endDate) {
+          isSchoolHoliday = true;
+          break;
+        }
+      }
+    }
+    
+    const isHoliday = publicHoliday || isSchoolHoliday;
+    const isToday = date.getTime() === today.getTime();
+    
+    // Check offdays based on staff role
+    const isOffday = viewingStaffUser.role === 'Manager' 
+      ? mainCalendarOffdays.manager.includes(dateStr)
+      : mainCalendarOffdays.am.includes(dateStr);
+    
+    const cell = document.createElement('div');
+    cell.className = `min-h-[40px] w-full rounded-lg flex flex-col items-center justify-center relative py-1 ${
+      isToday ? 'bg-blue-50 ring-2 ring-blue-500' :
+      leaveRequest ? 
+        leaveRequest.status === 'Pending' ? 'bg-yellow-100 border border-yellow-400' :
+        leaveRequest.status === 'Approved' ? 'bg-green-100 border border-green-400' :
+        'bg-red-100 border border-red-400' :
+      isHoliday ? 'bg-slate-100' :
+      'bg-white'
+    }`;
+    
+    // Number wrapper
+    const numWrapper = document.createElement('div');
+    numWrapper.className = 'flex items-center justify-center relative w-6 h-6';
+    
+    // Holiday circle
+    if (publicHoliday) {
+      const circle = document.createElement('span');
+      circle.className = 'absolute inset-0 rounded-full bg-slate-300 z-0';
+      numWrapper.appendChild(circle);
+    } else if (isSchoolHoliday) {
+      const circle = document.createElement('span');
+      circle.className = 'absolute inset-0 rounded-full bg-[#fff59c] z-0';
+      numWrapper.appendChild(circle);
+    }
+    
+    // Date number
+    const numSpan = document.createElement('span');
+    numSpan.textContent = day;
+    numSpan.className = `relative z-20 text-xs font-medium text-slate-800 ${isToday ? 'font-bold text-blue-700' : ''}`;
+    numWrapper.appendChild(numSpan);
+    cell.appendChild(numWrapper);
+    
+    // Add offday line
+    if (isOffday) {
+      const line = document.createElement('div');
+      line.className = viewingStaffUser.role === 'Manager' ? 'offday-line-m' : 'offday-line-am';
+      cell.appendChild(line);
+    }
+    
+    // Check if this is a replacement request
+    const isReplacementRequest = leaveRequest && leaveRequest.request_type === 'Replacement Day';
+    
+    // Add orange line for staff replacement request dates (approved only)
+    if (isReplacementRequest && leaveRequest.status === 'Approved') {
+      const line = document.createElement('div');
+      line.className = viewingStaffUser.role === 'Manager' ? 'replacement-line-m-orange' : 'replacement-line-am-orange';
+      cell.appendChild(line);
+      
+      // Store replacement date info for connector
+      cell.dataset.replacementDate = dateStr;
+      cell.dataset.workedOffday = leaveRequest.replacement_offday_date;
+    }
+    
+    // Check if this date was worked on (original offday that was replaced)
+    const workedOnThisDate = viewingStaffRequests.find(r => 
+      r.request_type === 'Replacement Day' && 
+      r.replacement_offday_date === dateStr &&
+      r.status === 'Approved'
+    );
+    if (workedOnThisDate) {
+      // Add orange line ABOVE the green/blue offday line
+      const line = document.createElement('div');
+      line.className = viewingStaffUser.role === 'Manager' ? 'replacement-line-m-orange-upper' : 'replacement-line-am-orange-upper';
+      cell.appendChild(line);
+      
+      // Store info for connector arrow
+      cell.dataset.workedDate = dateStr;
+      cell.dataset.replacementFor = workedOnThisDate.leave_date;
+    }
+    
+    // Add status indicator for leave requests
+    if (leaveRequest) {
+      const indicator = document.createElement('div');
+      indicator.className = `absolute top-1 right-1 w-2 h-2 rounded-full ${
+        leaveRequest.status === 'Pending' ? 'bg-yellow-500' :
+        leaveRequest.status === 'Approved' ? 'bg-green-500' : 'bg-red-500'
+      }`;
+      cell.appendChild(indicator);
+    }
+    
+    grid.appendChild(cell);
+  }
+  
+  // Draw replacement connector arrows after all cells are rendered (with slight delay for DOM)
+  setTimeout(() => {
+    drawViewingReplacementConnectors();
+  }, 50);
+}
+
+// Draw connector arrows for viewing calendar (supervisor view)
+function drawViewingReplacementConnectors() {
+  const grid = document.getElementById('viewingCalendarGrid');
+  if (!grid) return;
+  
+  // Remove existing connectors
+  grid.querySelectorAll('.replacement-connector').forEach(el => el.remove());
+  
+  // Find all worked dates that have replacement links
+  const workedCells = grid.querySelectorAll('[data-worked-date]');
+  
+  workedCells.forEach(workedCell => {
+    const workedDate = workedCell.dataset.workedDate;
+    const replacementDate = workedCell.dataset.replacementFor;
+    
+    // Find the replacement date cell
+    const replacementCell = grid.querySelector(`[data-replacement-date="${replacementDate}"]`);
+    if (!replacementCell) return;
+    
+    // Get positions relative to the grid
+    const gridRect = grid.getBoundingClientRect();
+    const workedCellRect = workedCell.getBoundingClientRect();
+    const replacementCellRect = replacementCell.getBoundingClientRect();
+    
+    // Calculate center positions
+    const startCenterX = workedCellRect.left + workedCellRect.width / 2 - gridRect.left;
+    const startTopY = workedCellRect.top - gridRect.top + 8;
+    const endCenterX = replacementCellRect.left + replacementCellRect.width / 2 - gridRect.left;
+    const endTopY = replacementCellRect.top - gridRect.top + 8;
+    
+    // Check if dates are on the same row
+    const sameRow = Math.abs(workedCellRect.top - replacementCellRect.top) < 10;
+    
+    // Create SVG container
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('replacement-connector');
+    svg.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 999;
+      overflow: visible;
+      opacity: 0.6;
+    `;
+    
+    let pathData;
+    let arrowPoints;
+    const arrowSize = 4;
+    
+    if (sameRow) {
+      // Same row: up, horizontal, down
+      const elbowY = startTopY - 8;
+      pathData = `
+        M ${startCenterX} ${startTopY}
+        L ${startCenterX} ${elbowY}
+        L ${endCenterX} ${elbowY}
+        L ${endCenterX} ${endTopY}
+      `;
+      arrowPoints = `
+        ${endCenterX},${endTopY}
+        ${endCenterX - arrowSize},${endTopY - arrowSize - 1}
+        ${endCenterX + arrowSize},${endTopY - arrowSize - 1}
+      `;
+    } else {
+      // Different rows: simple elbow
+      const midY = (startTopY + endTopY) / 2;
+      pathData = `
+        M ${startCenterX} ${startTopY}
+        L ${startCenterX} ${midY}
+        L ${endCenterX} ${midY}
+        L ${endCenterX} ${endTopY}
+      `;
+      arrowPoints = `
+        ${endCenterX},${endTopY}
+        ${endCenterX - arrowSize},${endTopY - arrowSize - 1}
+        ${endCenterX + arrowSize},${endTopY - arrowSize - 1}
+      `;
+    }
+    
+    // Create path
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathData);
+    path.setAttribute('stroke', '#ff8c00');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+    
+    // Create arrow
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    arrow.setAttribute('points', arrowPoints);
+    arrow.setAttribute('fill', '#ff8c00');
+    svg.appendChild(arrow);
+    
+    grid.appendChild(svg);
+  });
+}
+
+// Display viewing staff's leave requests list (two columns like staff view)
+function displayViewingRequestsList() {
+  const container = document.getElementById('viewingRequestsList');
+  if (!container) return;
+  
+  if (viewingStaffRequests.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 col-span-2">
+        <i class="fa-solid fa-calendar-xmark text-3xl text-slate-300 mb-2"></i>
+        <p class="text-xs text-slate-500">No leave requests</p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Separate requests by type
+  const leaveRequests = viewingStaffRequests.filter(r => r.request_type === 'Leave').slice(0, 10);
+  const replacementRequests = viewingStaffRequests.filter(r => r.request_type === 'Replacement Day').slice(0, 10);
+  
+  const statusColors = {
+    'Pending': 'bg-yellow-100 border-yellow-300 text-yellow-800',
+    'Approved': 'bg-green-100 border-green-300 text-green-800',
+    'Rejected': 'bg-red-100 border-red-300 text-red-800'
+  };
+  
+  // Generate Leave column HTML
+  const leaveHTML = leaveRequests.length > 0 ? leaveRequests.map(req => `
+    <div class="bg-white border border-slate-200 rounded-lg p-3 text-xs">
+      <div class="flex items-start justify-between mb-1">
+        <div class="flex-1 pr-2">
+          <div class="font-bold text-slate-800">${new Date(req.leave_date).toLocaleDateString('en-MY', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'})}</div>
+          ${req.notes ? `<div class="text-[10px] text-slate-500 mt-1">${req.notes.replace(/\n/g, '<br>')}</div>` : ''}
+        </div>
+        <span class="px-2 py-0.5 rounded-full text-[8px] font-semibold border flex-shrink-0 ${statusColors[req.status]}">${req.status}</span>
+      </div>
+    </div>
+  `).join('') : '<p class="text-xs text-slate-400 text-center py-4">No leave requests</p>';
+  
+  // Generate Replacement Day column HTML
+  const replacementHTML = replacementRequests.length > 0 ? replacementRequests.map(req => `
+    <div class="bg-white border border-slate-200 rounded-lg p-3 text-xs">
+      <div class="flex items-start justify-between mb-1">
+        <div class="flex-1 pr-2">
+          <div class="font-bold text-slate-800">${new Date(req.leave_date).toLocaleDateString('en-MY', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'})}</div>
+          ${req.notes ? `<div class="text-[10px] text-slate-500 mt-1">${req.notes.replace(/\n/g, '<br>')}</div>` : ''}
+        </div>
+        <span class="px-2 py-0.5 rounded-full text-[8px] font-semibold border flex-shrink-0 ${statusColors[req.status]}">${req.status}</span>
+      </div>
+    </div>
+  `).join('') : '<p class="text-xs text-slate-400 text-center py-4">No replacement requests</p>';
+  
+  // Combine in two-column layout
+  container.innerHTML = `
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <h4 class="text-xs font-bold text-blue-600 mb-2 flex items-center gap-1">
+          <i class="fa-solid fa-calendar-days"></i> Leave
+        </h4>
+        <div class="space-y-2">
+          ${leaveHTML}
+        </div>
+      </div>
+      <div>
+        <h4 class="text-xs font-bold text-green-600 mb-2 flex items-center gap-1">
+          <i class="fa-solid fa-calendar-plus"></i> Replacement Day
+        </h4>
+        <div class="space-y-2">
+          ${replacementHTML}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // Helper: Show toast
