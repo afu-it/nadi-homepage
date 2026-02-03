@@ -2491,19 +2491,17 @@ function renderEventList() {
     const hasSubmitLinks = ev.submitLinks && ev.submitLinks.length > 0;
     
     if (hasRegistrationLinks || hasSubmitLinks) {
-      actionLinksHtml = '<div class="mt-2 flex gap-2 flex-wrap">';
+      actionLinksHtml = '<div class="mt-2 flex flex-col gap-1">';
       
       // Add all registration links
       if (hasRegistrationLinks) {
         ev.registrationLinks.forEach((link) => {
           if (link.url) {
             actionLinksHtml += `
-              <a href="${link.url}" target="_blank" rel="noopener noreferrer" 
-                 class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors">
-                <i class="fa-solid fa-user-plus text-[9px]"></i>
-                Registration
-              </a>
-            `;
+            <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
+              <span class="font-bold text-slate-600 w-12 truncate shrink-0">${link.platform || 'NES'}</span>
+              <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline truncate flex-1 block">${link.url}</a>
+            </div>`;
           }
         });
       }
@@ -2513,12 +2511,10 @@ function renderEventList() {
         ev.submitLinks.forEach((link) => {
           if (link.url) {
             actionLinksHtml += `
-              <a href="${link.url}" target="_blank" rel="noopener noreferrer" 
-                 class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors">
-                <i class="fa-solid fa-paper-plane text-[9px]"></i>
-                Submit
-              </a>
-            `;
+            <div class="flex items-center gap-2 text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
+              <span class="font-bold text-slate-600 w-12 truncate shrink-0">${link.platform || 'Jotform'}</span>
+              <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline truncate flex-1 block">${link.url}</a>
+            </div>`;
           }
         });
       }
