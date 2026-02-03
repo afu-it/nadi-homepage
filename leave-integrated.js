@@ -5,7 +5,12 @@
 
 // Global leave management state
 let currentLeaveUser = null;
-let leaveRequestsCache = [];
+// OPTIMIZATION: Cache leave requests to avoid redundant queries
+let leaveRequestsCache = {
+  data: [],
+  timestamp: null,
+  userId: null
+};
 let siteAvailabilityCache = [];
 
 // Rate limiting for login attempts (prevent brute force)
@@ -111,7 +116,7 @@ async function loadSitesAndUsersForLogin() {
         
         const { data: users, error: usersError } = await supabaseClient
           .from('leave_users')
-          .select('*')
+          .select('user_id, site_id, full_name, role')
           .eq('site_id', siteId)
           .order('role');
         
@@ -188,10 +193,10 @@ async function showDashboard() {
 
 // Update leave statistics
 function updateLeaveStats() {
-  const pending = leaveRequestsCache.filter(r => r.status === 'Pending').length;
-  const approved = leaveRequestsCache.filter(r => r.status === 'Approved').length;
-  const rejected = leaveRequestsCache.filter(r => r.status === 'Rejected').length;
-  const total = leaveRequestsCache.length;
+  const pending = leaveRequestsCache.data.filter(r => r.status === 'Pending').length;
+  const approved = leaveRequestsCache.data.filter(r => r.status === 'Approved').length;
+  const rejected = leaveRequestsCache.data.filter(r => r.status === 'Rejected').length;
+  const total = leaveRequestsCache.data.length;
   
   const statPending = document.getElementById('statPending');
   const statApproved = document.getElementById('statApproved');
@@ -209,13 +214,13 @@ function renderLeaveRequestsList() {
   const container = document.getElementById('leaveRequestsList');
   if (!container) return;
   
-  if (leaveRequestsCache.length === 0) {
+  if (leaveRequestsCache.data.length === 0) {
     container.innerHTML = '<p class="text-gray-500 text-center py-8">No leave requests yet</p>';
     return;
   }
   
   // Sort by date (newest first)
-  const sorted = [...leaveRequestsCache].sort((a, b) => 
+  const sorted = [...leaveRequestsCache.data].sort((a, b) => 
     new Date(b.leave_date) - new Date(a.leave_date)
   );
   
@@ -567,6 +572,16 @@ function showUserMenu() {
 // Logout
 async function handleLeaveLogout() {
   if (await customConfirm('Are you sure you want to logout?')) {
+    // OPTIMIZATION: Unsubscribe from realtime updates
+    if (leaveSubscription) {
+      await supabaseClient.removeChannel(leaveSubscription);
+      leaveSubscription = null;
+      if (window.DEBUG_MODE) console.log('🔌 Unsubscribed from realtime updates');
+    }
+    
+    // Clear cache
+    leaveRequestsCache = { data: [], timestamp: null, userId: null };
+    
     localStorage.removeItem('leave_user');
     currentLeaveUser = null;
     updateLoginButton();
@@ -792,19 +807,50 @@ function toggleHolidayFilter(type, value) {
 }
 
 // Load and display user leave requests
-async function loadUserLeaveRequests() {
+async function loadUserLeaveRequests(forceRefresh = false) {
   if (!currentLeaveUser) return;
   
+  // OPTIMIZATION: Check cache first (5 minute TTL)
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  const now = Date.now();
+  
+  if (!forceRefresh && 
+      leaveRequestsCache.userId === currentLeaveUser.user_id &&
+      leaveRequestsCache.timestamp &&
+      (now - leaveRequestsCache.timestamp) < CACHE_TTL) {
+    if (window.DEBUG_MODE) console.log('✅ Using cached leave requests (age: ' + Math.floor((now - leaveRequestsCache.timestamp) / 1000) + 's)');
+    displayUserLeaveRequests();
+    
+    // Update stats if on standalone page
+    if (document.getElementById('statPending')) {
+      updateLeaveStats();
+      renderLeaveRequestsList();
+    }
+    
+    // Refresh calendar if it's open
+    if (document.getElementById('leaveCalendarGrid')) {
+      renderLeaveCalendar();
+    }
+    return;
+  }
+  
   try {
+    if (window.DEBUG_MODE) console.log('📥 Fetching leave requests from database...');
     const { data, error } = await supabaseClient
       .from('leave_requests')
-      .select('*')
+      .select('request_id, user_id, site_id, leave_date, request_type, status, notes, replacement_offday_date, requested_at, reviewed_by')
       .eq('user_id', currentLeaveUser.user_id)
       .order('leave_date', { ascending: false });
     
     if (error) throw error;
     
-    leaveRequestsCache = data || [];
+    // Update cache
+    leaveRequestsCache = {
+      data: data || [],
+      timestamp: now,
+      userId: currentLeaveUser.user_id
+    };
+    
     displayUserLeaveRequests();
     
     // Update stats if on standalone page
@@ -828,7 +874,7 @@ function displayUserLeaveRequests() {
   const container = document.getElementById('leaveRequestsList');
   if (!container) return;
   
-  if (leaveRequestsCache.length === 0) {
+  if (leaveRequestsCache.data.length === 0) {
     container.innerHTML = `
       <div class="text-center py-8 col-span-2">
         <i class="fa-solid fa-calendar-xmark text-3xl text-slate-300 mb-2"></i>
@@ -839,8 +885,8 @@ function displayUserLeaveRequests() {
   }
   
   // Separate requests by type
-  const leaveRequests = leaveRequestsCache.filter(r => r.request_type === 'Leave').slice(0, 10);
-  const replacementRequests = leaveRequestsCache.filter(r => r.request_type === 'Replacement Day').slice(0, 10);
+  const leaveRequests = leaveRequestsCache.data.filter(r => r.request_type === 'Leave').slice(0, 10);
+  const replacementRequests = leaveRequestsCache.data.filter(r => r.request_type === 'Replacement Day').slice(0, 10);
   
   // Generate Leave column HTML
   const leaveHTML = leaveRequests.length > 0 ? leaveRequests.map(req => `
@@ -1125,7 +1171,7 @@ function renderLeaveCalendar() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
     // Check if this date has a leave request
-    const leaveRequest = leaveRequestsCache.find(r => r.leave_date === dateStr);
+    const leaveRequest = leaveRequestsCache.data.find(r => r.leave_date === dateStr);
     
     // Check if this is M or AM off day
     const isManagerOff = mainCalendarOffdays.manager.includes(dateStr);
@@ -1272,7 +1318,7 @@ function renderLeaveCalendar() {
     }
     
     // Check if this date was worked on (original offday that was replaced)
-    const workedOnThisDate = leaveRequestsCache.find(r => 
+    const workedOnThisDate = leaveRequestsCache.data.find(r => 
       r.request_type === 'Replacement Day' && 
       r.replacement_offday_date === dateStr &&
       r.status === 'Approved'
@@ -1485,11 +1531,18 @@ window.addEventListener('resize', () => {
 });
 
 // Subscribe to realtime leave updates
+let leaveSubscription = null; // Track subscription for cleanup
+
 function subscribeToLeaveUpdates() {
   if (!currentLeaveUser) return;
   
+  // Unsubscribe from previous subscription if exists
+  if (leaveSubscription) {
+    supabaseClient.removeChannel(leaveSubscription);
+  }
+  
   // Use new Supabase Realtime API (v2)
-  supabaseClient
+  leaveSubscription = supabaseClient
     .channel('leave-requests-updates')
     .on(
       'postgres_changes',
@@ -1500,7 +1553,32 @@ function subscribeToLeaveUpdates() {
         filter: `user_id=eq.${currentLeaveUser.user_id}`
       },
       (payload) => {
-        loadUserLeaveRequests();
+        // OPTIMIZATION: Update cache incrementally instead of full reload
+        if (window.DEBUG_MODE) console.log('📡 Realtime event:', payload.eventType);
+        
+        if (payload.eventType === 'INSERT') {
+          // Add new request to cache
+          leaveRequestsCache.data.unshift(payload.new);
+        } else if (payload.eventType === 'UPDATE') {
+          // Update existing request in cache
+          const index = leaveRequestsCache.data.findIndex(r => r.request_id === payload.new.request_id);
+          if (index !== -1) {
+            leaveRequestsCache.data[index] = payload.new;
+          }
+        } else if (payload.eventType === 'DELETE') {
+          // Remove from cache
+          leaveRequestsCache.data = leaveRequestsCache.data.filter(r => r.request_id !== payload.old.request_id);
+        }
+        
+        // Update UI without refetching
+        displayUserLeaveRequests();
+        if (document.getElementById('statPending')) {
+          updateLeaveStats();
+          renderLeaveRequestsList();
+        }
+        if (document.getElementById('leaveCalendarGrid')) {
+          renderLeaveCalendar();
+        }
       }
     )
     .subscribe();
@@ -1520,7 +1598,7 @@ async function requestLeaveForDate(dateStr) {
   }
   
   // Check if already has a request for this date
-  const existingRequest = leaveRequestsCache.find(r => r.leave_date === dateStr);
+  const existingRequest = leaveRequestsCache.data.find(r => r.leave_date === dateStr);
   if (existingRequest) {
     if (existingRequest.status === 'Pending') {
       const cancelConfirm = await customConfirm(`You have a pending ${existingRequest.request_type} request for this date. Cancel it?`);
@@ -1666,8 +1744,8 @@ async function submitLeaveRequest(dateStr) {
       formModal.remove();
     }
     
-    // Reload data
-    await loadUserLeaveRequests();
+    // Reload data (force refresh since realtime might not trigger immediately)
+    await loadUserLeaveRequests(true);
     renderLeaveCalendar();
     
   } catch (error) {
@@ -1688,7 +1766,7 @@ async function cancelLeaveRequest(requestId) {
     if (error) throw error;
     
     showToast('Leave request cancelled', 'success');
-    loadUserLeaveRequests();
+    loadUserLeaveRequests(true); // Force refresh after cancellation
     
   } catch (error) {
     alert('Failed to cancel request');
@@ -1701,10 +1779,10 @@ async function showNADIAvailability() {
   const today = new Date().toISOString().split('T')[0];
   
   // Fetch all sites
-  const { data: sites, error: sitesError } = await supabaseClient
-    .from('sites')
-    .select('*')
-    .order('site_name');
+    const { data: sites, error: sitesError } = await supabaseClient
+      .from('sites')
+      .select('site_id, site_name')
+      .order('site_name');
     
   if (sitesError) {
     showToast('Failed to load sites', 'error');
@@ -1725,17 +1803,17 @@ async function showNADIAvailability() {
   // Fetch all users
   const { data: users, error: usersError } = await supabaseClient
     .from('leave_users')
-    .select('*')
+    .select('user_id, site_id, full_name, role')
     .neq('role', 'Supervisor');
     
   if (usersError) {
     console.error('Failed to load users:', usersError);
   }
   
-  // Fetch site settings to get offdays
+  // Fetch site settings to get offdays (optimized: select only id and settings)
   const { data: settings } = await supabaseClient
     .from('site_settings')
-    .select('*')
+    .select('id, settings')
     .in('id', [1, 10, 11, 12, 13, 20]);
     
   const basicSettings = settings?.find(s => s.id === 1) || {};
@@ -2331,10 +2409,10 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
   // Load offday data from site settings (for supervisor viewing)
   await syncMainCalendarOffdays();
   
-  // Load staff's leave requests
+  // Load staff's leave requests (optimized columns)
   const { data: requests, error } = await supabaseClient
     .from('leave_requests')
-    .select('*')
+    .select('request_id, user_id, site_id, leave_date, request_type, status, notes, replacement_offday_date, requested_at')
     .eq('user_id', userId)
     .order('leave_date', { ascending: false });
   

@@ -165,7 +165,7 @@ async function loadEventsForMonth(year, month) {
 
   const { data, error } = await supabaseClient
     .from('events')
-    .select('*')
+    .select('id, title, start, end, category, subcategory, time_start, time_end, location, notes')
     .or(`start.lte.${lastDay},end.gte.${firstDay}`)
     .order('start', { ascending: true });
   
@@ -594,48 +594,48 @@ async function loadFromSupabase() {
   if (window.DEBUG_MODE) console.log("🔄 Loading data from Supabase...");
   
   try {
-    // Load basic config (ID 1)
-    const { data: config } = await supabaseClient.from('site_settings').select('settings').eq('id', 1).single();
+    // OPTIMIZATION: Batch load all site_settings in ONE query (was 7 queries)
+    const { data: allSettings, error: settingsError } = await supabaseClient
+      .from('site_settings')
+      .select('id, settings')
+      .in('id', [1, 10, 11, 12, 13, 20, 21, 30]);
+
+    if (settingsError) throw settingsError;
+
+    // Map results by ID for easy access
+    const settingsMap = {};
+    (allSettings || []).forEach(item => {
+      settingsMap[item.id] = item.settings;
+    });
+
+    // Build siteSettings object from batched results
     siteSettings = {
-      title: config?.settings?.title || 'NADI SCSB',
-      subtitle: config?.settings?.subtitle || 'PULAU PINANG',
-      calendarFilters: config?.settings?.calendarFilters || {
+      // ID 1: Basic config
+      title: settingsMap[1]?.title || 'NADI SCSB',
+      subtitle: settingsMap[1]?.subtitle || 'PULAU PINANG',
+      calendarFilters: settingsMap[1]?.calendarFilters || {
         showCategories: true,
         showHolidays: true,
         showSchoolHolidays: true,
         showOffdays: true,
-      }
+      },
+      // ID 10: Manager offdays
+      managerOffdays: settingsMap[10]?.managerOffdays || [],
+      // ID 11: Assistant Manager offdays
+      assistantManagerOffdays: settingsMap[11]?.assistantManagerOffdays || [],
+      // ID 12: Manager replacements
+      managerReplacements: settingsMap[12]?.managerReplacements || [],
+      // ID 13: Assistant Manager replacements
+      assistantManagerReplacements: settingsMap[13]?.assistantManagerReplacements || [],
+      // ID 20: Public holidays
+      publicHolidays: settingsMap[20]?.publicHolidays || {},
+      // ID 21: School holidays
+      schoolHolidays: settingsMap[21]?.schoolHolidays || {},
+      // ID 30: Custom sections
+      sections: settingsMap[30]?.sections || []
     };
 
-    // Load manager offdays (ID 10)
-    const { data: offdays10 } = await supabaseClient.from('site_settings').select('settings').eq('id', 10).single();
-    siteSettings.managerOffdays = offdays10?.settings?.managerOffdays || [];
-
-    // Load assistant manager offdays (ID 11)
-    const { data: offdays11 } = await supabaseClient.from('site_settings').select('settings').eq('id', 11).single();
-    siteSettings.assistantManagerOffdays = offdays11?.settings?.assistantManagerOffdays || [];
-
-    // Load manager replacements (ID 12)
-    const { data: replace12 } = await supabaseClient.from('site_settings').select('settings').eq('id', 12).single();
-    siteSettings.managerReplacements = replace12?.settings?.managerReplacements || [];
-
-    // Load assistant manager replacements (ID 13)
-    const { data: replace13 } = await supabaseClient.from('site_settings').select('settings').eq('id', 13).single();
-    siteSettings.assistantManagerReplacements = replace13?.settings?.assistantManagerReplacements || [];
-
-    // Load public holidays (ID 20)
-    const { data: holidays20 } = await supabaseClient.from('site_settings').select('settings').eq('id', 20).single();
-    siteSettings.publicHolidays = holidays20?.settings?.publicHolidays || {};
-
-    // Load school holidays (ID 21)
-    const { data: holidays21 } = await supabaseClient.from('site_settings').select('settings').eq('id', 21).single();
-    siteSettings.schoolHolidays = holidays21?.settings?.schoolHolidays || {};
-
-    // Load custom sections (ID 30)
-    const { data: sections30 } = await supabaseClient.from('site_settings').select('settings').eq('id', 30).single();
-    siteSettings.sections = sections30?.settings?.sections || [];
-
-    if (window.DEBUG_MODE) console.log('✅ Loaded all settings from organized structure');
+    if (window.DEBUG_MODE) console.log('✅ Loaded all settings in 1 batched query (was 7)');
 
     // =====================================================
     // OPTIMIZATION: Load events for CURRENT MONTH only (with caching)
@@ -655,7 +655,7 @@ async function loadFromSupabase() {
     // Load announcements asynchronously (doesn't block UI)
     supabaseClient
       .from('announcements')
-      .select('*')
+      .select('id, title, content, category, subcategory, created_at')
       .then(({ data: announcementsData, error: announcementsError }) => {
         if (announcementsError) {
           console.error("Error loading announcements:", announcementsError);
