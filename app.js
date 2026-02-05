@@ -2589,13 +2589,9 @@ function openModal(id = null, dateHint = null) {
 
     programInfoContent = ev.info || "";
     updateProgramInfoPreview();
-    const hasInfo = !!ev.info;
     const infoContainer = document.getElementById("programInfoContainer");
-
-    if (hasInfo) {
+    if (infoContainer) {
       infoContainer.classList.remove("hidden");
-    } else {
-      infoContainer.classList.add("hidden");
     }
 
     const catRadio = document.querySelector(`input[name="category"][value="${ev.category}"]`);
@@ -2707,7 +2703,10 @@ function openModal(id = null, dateHint = null) {
     document.getElementById("eventId").value = "";
     document.getElementById("eventTitle").value = "";
     document.getElementById("programInfoContainer").classList.remove("hidden");
-    document.getElementById("subcategorySection").classList.add("hidden");
+    const subcategorySelect = document.getElementById("subcategory");
+    if (subcategorySelect) subcategorySelect.value = "";
+    const checkedCategory = document.querySelector('input[name="category"]:checked');
+    updateSubcategories(checkedCategory ? checkedCategory.value : null);
 
     programInfoContent = "";
     updateProgramInfoPreview();

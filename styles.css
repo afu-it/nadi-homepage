@@ -212,10 +212,45 @@ body {
   border: none !important;
 }
 #richTextEditor {
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.4;
   font-family: inherit;
-  color: inherit;
+  color: #334155;
+  caret-color: #000000;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 1v10M4 1h4M4 11h4' stroke='black' stroke-width='0.75' stroke-linecap='square' fill='none'/%3E%3C/svg%3E") 6 6, text;
+}
+#richTextEditor * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 1v10M4 1h4M4 11h4' stroke='black' stroke-width='0.75' stroke-linecap='square' fill='none'/%3E%3C/svg%3E") 6 6, text;
+}
+#announcementEditor {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 1v10M4 1h4M4 11h4' stroke='black' stroke-width='0.75' stroke-linecap='square' fill='none'/%3E%3C/svg%3E") 6 6, text;
+  caret-color: #000000;
+}
+#announcementEditor * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 1v10M4 1h4M4 11h4' stroke='black' stroke-width='0.75' stroke-linecap='square' fill='none'/%3E%3C/svg%3E") 6 6, text;
+}
+#announcementImageModal.image-modal-full {
+  padding-left: 0;
+  padding-right: 0;
+}
+#announcementImageModal.image-modal-full #announcementImagePanel {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#announcementImageModal.image-modal-full #announcementImageHeader,
+#announcementImageModal.image-modal-full #announcementImageFooter {
+  display: none;
+}
+#announcementImageModal.image-modal-full #announcementImageStage {
+  padding: 24px;
+  background: transparent;
+}
+#announcementImageModal.image-modal-full #announcementImagePreviewLarge {
+  max-height: calc(100vh - 48px);
 }
 #richTextEditor:empty:before {
   content: attr(placeholder);

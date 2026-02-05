@@ -1008,6 +1008,7 @@
                     <select
                       id="timeMinute"
                       name="timeMinute"
+                      onchange="updateEndTime()"
                       class="px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-mono w-12"
                     >
                       <option value="00">00</option>
@@ -1019,6 +1020,7 @@
                     <select
                       id="timeAMPM"
                       name="timeAMPM"
+                      onchange="updateEndTime()"
                       class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none text-center font-bold w-16"
                     >
                       <option value="AM" selected>AM</option>
@@ -1251,8 +1253,8 @@
                   <option value="8">8px</option>
                   <option value="8.5">8.5px</option>
                   <option value="9">9px</option>
-                  <option value="10" selected>10px (Default)</option>
-                  <option value="10.5">10.5px</option>
+                  <option value="10">10px</option>
+                  <option value="10.5" selected>10.5px (Default)</option>
                   <option value="11">11px</option>
                   <option value="11.5">11.5px</option>
                   <option value="12">12px</option>

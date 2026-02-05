@@ -137,117 +137,147 @@
       </div>
     </main>
 
-    <div id="addForm" class="hidden fixed top-20 right-4 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
-      <div class="px-4 py-3 bg-nadi flex justify-between items-center">
-        <h3 class="text-xs font-bold text-white">Create Announcement</h3>
+    <div id="addForm" class="hidden fixed top-20 right-4 w-[92vw] max-w-md bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+      <div class="px-5 py-4 bg-nadi flex justify-between items-center">
+        <h3 class="text-sm font-bold text-white">Create Announcement</h3>
         <button onclick="annHideAddForm()" class="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors">
           <i class="fa-solid fa-xmark text-xs"></i>
         </button>
       </div>
-      <div class="p-4 space-y-3 max-h-[calc(100vh-180px)] overflow-y-auto">
+      <div class="p-5 space-y-4 max-h-[calc(100vh-180px)] overflow-y-auto">
         <div>
           <label for="announcementTitle" class="sr-only">Title</label>
-          <input type="text" id="announcementTitle" name="announcementTitle" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" placeholder="Title..." />
+          <input type="text" id="announcementTitle" name="announcementTitle" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-nadi" placeholder="Title..." />
         </div>
         <div class="grid grid-cols-5 gap-1">
           <label class="relative cursor-pointer group">
             <input type="radio" id="annCategoryUrgent" name="annCategory" value="Urgent" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-red-700 peer-checked:border-red-400 peer-checked:bg-red-50 text-center transition-all flex items-center justify-center">
-              <span class="text-[8px] font-bold uppercase">Urgent</span>
+              <span class="text-[9px] font-bold uppercase">Urgent</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
             <input type="radio" id="annCategoryTP" name="annCategory" value="TP" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-slate-600 peer-checked:border-slate-400 peer-checked:bg-slate-100 text-center transition-all flex items-center justify-center">
-              <span class="text-[8px] font-bold uppercase">TP</span>
+              <span class="text-[9px] font-bold uppercase">TP</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
             <input type="radio" id="annCategorySamudra" name="annCategory" value="Samudra" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-cyan-700 peer-checked:border-cyan-400 peer-checked:bg-cyan-50 text-center transition-all flex items-center justify-center">
-              <span class="text-[8px] font-bold uppercase">Samudra</span>
+              <span class="text-[9px] font-bold uppercase">Samudra</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
             <input type="radio" id="annCategoryMaxis" name="annCategory" value="Maxis" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-rose-700 peer-checked:border-rose-400 peer-checked:bg-rose-50 text-center transition-all flex items-center justify-center">
-              <span class="text-[8px] font-bold uppercase">Maxis</span>
+              <span class="text-[9px] font-bold uppercase">Maxis</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
             <input type="radio" id="annCategorySSO" name="annCategory" value="SSO" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-nadi peer-checked:border-nadi peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center">
-              <span class="text-[8px] font-bold uppercase">SSO</span>
+              <span class="text-[9px] font-bold uppercase">SSO</span>
             </div>
           </label>
         </div>
         <div id="ssoMainContainer" class="hidden">
-          <div aria-label="SSO Main Category Selection" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Category</div>
+          <div aria-label="SSO Main Category Selection" class="text-[11px] font-bold text-slate-500 uppercase block mb-1.5">SSO Category</div>
           <div class="grid grid-cols-2 gap-1.5">
             <label class="relative cursor-pointer group">
               <input type="radio" id="ssoCategoryUsahawan" name="ssoCategory" value="Usahawan" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-yellow-700 peer-checked:border-yellow-400 peer-checked:bg-yellow-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
-                <span class="text-[9px] font-bold uppercase">Usahawan</span>
+                <span class="text-[10px] font-bold uppercase">Usahawan</span>
               </div>
             </label>
             <label class="relative cursor-pointer group">
               <input type="radio" id="ssoCategoryKesejahteraan" name="ssoCategory" value="Kesejahteraan Kendiri" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-emerald-700 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span class="text-[9px] font-bold uppercase">Kesejahteraan</span>
+                <span class="text-[10px] font-bold uppercase">Kesejahteraan</span>
               </div>
             </label>
             <label class="relative cursor-pointer group">
               <input type="radio" id="ssoCategoryKesedaran" name="ssoCategory" value="Kesedaran" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-violet-700 peer-checked:border-violet-400 peer-checked:bg-violet-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
-                <span class="text-[9px] font-bold uppercase">Kesedaran</span>
+                <span class="text-[10px] font-bold uppercase">Kesedaran</span>
               </div>
             </label>
             <label class="relative cursor-pointer group">
               <input type="radio" id="ssoCategoryKerajaan" name="ssoCategory" value="Inisiatif Kerajaan" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-red-700 peer-checked:border-red-400 peer-checked:bg-red-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                <span class="text-[9px] font-bold uppercase">Kerajaan</span>
+                <span class="text-[10px] font-bold uppercase">Kerajaan</span>
               </div>
             </label>
             <label class="relative cursor-pointer group col-span-2">
               <input type="radio" id="ssoCategoryPembelajaran" name="ssoCategory" value="Pembelajaran Sepanjang Hayat" onchange="annSSOMainChanged()" class="peer sr-only" />
               <div class="px-2 py-1.5 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-blue-700 peer-checked:border-blue-400 peer-checked:bg-blue-50 text-center transition-all flex items-center justify-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                <span class="text-[9px] font-bold uppercase">Pembelajaran Sepanjang Hayat</span>
+                <span class="text-[10px] font-bold uppercase">Pembelajaran Sepanjang Hayat</span>
               </div>
             </label>
           </div>
         </div>
         <div id="ssoSubContainer" class="hidden">
-          <div aria-label="SSO Subcategory Selection" class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">SSO Subcategory</div>
+          <div aria-label="SSO Subcategory Selection" class="text-[11px] font-bold text-slate-500 uppercase block mb-1.5">SSO Subcategory</div>
           <div id="ssoSubRadioContainer" class="grid grid-cols-2 gap-1.5"></div>
         </div>
         <div>
-          <div class="text-[10px] font-bold text-slate-500 uppercase block mb-1.5">Content</div>
+          <div class="text-[11px] font-bold text-slate-500 uppercase block mb-1.5">Content</div>
         </div>
         <div class="border border-slate-200 rounded-lg overflow-hidden">
-          <div class="flex gap-0.5 p-1.5 bg-slate-100 border-b border-slate-200">
-            <button type="button" onclick="annExecFormat('bold')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Bold"><i class="fa-solid fa-bold text-[10px]"></i></button>
-            <button type="button" onclick="annExecFormat('italic')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Italic"><i class="fa-solid fa-italic text-[10px]"></i></button>
-            <button type="button" onclick="annExecFormat('underline')" class="w-7 h-7 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Underline"><i class="fa-solid fa-underline text-[10px]"></i></button>
+          <div class="flex gap-1 p-2 bg-slate-100 border-b border-slate-200">
+            <button type="button" onclick="annExecFormat('bold')" class="w-8 h-8 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Bold"><i class="fa-solid fa-bold text-xs"></i></button>
+            <button type="button" onclick="annExecFormat('italic')" class="w-8 h-8 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Italic"><i class="fa-solid fa-italic text-xs"></i></button>
+            <button type="button" onclick="annExecFormat('underline')" class="w-8 h-8 rounded hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" title="Underline"><i class="fa-solid fa-underline text-xs"></i></button>
             <label for="annFontSize" class="sr-only">Font Size</label>
-            <select id="annFontSize" name="annFontSize" onchange="annChangeFontSize(this.value)" class="px-1.5 h-7 bg-white border border-slate-200 rounded text-[10px] font-semibold outline-none cursor-pointer text-slate-600">
+            <select id="annFontSize" name="annFontSize" onchange="annChangeFontSize(this.value)" class="px-2 h-8 bg-white border border-slate-200 rounded text-xs font-semibold outline-none cursor-pointer text-slate-600">
               <option value="" disabled selected>Size</option>
               <option value="11">11</option>
               <option value="12">12</option>
             </select>
-            <button type="button" onclick="annInsertLink()" class="w-7 h-7 rounded hover:bg-slate-200 text-blue-600 flex items-center justify-center transition-colors" title="Link"><i class="fa-solid fa-link text-[10px]"></i></button>
+            <button type="button" onclick="annInsertLink()" class="w-8 h-8 rounded hover:bg-slate-200 text-blue-600 flex items-center justify-center transition-colors" title="Link"><i class="fa-solid fa-link text-xs"></i></button>
           </div>
-          <div id="announcementEditor" contenteditable="true" class="w-full min-h-[80px] p-2 bg-white text-xs text-slate-700 outline-none" placeholder="Details..."></div>
+          <div id="announcementEditor" contenteditable="true" class="w-full min-h-[120px] p-3 bg-white text-sm text-slate-700 outline-none" placeholder="Details..."></div>
+        </div>
+        <div id="announcementImagesSection">
+          <div class="text-[11px] font-bold text-slate-500 uppercase block mb-1.5">Images (Optional)</div>
+          <div
+            id="announcementImageDropzone"
+            class="border-2 border-dashed border-slate-200 rounded-lg p-3 bg-white text-center text-xs text-slate-500"
+            ondragover="annHandleImageDragOver(event)"
+            ondragenter="annHandleImageDragOver(event)"
+            ondragleave="annHandleImageDragLeave(event)"
+            ondrop="annHandleImageDrop(event)"
+          >
+            <p class="font-semibold text-slate-600">Drag & drop images here</p>
+            <p class="text-[10px] text-slate-400 mt-1">or</p>
+            <button id="announcementImagesButton" type="button" onclick="annTriggerImagePicker()" class="mt-2 inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors">
+              <i class="fa-regular fa-image"></i> Upload Images
+            </button>
+            <input
+              type="file"
+              id="announcementImages"
+              name="announcementImages"
+              accept="image/*"
+              multiple
+              onchange="annHandleImageSelection(this)"
+              class="hidden"
+            />
+            <p class="text-[10px] text-slate-400 mt-2">Max 5 MB per image.</p>
+            <p id="announcementImagesDisabledNote" class="hidden text-[10px] text-red-500 mt-2">Images are disabled until the `images` column exists in Supabase.</p>
+          </div>
+          <div id="announcementImagePreview" class="grid grid-cols-3 gap-2 mt-2"></div>
+          <p class="text-[10px] text-slate-400 mt-1">Click a thumbnail to preview. Use the X to remove.</p>
         </div>
           <label for="announcementDueDate" class="sr-only">Due Date</label>
-          <input type="date" id="announcementDueDate" name="announcementDueDate" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-nadi" />
+          <input type="date" id="announcementDueDate" name="announcementDueDate" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-nadi" />
         <div class="flex gap-2">
-          <button onclick="annSaveAnnouncement()" class="flex-1 py-2 bg-nadi hover:bg-[#1b1d8a] text-white text-xs font-bold rounded-lg shadow transition-colors">Save</button>
-          <button onclick="annHideAddForm()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-bold rounded-lg transition-colors">Cancel</button>
+          <button onclick="annSaveAnnouncement()" class="flex-1 py-2.5 bg-nadi hover:bg-[#1b1d8a] text-white text-sm font-bold rounded-lg shadow transition-colors">Save</button>
+          <button onclick="annHideAddForm()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-600 text-sm font-bold rounded-lg transition-colors">Cancel</button>
         </div>
       </div>
     </div>
@@ -296,6 +326,45 @@
         </div>
       </div>
     </div>
+    
+    <div id="announcementImageModal" class="fixed inset-0 z-50 hidden" onclick="handleAnnouncementImageOverlayClick(event)">
+      <div id="announcementImageBackdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div id="announcementImagePanel" class="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden">
+          <div id="announcementImageHeader" class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+            <h3 class="text-sm font-bold text-slate-900">Image Preview</h3>
+            <button onclick="closeAnnouncementImageViewer()" class="w-7 h-7 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+          <div id="announcementImageStage" class="p-4 bg-slate-50 flex items-center justify-center">
+            <div id="announcementImageFrame" class="relative inline-flex max-w-full">
+              <img id="announcementImagePreviewLarge" src="" alt="Announcement image" class="max-h-[80vh] max-w-full w-auto rounded border border-slate-200 bg-white" />
+              <button id="announcementImagePrev" onclick="showPrevAnnouncementImage()" class="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-chevron-left"></i>
+              </button>
+              <button id="announcementImageNext" onclick="showNextAnnouncementImage()" class="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+              <button id="announcementImageFullscreen" onclick="toggleAnnouncementImageFullscreen()" class="absolute right-2 bottom-2 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors" aria-label="Toggle full view">
+                <i id="announcementImageFullscreenIcon" class="fa-solid fa-expand"></i>
+              </button>
+            </div>
+          </div>
+          <div id="announcementImageFooter" class="px-4 py-3 border-t border-slate-100 bg-white flex flex-wrap items-center justify-between gap-2">
+            <span id="announcementImageCounter" class="text-[11px] text-slate-500 font-semibold"></span>
+            <div class="flex items-center gap-2">
+              <button onclick="copyAnnouncementImage()" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                Copy Image
+              </button>
+              <button onclick="downloadAnnouncementImage()" class="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors">
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script src="config.js"></script>
     <script>
@@ -317,11 +386,407 @@
       let currentSSOSubFilter = "";
       let currentSSOSubSubFilter = "";
       let annEditingId = null;
+      const ANNOUNCEMENT_IMAGE_BUCKET = "announcement-images";
+      let announcementImagesEnabled = true;
+      let annExistingImages = [];
+      let annNewImageFiles = [];
+      let annRemovedImages = [];
+      let annNewImagePreviewUrls = [];
+      let currentAnnouncementImageUrl = "";
+      let currentAnnouncementImageName = "";
+      let currentAnnouncementImageList = [];
+      let currentAnnouncementImageIndex = 0;
+      let announcementImageMap = {};
+      let announcementImageMaximized = false;
+      const ANNOUNCEMENT_IMAGE_DISABLED_MSG = "Images are disabled until the `images` column exists in Supabase.";
+
+      function isMissingColumnError(error) {
+        if (!error) return false;
+        if (error.code === "42703") return true;
+        const message = typeof error.message === "string" ? error.message : "";
+        return /column .* does not exist/i.test(message);
+      }
+
+      function escapeAttribute(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function normalizeAnnouncementImages(images) {
+        if (!Array.isArray(images)) return [];
+        return images
+          .map((img) => {
+            if (!img) return null;
+            if (typeof img === "string") return { url: img, path: null, name: "" };
+            const url = img.url || img.publicUrl || img.href || "";
+            return url ? { url: url, path: img.path || null, name: img.name || "" } : null;
+          })
+          .filter(Boolean);
+      }
+
+      function resetAnnouncementImageState() {
+        annExistingImages = [];
+        annNewImageFiles = [];
+        annRemovedImages = [];
+        annNewImagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+        annNewImagePreviewUrls = [];
+        const input = document.getElementById("announcementImages");
+        if (input) input.value = "";
+        const preview = document.getElementById("announcementImagePreview");
+        if (preview) preview.innerHTML = "";
+      }
+
+      function setAnnouncementImagesEnabled(isEnabled) {
+        announcementImagesEnabled = isEnabled;
+        const input = document.getElementById("announcementImages");
+        const button = document.getElementById("announcementImagesButton");
+        const note = document.getElementById("announcementImagesDisabledNote");
+        const zone = document.getElementById("announcementImageDropzone");
+
+        if (input) input.disabled = !isEnabled;
+        if (button) {
+          button.disabled = !isEnabled;
+          button.classList.toggle("opacity-50", !isEnabled);
+          button.classList.toggle("cursor-not-allowed", !isEnabled);
+        }
+        if (zone) {
+          zone.classList.toggle("opacity-60", !isEnabled);
+          zone.classList.toggle("cursor-not-allowed", !isEnabled);
+        }
+        if (note) note.classList.toggle("hidden", isEnabled);
+      }
+
+      function renderAnnouncementImagePreviews() {
+        const container = document.getElementById("announcementImagePreview");
+        if (!container) return;
+
+        annNewImagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+        annNewImagePreviewUrls = [];
+
+        const previewItems = [];
+
+        annExistingImages.forEach((img, index) => {
+          const safeUrl = escapeAttribute(img.url);
+          previewItems.push(`
+            <div class="relative group">
+              <button type="button" onclick="annOpenPreviewImage('existing', ${index})" class="block w-full">
+                <img src="${safeUrl}" alt="Announcement image" class="w-full h-24 object-cover rounded border border-slate-200" />
+              </button>
+              <button type="button" onclick="annRemoveExistingImage(${index})" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          `);
+        });
+
+        annNewImageFiles.forEach((file, index) => {
+          const previewUrl = URL.createObjectURL(file);
+          annNewImagePreviewUrls.push(previewUrl);
+          previewItems.push(`
+            <div class="relative group">
+              <button type="button" onclick="annOpenPreviewImage('new', ${index})" class="block w-full">
+                <img src="${escapeAttribute(previewUrl)}" alt="New image" class="w-full h-24 object-cover rounded border border-slate-200" />
+              </button>
+              <button type="button" onclick="annRemoveNewImage(${index})" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          `);
+        });
+
+        container.innerHTML = previewItems.join("");
+      }
+
+      function annTriggerImagePicker() {
+        if (!announcementImagesEnabled) {
+          alert(ANNOUNCEMENT_IMAGE_DISABLED_MSG);
+          return;
+        }
+        const input = document.getElementById("announcementImages");
+        if (input) input.click();
+      }
+
+      function annValidateImageFiles(files) {
+        const maxSize = 5 * 1024 * 1024;
+        const accepted = [];
+        const rejected = [];
+
+        files.forEach((file) => {
+          if (!file.type.startsWith("image/")) {
+            rejected.push(`${file.name} (not an image)`);
+            return;
+          }
+          if (file.size > maxSize) {
+            rejected.push(`${file.name} (over 5 MB)`);
+            return;
+          }
+          accepted.push(file);
+        });
+
+        if (rejected.length > 0) {
+          alert(`Some files were skipped:\n- ${rejected.join("\n- ")}`);
+        }
+
+        return accepted;
+      }
+
+      function annHandleImageSelection(input) {
+        if (!announcementImagesEnabled) {
+          alert(ANNOUNCEMENT_IMAGE_DISABLED_MSG);
+          if (input) input.value = "";
+          return;
+        }
+        const files = Array.from(input.files || []);
+        if (!files.length) return;
+        const imageFiles = annValidateImageFiles(files);
+        if (!imageFiles.length) return;
+        annNewImageFiles = annNewImageFiles.concat(imageFiles);
+        input.value = "";
+        renderAnnouncementImagePreviews();
+      }
+
+      function annHandleImageDragOver(event) {
+        if (!announcementImagesEnabled) return;
+        event.preventDefault();
+        annSetDropActive(true);
+      }
+
+      function annHandleImageDragLeave(event) {
+        if (!announcementImagesEnabled) return;
+        event.preventDefault();
+        annSetDropActive(false);
+      }
+
+      function annHandleImageDrop(event) {
+        if (!announcementImagesEnabled) {
+          event.preventDefault();
+          alert(ANNOUNCEMENT_IMAGE_DISABLED_MSG);
+          return;
+        }
+        event.preventDefault();
+        annSetDropActive(false);
+        const files = Array.from(event.dataTransfer?.files || []);
+        if (!files.length) return;
+        const imageFiles = annValidateImageFiles(files);
+        if (!imageFiles.length) return;
+        annNewImageFiles = annNewImageFiles.concat(imageFiles);
+        renderAnnouncementImagePreviews();
+      }
+
+      function annSetDropActive(isActive) {
+        const zone = document.getElementById("announcementImageDropzone");
+        if (!zone) return;
+        if (isActive) {
+          zone.classList.add("ring-2", "ring-blue-300", "bg-blue-50/60");
+        } else {
+          zone.classList.remove("ring-2", "ring-blue-300", "bg-blue-50/60");
+        }
+      }
+
+      function annRemoveExistingImage(index) {
+        const removed = annExistingImages.splice(index, 1)[0];
+        if (removed) annRemovedImages.push(removed);
+        renderAnnouncementImagePreviews();
+      }
+
+      function annRemoveNewImage(index) {
+        annNewImageFiles.splice(index, 1);
+        renderAnnouncementImagePreviews();
+      }
+
+      function annOpenPreviewImage(type, index) {
+        const list = [];
+        annExistingImages.forEach((img) => list.push({ url: img.url, name: img.name || "announcement-image" }));
+        annNewImageFiles.forEach((file, fileIndex) => {
+          const url = annNewImagePreviewUrls[fileIndex];
+          if (url) list.push({ url, name: file.name || "new-image" });
+        });
+        let offset = 0;
+        if (type === "existing") {
+          offset = index;
+        } else {
+          offset = annExistingImages.length + index;
+        }
+        if (list.length > 0) openAnnouncementImageViewerWithList(list, offset);
+      }
+
+      function openAnnouncementImageViewer(url, name = "") {
+        openAnnouncementImageViewerWithList([{ url, name: name || "announcement-image" }], 0);
+      }
+
+      function openAnnouncementImageViewerWithList(images, index) {
+        const modal = document.getElementById("announcementImageModal");
+        if (!modal || !Array.isArray(images) || images.length === 0) return;
+        currentAnnouncementImageList = images;
+        currentAnnouncementImageIndex = Math.min(Math.max(index, 0), images.length - 1);
+        updateAnnouncementImageViewer();
+        modal.classList.remove("hidden");
+      }
+
+      function updateAnnouncementImageViewer() {
+        const img = document.getElementById("announcementImagePreviewLarge");
+        const counter = document.getElementById("announcementImageCounter");
+        const prevBtn = document.getElementById("announcementImagePrev");
+        const nextBtn = document.getElementById("announcementImageNext");
+        if (!img) return;
+        const current = currentAnnouncementImageList[currentAnnouncementImageIndex];
+        if (!current) return;
+        currentAnnouncementImageUrl = current.url;
+        currentAnnouncementImageName = current.name || "announcement-image";
+        img.src = currentAnnouncementImageUrl;
+        img.alt = currentAnnouncementImageName;
+        if (counter) counter.textContent = `${currentAnnouncementImageIndex + 1} / ${currentAnnouncementImageList.length}`;
+        const isPrevDisabled = currentAnnouncementImageIndex <= 0;
+        const isNextDisabled = currentAnnouncementImageIndex >= currentAnnouncementImageList.length - 1;
+        if (prevBtn) {
+          prevBtn.disabled = isPrevDisabled;
+          prevBtn.classList.toggle("opacity-40", isPrevDisabled);
+          prevBtn.classList.toggle("hidden", isPrevDisabled);
+        }
+        if (nextBtn) {
+          nextBtn.disabled = isNextDisabled;
+          nextBtn.classList.toggle("opacity-40", isNextDisabled);
+          nextBtn.classList.toggle("hidden", isNextDisabled);
+        }
+      }
+
+      function showPrevAnnouncementImage() {
+        if (currentAnnouncementImageIndex <= 0) return;
+        currentAnnouncementImageIndex -= 1;
+        updateAnnouncementImageViewer();
+      }
+
+      function showNextAnnouncementImage() {
+        if (currentAnnouncementImageIndex >= currentAnnouncementImageList.length - 1) return;
+        currentAnnouncementImageIndex += 1;
+        updateAnnouncementImageViewer();
+      }
+
+      function closeAnnouncementImageViewer() {
+        const modal = document.getElementById("announcementImageModal");
+        const img = document.getElementById("announcementImagePreviewLarge");
+        if (img) img.src = "";
+        if (modal) modal.classList.add("hidden");
+        currentAnnouncementImageUrl = "";
+        currentAnnouncementImageName = "";
+        currentAnnouncementImageList = [];
+        currentAnnouncementImageIndex = 0;
+        exitAnnouncementImageFullscreen();
+      }
+
+      function handleAnnouncementImageOverlayClick(event) {
+        const panel = document.getElementById("announcementImagePanel");
+        const frame = document.getElementById("announcementImageFrame");
+        const target = event?.target;
+        if (!panel || !target) return;
+
+        if (!announcementImageMaximized) {
+          if (!panel.contains(target)) {
+            closeAnnouncementImageViewer();
+          }
+          return;
+        }
+
+        if (frame && !frame.contains(target)) {
+          exitAnnouncementImageFullscreen();
+        }
+      }
+
+      async function copyAnnouncementImage() {
+        if (!currentAnnouncementImageUrl) return;
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            const response = await fetch(currentAnnouncementImageUrl);
+            const blob = await response.blob();
+            await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+            alert("Image copied to clipboard.");
+            return;
+          }
+        } catch (error) {}
+
+        try {
+          await navigator.clipboard.writeText(currentAnnouncementImageUrl);
+          alert("Image link copied to clipboard.");
+        } catch (error) {
+          alert("Unable to copy image. Please use Download.");
+        }
+      }
+
+      function downloadAnnouncementImage() {
+        if (!currentAnnouncementImageUrl) return;
+        const link = document.createElement("a");
+        link.href = currentAnnouncementImageUrl;
+        link.download = currentAnnouncementImageName || "announcement-image";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      function toggleAnnouncementImageFullscreen() {
+        const modal = document.getElementById("announcementImageModal");
+        const icon = document.getElementById("announcementImageFullscreenIcon");
+        if (!modal) return;
+        announcementImageMaximized = !announcementImageMaximized;
+        modal.classList.toggle("image-modal-full", announcementImageMaximized);
+        if (icon) {
+          icon.classList.toggle("fa-expand", !announcementImageMaximized);
+          icon.classList.toggle("fa-compress", announcementImageMaximized);
+        }
+      }
+
+      function exitAnnouncementImageFullscreen() {
+        const modal = document.getElementById("announcementImageModal");
+        const icon = document.getElementById("announcementImageFullscreenIcon");
+        announcementImageMaximized = false;
+        if (modal) modal.classList.remove("image-modal-full");
+        if (icon) {
+          icon.classList.remove("fa-compress");
+          icon.classList.add("fa-expand");
+        }
+      }
+
+      function annOpenCardImage(announcementId, index) {
+        const images = announcementImageMap[announcementId] || [];
+        if (!images.length) return;
+        openAnnouncementImageViewerWithList(images, index);
+      }
+
+      async function uploadAnnouncementImages(announcementId, files) {
+        const uploaded = [];
+        for (const file of files) {
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const uniquePart = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const path = `announcements/${announcementId}/${uniquePart}-${safeName}`;
+          const { error } = await supabaseClient
+            .storage
+            .from(ANNOUNCEMENT_IMAGE_BUCKET)
+            .upload(path, file, { contentType: file.type, upsert: false });
+          if (error) throw error;
+          const { data } = supabaseClient.storage.from(ANNOUNCEMENT_IMAGE_BUCKET).getPublicUrl(path);
+          if (data?.publicUrl) {
+            uploaded.push({ url: data.publicUrl, path: path, name: file.name });
+          }
+        }
+        return uploaded;
+      }
+
+      async function deleteAnnouncementImages(images) {
+        const paths = images.map((img) => img.path).filter(Boolean);
+        if (!paths.length) return;
+        try {
+          await supabaseClient.storage.from(ANNOUNCEMENT_IMAGE_BUCKET).remove(paths);
+        } catch (error) {}
+      }
 
       function annShowAddForm() {
         document.getElementById("addForm").classList.remove("hidden");
         document.getElementById("announcementTitle").focus();
-        document.getElementById("announcementEditor").style.fontSize = "11px";
+        document.getElementById("announcementEditor").style.fontSize = "12px";
+        resetAnnouncementImageState();
         
         // If editing, don't change the form values - annEditAnnouncement handles that
         if (annEditingId) {
@@ -345,7 +810,8 @@
         document.getElementById("addForm").classList.add("hidden");
         document.getElementById("announcementTitle").value = "";
         document.getElementById("announcementEditor").innerHTML = "";
-        document.getElementById("announcementEditor").style.fontSize = "11px";
+        document.getElementById("announcementEditor").style.fontSize = "12px";
+        resetAnnouncementImageState();
         const allRadio = document.querySelector('input[name="annCategory"][value="Urgent"]');
         if (allRadio) allRadio.checked = true;
         document.querySelectorAll('input[name="ssoCategory"]').forEach(r => r.checked = false);
@@ -674,6 +1140,7 @@
       function renderAnnouncementList() {
         const container = document.getElementById("announcementListContainer");
         if (!container) return;
+        announcementImageMap = {};
         const filter = currentAnnouncementFilter;
         let filtered = announcements;
         
@@ -717,21 +1184,40 @@
             const colors = catColors[ann.ssoMain] || catColors["Usahawan"];
             const ssoLabel = `<span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded text-left ${colors.bg} ${colors.text} border ${colors.border}">${ann.ssoMain}</span>`;
             const ssoSubLabel = ann.ssoSub ? `<span class="text-[8px] ${colors.text} font-semibold ml-1">${ann.ssoSub}</span>` : "";
-            topLeftLabel = `<div class="mb-0.5 flex items-center gap-1 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #2228a4; color: white;">SSO</span>${ssoLabel}${ssoSubLabel}</div>`;
+            topLeftLabel = `<div class="mb-[10px] flex items-center gap-1 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #2228a4; color: white;">SSO</span>${ssoLabel}${ssoSubLabel}</div>`;
             bottomLeftLabel = ``;
           } else if (categoryValue === "Urgent" || categoryValue === "urgent") {
-            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #dc2626; color: white;">URGENT</span></div>`;
+            topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #dc2626; color: white;">URGENT</span></div>`;
             bottomLeftLabel = ``;
           } else if (categoryValue === "Maxis" || categoryValue === "maxis") {
-            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #46c910; color: white;">MAXIS</span></div>`;
+            topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #46c910; color: white;">MAXIS</span></div>`;
           } else if (categoryValue === "Samudra" || categoryValue === "samudra") {
-            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94237a; color: white;">SAMUDRA</span></div>`;
+            topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94237a; color: white;">SAMUDRA</span></div>`;
           } else if (categoryValue === "TP" || categoryValue === "tp") {
-            topLeftLabel = `<div class="mb-0.5 justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #f97316; color: white;">TP</span></div>`;
+            topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #f97316; color: white;">TP</span></div>`;
           } else {
             if (window.DEBUG_MODE) console.log("Unknown category:", categoryValue);
-            topLeftLabel = `<span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94a3b8; color: white;">${categoryValue || 'Unknown'}</span>`;
+            topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #94a3b8; color: white;">${categoryValue || 'Unknown'}</span></div>`;
           }
+
+          const imageItems = announcementImagesEnabled ? normalizeAnnouncementImages(ann.images) : [];
+          announcementImageMap[ann.id] = imageItems.map((img) => ({
+            url: img.url,
+            name: img.name || "announcement-image"
+          }));
+          const imagesHtml = imageItems.length > 0
+            ? `
+              <div class="mt-2 grid grid-cols-3 gap-2">
+                ${imageItems.map((img, index) => `
+                  <button type="button" onclick="annOpenCardImage('${ann.id}', ${index})" class="block w-full">
+                    <div class="w-full h-[130px] flex items-center justify-center bg-slate-50 rounded border border-slate-200 hover:opacity-95 transition-opacity">
+                      <img src="${escapeAttribute(img.url)}" alt="Announcement image" class="max-h-[130px] w-full object-contain" loading="lazy" />
+                    </div>
+                  </button>
+                `).join("")}
+              </div>
+            `
+            : "";
           
           return `
             <div class="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow">
@@ -746,7 +1232,8 @@
                   <button onclick="annShowDeleteModal('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
                 </div>
               </div>
-              <div class="text-xs text-slate-600 mt-2 leading-relaxed" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(convertBoldSyntax(ann.content)) : ""}</div>
+              <div class="text-xs text-black mt-2 leading-relaxed bg-slate-50 border border-slate-100 rounded-lg px-3 py-2" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(convertBoldSyntax(ann.content)) : ""}</div>
+              ${imagesHtml}
               <div class="pt-2 border-t border-slate-100 mt-3">
                 <div class="flex justify-between items-end">
                   ${dueDisplay ? `<div>${dueDisplay}</div>` : '<div></div>'}
@@ -789,39 +1276,88 @@
 
         try {
           if (annEditingId) {
-            // Update existing announcement
+            let imagesToSave = [];
+            if (announcementImagesEnabled) {
+              const uploadedImages = annNewImageFiles.length > 0
+                ? await uploadAnnouncementImages(annEditingId, annNewImageFiles)
+                : [];
+              imagesToSave = annExistingImages.concat(uploadedImages);
+              announcementData.images = imagesToSave;
+            }
+
             const { data: updatedData, error } = await supabaseClient
               .from('announcements')
               .update(announcementData)
               .eq('id', annEditingId)
               .select();
-            
+
             if (error) throw error;
-            
-            // Update local array with returned data
+
             const index = announcements.findIndex((a) => a.id === annEditingId);
             if (index !== -1 && updatedData && updatedData.length > 0) {
               announcements[index] = updatedData[0];
             }
-            
+
+            if (announcementImagesEnabled && annRemovedImages.length > 0) {
+              await deleteAnnouncementImages(annRemovedImages);
+            }
+
             annEditingId = null;
           } else {
-            // Insert new announcement
-            const { data: insertedData, error } = await supabaseClient
-              .from('announcements')
-              .insert([announcementData])
-              .select();
-            
-            if (error) throw error;
-            
-            // Add returned data (with id and created_at) to local array
-            if (insertedData && insertedData.length > 0) {
-              announcements.unshift(insertedData[0]);
+            if (announcementImagesEnabled && annNewImageFiles.length > 0) {
+              const { data: insertedData, error } = await supabaseClient
+                .from('announcements')
+                .insert([announcementData])
+                .select();
+
+              if (error) throw error;
+
+              if (insertedData && insertedData.length > 0) {
+                const inserted = insertedData[0];
+                const uploadedImages = await uploadAnnouncementImages(inserted.id, annNewImageFiles);
+                if (uploadedImages.length > 0) {
+                  const { data: updatedData, error: updateError } = await supabaseClient
+                    .from('announcements')
+                    .update({ images: uploadedImages })
+                    .eq('id', inserted.id)
+                    .select();
+
+                  if (updateError) throw updateError;
+
+                  if (updatedData && updatedData.length > 0) {
+                    announcements.unshift(updatedData[0]);
+                  } else {
+                    inserted.images = uploadedImages;
+                    announcements.unshift(inserted);
+                  }
+                } else {
+                  inserted.images = [];
+                  announcements.unshift(inserted);
+                }
+              }
+            } else {
+              if (announcementImagesEnabled) {
+                announcementData.images = annExistingImages;
+              }
+              const { data: insertedData, error } = await supabaseClient
+                .from('announcements')
+                .insert([announcementData])
+                .select();
+
+              if (error) throw error;
+
+              if (insertedData && insertedData.length > 0) {
+                announcements.unshift(insertedData[0]);
+              }
             }
           }
         } catch (err) {
           console.error("Failed to save announcement:", err);
+          if (announcementImagesEnabled && /bucket|storage/i.test(err?.message || "")) {
+            alert("Image upload failed. Please check the Supabase storage bucket.");
+          } else {
           alert("Failed to save announcement. Please try again.");
+          }
           return;
         }
         
@@ -831,6 +1367,13 @@
 
       async function annDeleteAnnouncement(id) {
         try {
+          if (announcementImagesEnabled) {
+            const ann = announcements.find((a) => a.id === id);
+            const imagesToRemove = ann ? normalizeAnnouncementImages(ann.images) : [];
+            if (imagesToRemove.length > 0) {
+              await deleteAnnouncementImages(imagesToRemove);
+            }
+          }
           // Delete from separate announcements table
           const { error } = await supabaseClient
             .from('announcements')
@@ -854,11 +1397,11 @@
       function annEditAnnouncement(id) {
         const ann = announcements.find((a) => a.id === id);
         if (!ann) return;
-        annShowAddForm();
         annEditingId = id;
+        annShowAddForm();
         document.getElementById("announcementTitle").value = ann.title;
         document.getElementById("announcementEditor").innerHTML = ann.content || "";
-        document.getElementById("announcementEditor").style.fontSize = "11px";
+        document.getElementById("announcementEditor").style.fontSize = "12px";
         const categoryToSelect = ann.category === "Urgent" ? "Urgent" : ann.category || "all";
         const catRadio = document.querySelector(`input[name="annCategory"][value="${categoryToSelect}"]`);
         if (catRadio) catRadio.checked = true;
@@ -873,16 +1416,32 @@
           }, 50);
         }
         document.getElementById("announcementDueDate").value = ann.dueDate || "";
+        if (announcementImagesEnabled) {
+          annExistingImages = normalizeAnnouncementImages(ann.images);
+          annRemovedImages = [];
+          annNewImageFiles = [];
+          renderAnnouncementImagePreviews();
+        }
       }
 
       document.addEventListener("DOMContentLoaded", async function() {
+        setAnnouncementImagesEnabled(true);
         setAnnouncementFilter("all");
         
         // Load announcements from Supabase
         try {
-          const { data: announcementsData, error } = await supabaseClient
+          let { data: announcementsData, error } = await supabaseClient
             .from('announcements')
-            .select('id,title,content,category,ssoMain,ssoSub,dueDate,isUrgent,created_at');
+            .select('id,title,content,category,ssoMain,ssoSub,dueDate,isUrgent,created_at,images');
+
+          if (error && isMissingColumnError(error)) {
+            setAnnouncementImagesEnabled(false);
+            const fallback = await supabaseClient
+              .from('announcements')
+              .select('id,title,content,category,ssoMain,ssoSub,dueDate,isUrgent,created_at');
+            announcementsData = fallback.data;
+            error = fallback.error;
+          }
           
           if (error) {
             console.error("Error loading announcements:", error);
