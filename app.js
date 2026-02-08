@@ -65,6 +65,16 @@ function formatDate(dateStr, options = { weekday: "short", day: "numeric", month
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-GB", options);
 }
 
+function getAutoSelectedDateForMonth(year, month) {
+  const isCurrentLocalMonth = year === today.getFullYear() && month === today.getMonth();
+  if (isCurrentLocalMonth) {
+    return toLocalISOString(today);
+  }
+
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+}
+
 function showModal(modalId, panelId, focusId = null) {
   const modal = document.getElementById(modalId);
   const panel = document.getElementById(panelId);
@@ -120,6 +130,53 @@ let rangeFilter = { start: null, end: null };
 
 let events = [];
 
+// Skeleton Loading Functions
+function showCalendarSkeleton() {
+  const calendarGrid = document.getElementById('calendarGrid');
+  const calendarSkeleton = document.getElementById('calendarSkeleton');
+  if (calendarGrid && calendarSkeleton) {
+    calendarGrid.classList.add('hidden');
+    calendarSkeleton.classList.remove('hidden');
+  }
+}
+
+function hideCalendarSkeleton() {
+  const calendarGrid = document.getElementById('calendarGrid');
+  const calendarSkeleton = document.getElementById('calendarSkeleton');
+  if (calendarGrid && calendarSkeleton) {
+    calendarGrid.classList.remove('hidden');
+    calendarSkeleton.classList.add('hidden');
+  }
+}
+
+function showEventListSkeleton() {
+  const eventListContainer = document.getElementById('eventListContainer');
+  const eventListSkeleton = document.getElementById('eventListSkeleton');
+  if (eventListContainer && eventListSkeleton) {
+    eventListContainer.classList.add('hidden');
+    eventListSkeleton.classList.remove('hidden');
+  }
+}
+
+function hideEventListSkeleton() {
+  const eventListContainer = document.getElementById('eventListContainer');
+  const eventListSkeleton = document.getElementById('eventListSkeleton');
+  if (eventListContainer && eventListSkeleton) {
+    eventListContainer.classList.remove('hidden');
+    eventListSkeleton.classList.add('hidden');
+  }
+}
+
+function showAllSkeletons() {
+  showCalendarSkeleton();
+  showEventListSkeleton();
+}
+
+function hideAllSkeletons() {
+  hideCalendarSkeleton();
+  hideEventListSkeleton();
+}
+
 // Ensure events is always an array
 function ensureEventsArray() {
   if (!Array.isArray(events)) {
@@ -153,22 +210,54 @@ let siteSettingsBackup = null;
 // OPTIMIZATION: Caching variables
 // =====================================================
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+const EVENT_SUMMARY_SELECT_COLUMNS = "id,title,start,end,category,subcategory,time,secondTime,links,registrationLinks,submitLinks";
+const EVENT_DETAIL_SELECT_COLUMNS = "id,info";
+const EVENT_DETAIL_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const MAX_PROGRAM_INFO_BYTES = 120 * 1024; // 120 KB
 let eventsCache = {
   data: null,
   timestamp: null,
   monthKey: null  // Store which month this cache is for
 };
+const eventDetailsCache = new Map();
+
+function clearEventsCache() {
+  eventsCache = {
+    data: null,
+    timestamp: null,
+    monthKey: null
+  };
+  try {
+    appStorage.removeItem('events_cache');
+  } catch (e) {
+    if (window.DEBUG_MODE) console.warn('Could not clear events cache:', e);
+  }
+}
+
+function getUtf8ByteLength(value) {
+  const safeValue = typeof value === "string" ? value : "";
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(safeValue).length;
+  }
+  return unescape(encodeURIComponent(safeValue)).length;
+}
+
+function containsEmbeddedDataImage(html) {
+  if (!html) return false;
+  return /data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(html);
+}
 
 // =====================================================
 // OPTIMIZATION: Load events for specific month
 // =====================================================
-  async function loadEventsForMonth(year, month) {
+  async function loadEventsForMonth(year, month, forceRefresh = false) {
     const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
     const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
     const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
   
   // Check cache first
-  if (eventsCache.monthKey === monthKey && 
+  if (!forceRefresh &&
+      eventsCache.monthKey === monthKey && 
       eventsCache.data && 
       eventsCache.timestamp && 
       (Date.now() - eventsCache.timestamp) < CACHE_DURATION) {
@@ -181,10 +270,11 @@ let eventsCache = {
     const queryEventsForMonth = (columns) => supabaseClient
       .from('events')
       .select(columns)
-      .or(`start.lte.${lastDay},end.gte.${firstDay}`)
+      .lte('start', lastDay)
+      .gte('end', firstDay)
       .order('start', { ascending: true });
 
-    let { data, error } = await queryEventsForMonth(EVENT_SELECT_COLUMNS);
+    let { data, error } = await queryEventsForMonth(EVENT_SUMMARY_SELECT_COLUMNS);
 
     if (error) {
       console.error('❌ Error loading events for month:', error);
@@ -215,33 +305,78 @@ let eventsCache = {
   return eventsArray;
 }
 
+async function loadEventsForDateRange(startDate, endDate) {
+  const { data, error } = await supabaseClient
+    .from('events')
+    .select(EVENT_SUMMARY_SELECT_COLUMNS)
+    .lte('start', endDate)
+    .gte('end', startDate)
+    .order('start', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadEventInfoById(eventId, forceRefresh = false) {
+  if (!eventId) return "";
+
+  const cached = eventDetailsCache.get(eventId);
+  if (!forceRefresh && cached && (Date.now() - cached.timestamp) < EVENT_DETAIL_CACHE_DURATION) {
+    return cached.info;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('events')
+    .select(EVENT_DETAIL_SELECT_COLUMNS)
+    .eq('id', eventId)
+    .single();
+
+  if (error) throw error;
+
+  const info = typeof data?.info === "string" ? data.info : "";
+  eventDetailsCache.set(eventId, {
+    info: info,
+    timestamp: Date.now()
+  });
+
+  const eventInList = events.find((eventItem) => eventItem.id === eventId);
+  if (eventInList) {
+    eventInList.info = info;
+  }
+
+  return info;
+}
+
 // =====================================================
 // OPTIMIZATION: Load from cache or Supabase
 // =====================================================
 async function loadEventsWithCache() {
+  showAllSkeletons();
+  
   // Try to load from localStorage cache first
   try {
     const cached = appStorage.getItem('events_cache');
     if (cached) {
       const cache = JSON.parse(cached);
       const cacheAge = Date.now() - (cache.timestamp || 0);
-      
+
       // Check if cache is for current month and less than 5 minutes old
       const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-      
-      if (cacheAge < CACHE_DURATION && 
-          cache.monthKey === currentMonthKey && 
+
+      if (cacheAge < CACHE_DURATION &&
+          cache.monthKey === currentMonthKey &&
           Array.isArray(cache.data)) {
         if (window.DEBUG_MODE) console.log('✅ Using cached events (age:', Math.round(cacheAge/1000), 'seconds)');
         events = cache.data;
-        
+
         // Update in-memory cache
         eventsCache = {
           data: cache.data,
           timestamp: cache.timestamp,
           monthKey: cache.monthKey
         };
-        
+
+        hideAllSkeletons();
         renderCalendar();
         renderEventList();
         return; // Skip Supabase loading
@@ -250,12 +385,18 @@ async function loadEventsWithCache() {
   } catch (e) {
     if (window.DEBUG_MODE) console.warn('Could not read events cache:', e);
   }
-  
+
   // Load from Supabase if no valid cache
-  const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
-  events = monthEvents;
-  renderCalendar();
-  renderEventList();
+  try {
+    const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
+    events = monthEvents;
+    hideAllSkeletons();
+    renderCalendar();
+    renderEventList();
+  } catch (error) {
+    hideAllSkeletons();
+    throw error;
+  }
 }
 
 async function backupSiteSettings() {
@@ -348,12 +489,12 @@ window.restoreData = function() {
   }
 };
 
-const EVENT_SELECT_COLUMNS = "id,title,start,end,category,subcategory,time,secondTime,links,registrationLinks,submitLinks,info";
 const ANNOUNCEMENT_SELECT_COLUMNS = "id,title,content,category,ssoMain,ssoSub,dueDate,isUrgent,created_at";
 const LATEST_ANNOUNCEMENT_SELECT_COLUMNS = "id,created_at";
 let announcements = [];
 let latestAnnouncementMeta = null;
 let programInfoContent = "";
+let originalProgramInfoContent = "";
 let currentSort = "startTime";
 let deleteEventId = null;
 let deleteSectionIdx = null;
@@ -511,26 +652,16 @@ async function updateFullBackup() {
   if (window.DEBUG_MODE) console.log('✅ Saved backup to ID 99');
 }
 
-// Fallback: Save all settings at once
+// Fallback: Save all non-event settings at once
 async function saveAllSettings() {
   if (!isDataLoaded) {
     if (window.DEBUG_MODE) console.warn("saveAllSettings called but data not loaded yet");
     return Promise.reject(new Error("Data not loaded yet"));
   }
 
-  if (window.DEBUG_MODE) console.log("💾 Saving all settings to Supabase...");
+  if (window.DEBUG_MODE) console.log("💾 Saving settings to Supabase...");
   
   try {
-    // Save events to separate events table
-    if (events && events.length > 0) {
-      const { error: deleteError } = await supabaseClient.from('events').delete().neq('id', 0);
-      if (deleteError && window.DEBUG_MODE) console.warn("Warning deleting events:", deleteError);
-      const { error: insertError } = await supabaseClient.from('events').insert(events);
-      if (insertError) throw insertError;
-    } else {
-      await supabaseClient.from('events').delete().neq('id', 0);
-    }
-
     // Save all settings using specialized functions
     await saveBasicConfig();
     await saveManagerOffdays();
@@ -556,20 +687,15 @@ const saveToSupabase = saveAllSettings;
 
 async function refreshEventsFromSupabase() {
   try {
-    // CRITICAL FIX: Refresh from separate events table
-    const { data: eventsData, error } = await supabaseClient
-      .from('events')
-      .select(EVENT_SELECT_COLUMNS);
-    
-    if (error) throw error;
+    const hasRangeFilter = Boolean(rangeFilter.start && rangeFilter.end);
+    const newEvents = hasRangeFilter
+      ? await loadEventsForDateRange(rangeFilter.start, rangeFilter.end)
+      : await loadEventsForMonth(currentYear, currentMonth, true);
 
-    const newEvents = eventsData || [];
-    if (JSON.stringify(events) !== JSON.stringify(newEvents)) {
-      events = newEvents;
-      if (window.DEBUG_MODE) console.log("✓ Refreshed events from Supabase:", events.length, "events");
-      renderCalendar();
-      renderEventList();
-    }
+    events = newEvents;
+    if (window.DEBUG_MODE) console.log("✓ Refreshed events from Supabase:", events.length, "events");
+    renderCalendar();
+    renderEventList();
     return events;
   } catch (error) {
     console.error("Error refreshing events:", error);
@@ -624,17 +750,19 @@ async function loadFromSupabase() {
 
     if (window.DEBUG_MODE) console.log('✅ Loaded all settings in 1 batched query (was 7)');
 
-    // =====================================================
+// =====================================================
     // OPTIMIZATION: Load events for CURRENT MONTH only (with caching)
     // =====================================================
     if (window.DEBUG_MODE) console.log("📥 Loading events for current month (with cache)...");
-    
+
     // Load events and assign to global events variable
+    showAllSkeletons();
     events = await loadEventsForMonth(currentYear, currentMonth);
     // Render events immediately
+    hideAllSkeletons();
     renderCalendar();
     renderEventList();
-    
+
     // =====================================================
     // OPTIMIZATION: Load only latest announcement meta (for red dot)
     // =====================================================
@@ -800,11 +928,16 @@ async function loadLatestAnnouncementMeta() {
       currentMonth = 11;
       currentYear--;
     }
+
+    await clearRangeFilter(false);
+    window.selectedFilterDate = getAutoSelectedDateForMonth(currentYear, currentMonth);
     
     // Load events for the new month
+    showCalendarSkeleton();
     const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
     events = monthEvents;
-    
+    hideCalendarSkeleton();
+
     renderCalendar();
     renderCategoryCounts();
     renderEventList();
@@ -816,11 +949,16 @@ async function loadLatestAnnouncementMeta() {
       currentMonth = 0;
       currentYear++;
     }
-    
+
+    await clearRangeFilter(false);
+    window.selectedFilterDate = getAutoSelectedDateForMonth(currentYear, currentMonth);
+
     // Load events for the new month
+    showCalendarSkeleton();
     const monthEvents = await loadEventsForMonth(currentYear, currentMonth);
     events = monthEvents;
-    
+    hideCalendarSkeleton();
+
     renderCalendar();
     renderCategoryCounts();
     renderEventList();
@@ -1704,9 +1842,13 @@ async function confirmDelete() {
       
       if (deleteError) {
         console.error("Failed to delete event from database:", deleteError);
-        // Fall back to re-saving all events
-        await saveAllSettings();
+        // Re-sync the current month instead of rewriting the full events table
+        clearEventsCache();
+        events = await loadEventsForMonth(currentYear, currentMonth, true);
+      } else {
+        clearEventsCache();
       }
+      eventDetailsCache.delete(deleteEventId);
       
       renderEventList();
       renderCalendar();
@@ -2093,36 +2235,47 @@ function renderCalendar() {
       cell.appendChild(dotsDiv);
     }
 
-    cell.onclick = () => {
+    cell.onclick = async () => {
+      const hadRangeFilter = Boolean(rangeFilter.start && rangeFilter.end);
       clearRangeFilter(false);
-      if (window.selectedFilterDate === dateStr) {
-        window.selectedFilterDate = null;
-        refreshEventsFromSupabase().then(() => {
-          renderEventList();
-        });
-      } else {
-        window.selectedFilterDate = dateStr;
-        refreshEventsFromSupabase().then(() => {
-          renderEventList();
-        });
+      showEventListSkeleton();
+
+      try {
+        if (hadRangeFilter) {
+          events = await loadEventsForMonth(currentYear, currentMonth);
+        }
+        window.selectedFilterDate = window.selectedFilterDate === dateStr ? null : dateStr;
+        renderCalendar();
+        renderEventList();
+      } catch (error) {
+        console.error("Failed to update day filter:", error);
+      } finally {
+        hideEventListSkeleton();
       }
-      renderCalendar();
     };
 
     grid.appendChild(cell);
   }
 }
 
-function applyRangeFilter() {
+async function applyRangeFilter() {
   const start = document.getElementById("filterStart").value;
   const end = document.getElementById("filterEnd").value;
 
   if (start && end) {
     rangeFilter = { start, end };
     window.selectedFilterDate = null;
-    renderCalendar();
-    renderEventList();
-    document.getElementById("clearRangeBtn").classList.remove("hidden");
+    showEventListSkeleton();
+    try {
+      events = await loadEventsForDateRange(start, end);
+      renderCalendar();
+      renderEventList();
+      document.getElementById("clearRangeBtn").classList.remove("hidden");
+    } catch (error) {
+      console.error("Failed to apply range filter:", error);
+    } finally {
+      hideEventListSkeleton();
+    }
   }
 }
 
@@ -2130,12 +2283,23 @@ function openModalWithSelectedDate() {
   openModal(null, window.selectedFilterDate || "");
 }
 
-function clearRangeFilter(shouldRender = true) {
+async function clearRangeFilter(shouldRender = true) {
   document.getElementById("filterStart").value = "";
   document.getElementById("filterEnd").value = "";
   rangeFilter = { start: null, end: null };
   document.getElementById("clearRangeBtn").classList.add("hidden");
-  if (shouldRender) renderEventList();
+  if (!shouldRender) return;
+
+  showEventListSkeleton();
+  try {
+    events = await loadEventsForMonth(currentYear, currentMonth);
+    renderCalendar();
+    renderEventList();
+  } catch (error) {
+    console.error("Failed to clear range filter:", error);
+  } finally {
+    hideEventListSkeleton();
+  }
 }
 
 function renderCategoryCounts() {
@@ -2431,6 +2595,12 @@ function renderEventList() {
     }
 
 
+    const infoMarkup = typeof ev.info === "string"
+      ? (ev.info
+        ? sanitizeHTMLWithLinks(ev.info)
+        : '<span class="text-[9px] text-slate-400 italic">No program info available.</span>')
+      : '<span class="text-[9px] text-slate-400 italic">Loading program info...</span>';
+
     card.innerHTML = `
       <div class="flex flex-col gap-1 relative">
         <div class="flex justify-between items-start">
@@ -2447,15 +2617,13 @@ function renderEventList() {
           </div>
         </div>
         ${ev.time || ev.secondTime ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time || ""}${ev.secondTime ? `<br><i class="fa-regular fa-clock mr-1"></i>${ev.secondTime}` : ""}</div>` : ""}
-        ${ev.info ? `
-          <div class="mt-1 flex justify-end">
-            <button type="button" onclick="toggleEventInfo('${ev.id}')" class="text-[8px] text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer">
-              <span class="font-semibold" style="color: #cb233b;">Program Info</span>
-              <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]" style="color: #cb233b;"></i>
-            </button>
-          </div>
-          <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content overflow-hidden">${sanitizeHTMLWithLinks(ev.info)}</div>
-        ` : ""}
+        <div class="mt-1 flex justify-end">
+          <button type="button" onclick="toggleEventInfo('${ev.id}')" class="text-[8px] text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer">
+            <span class="font-semibold" style="color: #cb233b;">Program Info</span>
+            <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]" style="color: #cb233b;"></i>
+          </button>
+        </div>
+        <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content overflow-hidden">${infoMarkup}</div>
         ${linksHtml}
         ${actionLinksHtml}
         <div class="absolute top-0 right-0 flex gap-2 ${showEditDeleteButtons ? "opacity-100" : "opacity-0"} transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
@@ -2565,7 +2733,7 @@ function removeSubmitLink(id) {
 }
 
 
-function openModal(id = null, dateHint = null) {
+async function openModal(id = null, dateHint = null) {
   showModal("eventModal", "modalPanel", "eventTitle");
 
   if (id) {
@@ -2587,7 +2755,17 @@ function openModal(id = null, dateHint = null) {
 
 
 
-    programInfoContent = ev.info || "";
+    let eventInfo = typeof ev.info === "string" ? ev.info : "";
+    if (typeof ev.info !== "string") {
+      try {
+        eventInfo = await loadEventInfoById(ev.id);
+      } catch (error) {
+        console.error("Failed to load event details:", error);
+      }
+    }
+
+    programInfoContent = eventInfo || "";
+    originalProgramInfoContent = programInfoContent;
     updateProgramInfoPreview();
     const infoContainer = document.getElementById("programInfoContainer");
     if (infoContainer) {
@@ -2709,6 +2887,7 @@ function openModal(id = null, dateHint = null) {
     updateSubcategories(checkedCategory ? checkedCategory.value : null);
 
     programInfoContent = "";
+    originalProgramInfoContent = "";
     updateProgramInfoPreview();
 
     // Set date to today or clicked date
@@ -2984,7 +3163,19 @@ function removeInfoConfirmed() {
 
 function saveRichText() {
   const editor = document.getElementById("richTextEditor");
-  programInfoContent = editor.innerHTML.trim();
+  const nextContent = editor.innerHTML.trim();
+  if (containsEmbeddedDataImage(nextContent)) {
+    alert("Embedded base64 images are not allowed in Program Info. Upload images to a URL and paste the URL instead.");
+    return;
+  }
+
+  const contentBytes = getUtf8ByteLength(nextContent);
+  if (contentBytes > MAX_PROGRAM_INFO_BYTES) {
+    alert(`Program Info is too large (${Math.ceil(contentBytes / 1024)} KB). Maximum allowed is ${Math.ceil(MAX_PROGRAM_INFO_BYTES / 1024)} KB.`);
+    return;
+  }
+
+  programInfoContent = nextContent;
   updateProgramInfoPreview();
   closeRichTextModal();
 }
@@ -3019,17 +3210,41 @@ function updateSubcategories(categoryValue) {
   });
 }
 
-function toggleEventInfo(eventId) {
+async function toggleEventInfo(eventId) {
   const container = document.getElementById("event-info-" + eventId);
   const icon = document.getElementById("info-icon-" + eventId);
+  if (!container || !icon) return;
   const isOpen = !container.classList.contains("hidden");
 
   if (isOpen) {
     container.classList.add("hidden");
+    toggleChevron(icon, false);
+    return;
+  }
+
+  const eventData = events.find((eventItem) => eventItem.id === eventId);
+  const needsDetailsFetch = !eventData || typeof eventData.info !== "string";
+
+  if (needsDetailsFetch) {
+    container.innerHTML = '<span class="text-[9px] text-slate-400 italic">Loading program info...</span>';
+    container.classList.remove("hidden");
+    toggleChevron(icon, true);
+    try {
+      const info = await loadEventInfoById(eventId);
+      container.innerHTML = info
+        ? sanitizeHTMLWithLinks(info)
+        : '<span class="text-[9px] text-slate-400 italic">No program info available.</span>';
+    } catch (error) {
+      console.error("Failed to load program info:", error);
+      container.innerHTML = '<span class="text-[9px] text-red-500 italic">Failed to load program info.</span>';
+    }
   } else {
     container.classList.remove("hidden");
+    if (!eventData.info) {
+      container.innerHTML = '<span class="text-[9px] text-slate-400 italic">No program info available.</span>';
+    }
+    toggleChevron(icon, true);
   }
-  toggleChevron(icon, !isOpen);
 }
 
 function toggleSecondSession() {
@@ -3193,6 +3408,18 @@ async function saveEvent() {
   // Hide any previous category errors
   hideCategoryError();
 
+  const infoChanged = programInfoVal !== originalProgramInfoContent;
+  if (infoChanged && containsEmbeddedDataImage(programInfoVal)) {
+    alert("Embedded base64 images are not allowed in Program Info. Upload images to a URL and paste the URL instead.");
+    return;
+  }
+
+  const infoBytes = getUtf8ByteLength(programInfoVal);
+  if (infoChanged && infoBytes > MAX_PROGRAM_INFO_BYTES) {
+    alert(`Program Info is too large (${Math.ceil(infoBytes / 1024)} KB). Maximum allowed is ${Math.ceil(MAX_PROGRAM_INFO_BYTES / 1024)} KB.`);
+    return;
+  }
+
   const eventData = {
     id: id || Date.now().toString(),
     title: title,
@@ -3225,6 +3452,7 @@ async function saveEvent() {
     // Update local array
     const index = events.findIndex((e) => e.id === id);
     if (index !== -1) events[index] = eventData;
+    eventDetailsCache.set(id, { info: eventData.info || "", timestamp: Date.now() });
   } else {
     // Add new event - insert directly into events table
     const { error: insertError } = await supabaseClient
@@ -3239,8 +3467,11 @@ async function saveEvent() {
     
     // Add to local array
     events.push(eventData);
+    eventDetailsCache.set(eventData.id, { info: eventData.info || "", timestamp: Date.now() });
   }
 
+  clearEventsCache();
+  originalProgramInfoContent = eventData.info || "";
   closeModal();
   renderCalendar();
   renderEventList();

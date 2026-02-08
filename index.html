@@ -34,6 +34,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="leave-system.css" />
+    <link rel="stylesheet" href="reminder-system.css" />
     <script>
       (function () {
         try {
@@ -76,6 +77,19 @@
           <div id="current-date-header" class="hidden sm:flex flex-col items-end border-l border-white/20 pl-3"></div>
         </div>
           <div class="flex items-center gap-3 ml-auto">
+            <!-- Reminder Button -->
+            <button
+              id="reminderBtn"
+              onclick="toggleReminderPanel()"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-2.5 py-1.5 h-[30px] rounded shadow flex items-center justify-center transition-colors relative cursor-pointer"
+              title="Reminders"
+              aria-expanded="false"
+              aria-controls="reminderOverlay"
+            >
+              <i class="fa-solid fa-bell text-[#2228a4] text-xs"></i>
+              <span id="reminderBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white text-white text-[9px] flex items-center justify-center font-bold">0</span>
+            </button>
+
             <!-- Leave Management Button -->
             <button
               id="leaveLoginBtn"
@@ -93,7 +107,7 @@
               </span>
               <span class="interactive-hover-btn__bg"></span>
             </button>
-            
+
             <a
               href="announcements.html"
               id="announcementBtn"
@@ -107,6 +121,19 @@
       </div>
     </header>
 
+    <!-- Reminder Marquee -->
+    <div id="reminderMarquee" class="reminder-marquee hidden" role="status" aria-live="polite">
+      <div class="reminder-marquee-inner">
+        <span class="reminder-marquee-pill">
+          <i class="fa-solid fa-bell"></i>
+          Due today
+        </span>
+        <div class="reminder-marquee-window">
+          <div id="reminderMarqueeContent" class="reminder-marquee-track"></div>
+        </div>
+      </div>
+    </div>
+ 
     <main class="flex-grow w-full px-4 py-6">
       <div class="max-w-5xl mx-auto">
         <div class="flex flex-col md:flex-row gap-6 items-start">
@@ -125,7 +152,7 @@
                   </button>
                 </div>
               
-              <div class="grid grid-cols-7 mb-2 border-b border-slate-100 pb-2">
+<div class="grid grid-cols-7 mb-2 border-b border-slate-100 pb-2">
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SUN</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">MON</div>
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">TUE</div>
@@ -135,6 +162,43 @@
                 <div class="text-center text-[10px] font-bold text-slate-400 uppercase">SAT</div>
               </div>
               <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
+              <div id="calendarSkeleton" class="hidden">
+                <div class="grid grid-cols-7 gap-1">
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                  <div class="skeleton skeleton-calendar-cell"></div>
+                </div>
+              </div>
               <div class="mt-4 pt-3 border-t border-slate-100">
                 <div class="flex flex-wrap gap-x-4 gap-y-2 justify-center text-[9px] font-semibold text-slate-500 mb-3">
                   <div class="flex items-center gap-1.5">
@@ -305,6 +369,53 @@
               </div>
             </div>
             <div id="eventListContainer" class="space-y-2 pb-2 overflow-y-auto max-h-[500px] pr-1"></div>
+            <div id="eventListSkeleton" class="hidden space-y-2 pb-2">
+              <div class="skeleton-event-card bg-white">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="skeleton skeleton-badge"></div>
+                  <div class="skeleton skeleton-title"></div>
+                </div>
+                <div class="skeleton skeleton-subtitle"></div>
+                <div class="skeleton skeleton-text w-3/4"></div>
+                <div class="skeleton skeleton-text w-1/2"></div>
+              </div>
+              <div class="skeleton-event-card bg-white">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="skeleton skeleton-badge"></div>
+                  <div class="skeleton skeleton-title"></div>
+                </div>
+                <div class="skeleton skeleton-subtitle"></div>
+                <div class="skeleton skeleton-text w-3/4"></div>
+                <div class="skeleton skeleton-text w-1/2"></div>
+              </div>
+              <div class="skeleton-event-card bg-white">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="skeleton skeleton-badge"></div>
+                  <div class="skeleton skeleton-title"></div>
+                </div>
+                <div class="skeleton skeleton-subtitle"></div>
+                <div class="skeleton skeleton-text w-3/4"></div>
+                <div class="skeleton skeleton-text w-1/2"></div>
+              </div>
+              <div class="skeleton-event-card bg-white">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="skeleton skeleton-badge"></div>
+                  <div class="skeleton skeleton-title"></div>
+                </div>
+                <div class="skeleton skeleton-subtitle"></div>
+                <div class="skeleton skeleton-text w-3/4"></div>
+                <div class="skeleton skeleton-text w-1/2"></div>
+              </div>
+              <div class="skeleton-event-card bg-white">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="skeleton skeleton-badge"></div>
+                  <div class="skeleton skeleton-title"></div>
+                </div>
+                <div class="skeleton skeleton-subtitle"></div>
+                <div class="skeleton skeleton-text w-3/4"></div>
+                <div class="skeleton skeleton-text w-1/2"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1463,6 +1574,265 @@
       </div>
     </div>
 
+    <!-- Reminder Panel -->
+    <div id="reminderOverlay" class="reminder-overlay hidden" aria-hidden="true">
+      <div class="reminder-backdrop" onclick="closeReminderPanel()" aria-hidden="true"></div>
+      <div class="reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="reminderDialogTitle">
+        <div class="reminder-shell">
+          <header class="reminder-dialog-header">
+            <div>
+              <p class="reminder-eyebrow">Reminders</p>
+              <h2 id="reminderDialogTitle" class="reminder-dialog-title">Reminder Center</h2>
+              <p class="reminder-dialog-subtitle">Stay ahead of weekly routines, month-end tasks, and quarter closes.</p>
+            </div>
+            <button
+              onclick="closeReminderPanel()"
+              class="reminder-icon-btn"
+              aria-label="Close reminder panel"
+              title="Close"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </header>
+
+          <div class="reminder-menubar" role="tablist" aria-label="Reminder views">
+            <button id="reminderMenuDue" type="button" onclick="switchReminderView('due')" class="reminder-menu-btn reminder-menu-btn-active">
+              Due Today
+              <span id="reminderCountDue" class="reminder-menu-count">0</span>
+            </button>
+            <button id="reminderMenuWeekly" type="button" onclick="switchReminderView('weekly')" class="reminder-menu-btn">
+              Weekly
+              <span id="reminderCountWeekly" class="reminder-menu-count">0</span>
+            </button>
+            <button id="reminderMenuMonthly" type="button" onclick="switchReminderView('monthly')" class="reminder-menu-btn">
+              Monthly
+              <span id="reminderCountMonthly" class="reminder-menu-count">0</span>
+            </button>
+            <button id="reminderMenuQuarterly" type="button" onclick="switchReminderView('quarterly')" class="reminder-menu-btn">
+              Quarterly
+              <span id="reminderCountQuarterly" class="reminder-menu-count">0</span>
+            </button>
+          </div>
+
+          <div class="reminder-dialog-body">
+            <div id="reminderViewDue" class="reminder-view">
+              <section class="reminder-section">
+                <div class="reminder-section-head">
+                  <div>
+                    <p class="reminder-section-kicker">Home</p>
+                    <h3 class="reminder-section-title">Due Today</h3>
+                    <p class="reminder-section-subtitle">All reminders that trigger today.</p>
+                  </div>
+                </div>
+                <div id="dueRemindersList" class="reminder-list"></div>
+                <div id="noDueReminders" class="reminder-empty">
+                  <div class="reminder-empty-title">No reminders due today</div>
+                  <div class="reminder-empty-description">Use Weekly, Monthly, or Quarterly tabs to add reminders.</div>
+                </div>
+              </section>
+            </div>
+
+            <div id="reminderViewWeekly" class="reminder-view hidden">
+              <section class="reminder-section">
+                <div class="reminder-section-head">
+                  <div>
+                    <p class="reminder-section-kicker">Cadence</p>
+                    <h3 class="reminder-section-title">Weekly</h3>
+                    <p class="reminder-section-subtitle">Set a weekday pulse for recurring tasks.</p>
+                  </div>
+                  <button
+                    id="showWeeklyFormBtn"
+                    onclick="toggleAddWeeklyForm()"
+                    class="reminder-btn"
+                  >
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add weekly</span>
+                  </button>
+                </div>
+
+                <div id="weeklyFormContainer" class="reminder-form hidden">
+                  <div class="reminder-form-grid">
+                    <div class="reminder-field">
+                      <label for="weeklyTitle" class="reminder-label">Title</label>
+                      <input
+                        type="text"
+                        id="weeklyTitle"
+                        class="reminder-input"
+                        placeholder="e.g., Team sync"
+                      />
+                    </div>
+                    <div class="reminder-field">
+                      <label for="weeklyDescription" class="reminder-label">Description</label>
+                      <textarea
+                        id="weeklyDescription"
+                        class="reminder-input reminder-textarea"
+                        placeholder="Optional notes"
+                      ></textarea>
+                    </div>
+                    <div class="reminder-field">
+                      <label for="weeklyDay" class="reminder-label">Day of week</label>
+                      <select id="weeklyDay" class="reminder-select">
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                        <option value="0">Sunday</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="reminder-form-actions">
+                    <button id="weeklySubmitBtn" onclick="addWeeklyReminder()" class="reminder-submit-btn">
+                      <i class="fa-solid fa-check"></i>
+                      Save weekly reminder
+                    </button>
+                  </div>
+                </div>
+
+                <div id="weeklyRemindersList" class="reminder-list"></div>
+                <div id="noWeeklyReminders" class="reminder-empty">
+                  <div class="reminder-empty-title">No weekly reminders yet</div>
+                  <div class="reminder-empty-description">Add a weekly cadence to get started.</div>
+                </div>
+              </section>
+            </div>
+
+            <div id="reminderViewMonthly" class="reminder-view hidden">
+              <section class="reminder-section">
+                <div class="reminder-section-head">
+                  <div>
+                    <p class="reminder-section-kicker">Month end</p>
+                    <h3 class="reminder-section-title">Monthly</h3>
+                    <p class="reminder-section-subtitle">Perfect for reports and recurring month-end wrap ups.</p>
+                  </div>
+                  <button
+                    id="showMonthlyFormBtn"
+                    onclick="toggleAddMonthlyForm()"
+                    class="reminder-btn"
+                  >
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add monthly</span>
+                  </button>
+                </div>
+
+                <div id="monthlyFormContainer" class="reminder-form hidden">
+                  <div class="reminder-form-grid">
+                    <div class="reminder-field">
+                      <label for="monthlyTitle" class="reminder-label">Title</label>
+                      <input
+                        type="text"
+                        id="monthlyTitle"
+                        class="reminder-input"
+                        placeholder="e.g., Monthly report"
+                      />
+                    </div>
+                    <div class="reminder-field">
+                      <label for="monthlyDescription" class="reminder-label">Description</label>
+                      <textarea
+                        id="monthlyDescription"
+                        class="reminder-input reminder-textarea"
+                        placeholder="Optional notes"
+                      ></textarea>
+                    </div>
+                  </div>
+                  <div class="reminder-note">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <div>
+                      <div class="reminder-note-title">Auto-scheduled for month end</div>
+                      <div class="reminder-note-text">Triggers on the last day of every month.</div>
+                    </div>
+                  </div>
+                  <div class="reminder-form-actions">
+                    <button id="monthlySubmitBtn" onclick="addMonthlyReminder()" class="reminder-submit-btn">
+                      <i class="fa-solid fa-check"></i>
+                      Save monthly reminder
+                    </button>
+                  </div>
+                </div>
+
+                <div id="monthlyRemindersList" class="reminder-list"></div>
+                <div id="noMonthlyReminders" class="reminder-empty">
+                  <div class="reminder-empty-title">No monthly reminders yet</div>
+                  <div class="reminder-empty-description">Add a month-end task to see it here.</div>
+                </div>
+              </section>
+            </div>
+
+            <div id="reminderViewQuarterly" class="reminder-view hidden">
+              <section class="reminder-section">
+                <div class="reminder-section-head">
+                  <div>
+                    <p class="reminder-section-kicker">Quarter close</p>
+                    <h3 class="reminder-section-title">Quarterly</h3>
+                    <p class="reminder-section-subtitle">Capture end-of-quarter milestones and reviews.</p>
+                  </div>
+                  <button
+                    id="showQuarterlyFormBtn"
+                    onclick="toggleAddQuarterlyForm()"
+                    class="reminder-btn"
+                  >
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add quarterly</span>
+                  </button>
+                </div>
+
+                <div id="quarterlyFormContainer" class="reminder-form hidden">
+                  <div class="reminder-form-grid">
+                    <div class="reminder-field">
+                      <label for="quarterlyTitle" class="reminder-label">Title</label>
+                      <input
+                        type="text"
+                        id="quarterlyTitle"
+                        class="reminder-input"
+                        placeholder="e.g., Q2 review"
+                      />
+                    </div>
+                    <div class="reminder-field">
+                      <label for="quarterlyDescription" class="reminder-label">Description</label>
+                      <textarea
+                        id="quarterlyDescription"
+                        class="reminder-input reminder-textarea"
+                        placeholder="Optional notes"
+                      ></textarea>
+                    </div>
+                    <div class="reminder-field">
+                      <label for="quarterlyMonth" class="reminder-label">Quarter end</label>
+                      <select id="quarterlyMonth" class="reminder-select">
+                        <option value="3">Q1 (March 31)</option>
+                        <option value="6">Q2 (June 30)</option>
+                        <option value="9">Q3 (September 30)</option>
+                        <option value="12">Q4 (December 31)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="reminder-note">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <div>
+                      <div class="reminder-note-title">Auto-scheduled for quarter end</div>
+                      <div class="reminder-note-text">Triggers on the last day of the selected quarter.</div>
+                    </div>
+                  </div>
+                  <div class="reminder-form-actions">
+                    <button id="quarterlySubmitBtn" onclick="addQuarterlyReminder()" class="reminder-submit-btn">
+                      <i class="fa-solid fa-check"></i>
+                      Save quarterly reminder
+                    </button>
+                  </div>
+                </div>
+
+                <div id="quarterlyRemindersList" class="reminder-list"></div>
+                <div id="noQuarterlyReminders" class="reminder-empty">
+                  <div class="reminder-empty-title">No quarterly reminders yet</div>
+                  <div class="reminder-empty-description">Add a quarterly checkpoint to see it here.</div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Leave Management Login Modal -->
     <div id="leaveLoginModal" class="fixed inset-0 z-50 hidden">
       <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveLogin()"></div>
@@ -1557,5 +1927,6 @@
     <!-- 3. Application logic -->
     <script src="app.js"></script>
     <script src="leave-integrated.js"></script>
+    <script src="reminder-system.js"></script>
   </body>
 </html>

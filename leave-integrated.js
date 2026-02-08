@@ -2626,7 +2626,7 @@ async function handleViewStaffCalendar() {
     // Find the staff member
     const { data: user, error } = await supabaseClient
       .from('leave_users')
-      .select('*, sites(*)')
+      .select('user_id, username, full_name, role, site_id, is_active, sites(site_name)')
       .eq('site_id', siteId)
       .eq('role', role)
       .eq('is_active', true)
