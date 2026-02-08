@@ -50,6 +50,11 @@ node --check js/config.js && node --check js/app.js && node --check js/leave-int
 3. Open Leave panel and submit/cancel a test request flow.
 4. Open Announcements page and verify CRUD + filter behavior.
 5. Open Reminder panel and verify create/edit/delete sync.
+6. Open Program modal -> Edit Program Info and verify:
+   - Image add via file picker, drag-and-drop, and clipboard paste.
+   - Pasted images are separated into Program Images (not embedded in rich text).
+   - Program card shows images at top of Program Info area.
+   - Clicking image opens viewer with next/prev, fullscreen, copy, and download.
 
 ## Current File Structure
 ```text
@@ -96,6 +101,25 @@ const { data, error } = await supabaseClient
 6. Preserve this navigation behavior:
    - Moving to non-current month: auto-select last date of that month.
    - Returning to current local month: auto-select local today date.
+
+## Program Info Images (Current Behavior)
+
+1. `events.images` is used for Program Info image metadata (JSON array).
+2. Program detail loading must use projected columns only:
+   - Primary: `EVENT_DETAIL_SELECT_COLUMNS` (`id,info,images`)
+   - Fallback when `images` column is missing: `EVENT_DETAIL_FALLBACK_SELECT_COLUMNS` (`id,info`)
+3. Storage bucket for Program Info images:
+   - Bucket: `announcement-images`
+   - Path prefix: `events/program-info/<eventId>/...`
+4. Do not embed base64 images in Program Info HTML.
+   - Clipboard/dropped images should be stored as Program Images, separate from rich text.
+5. Program card rendering:
+   - Images render at top of Program Info area.
+   - Click image opens viewer modal (multi-image navigation, fullscreen, copy, download).
+6. Required Supabase setup:
+   - SQL column: `events.images jsonb not null default '[]'::jsonb`
+   - Storage RLS policies must allow role `anon` for `insert/delete/select` on
+     `announcement-images/events/program-info/...` objects.
 
 ## Supabase Data Patterns
 

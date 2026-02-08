@@ -53,6 +53,53 @@ function sanitizeHTMLWithLinks(html) {
   return sanitized.replace(/<a\s+/gi, '<a target="_blank" rel="noopener noreferrer" ');
 }
 
+function escapeAttribute(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function getPlainTextFromHtml(html) {
+  const value = typeof html === "string" ? html : "";
+  if (!value) return "";
+  if (typeof document !== "undefined") {
+    const temp = document.createElement("div");
+    temp.innerHTML = value;
+    return (temp.textContent || temp.innerText || "").replace(/\u00a0/g, " ").trim();
+  }
+  return value.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim();
+}
+
+function hasProgramInfoValue(info, images, assumeUnknownHasInfo = false) {
+  const hasImages = normalizeProgramImages(images).length > 0;
+  if (typeof info !== "string") {
+    return hasImages || assumeUnknownHasInfo;
+  }
+
+  const plainText = getPlainTextFromHtml(info);
+  const normalizedText = plainText.toLowerCase().replace(/\s+/g, " ").trim();
+  const isNoInfoPlaceholder =
+    normalizedText === "no program info available." ||
+    normalizedText === "no program info available";
+
+  if (isNoInfoPlaceholder) {
+    return hasImages;
+  }
+
+  return hasImages || plainText.length > 0;
+}
+
+function setProgramInfoIndicatorColor(eventId, hasInfo) {
+  const color = hasInfo ? "#cb233b" : "#94a3b8";
+  const label = document.getElementById(`info-label-${eventId}`);
+  const icon = document.getElementById(`info-icon-${eventId}`);
+  if (label) label.style.color = color;
+  if (icon) icon.style.color = color;
+}
+
 const appStorage = window.safeStorage || {
   getItem() {
     return null;
@@ -211,9 +258,13 @@ let siteSettingsBackup = null;
 // =====================================================
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const EVENT_SUMMARY_SELECT_COLUMNS = "id,title,start,end,category,subcategory,time,secondTime,links,registrationLinks,submitLinks";
-const EVENT_DETAIL_SELECT_COLUMNS = "id,info";
+const EVENT_DETAIL_SELECT_COLUMNS = "id,info,images";
+const EVENT_DETAIL_FALLBACK_SELECT_COLUMNS = "id,info";
 const EVENT_DETAIL_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 const MAX_PROGRAM_INFO_BYTES = 120 * 1024; // 120 KB
+const MAX_PROGRAM_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+const PROGRAM_IMAGE_BUCKET = "announcement-images";
+const PROGRAM_IMAGE_DISABLED_MSG = "Program images are disabled until the `images` column exists in Supabase.";
 let eventsCache = {
   data: null,
   timestamp: null,
@@ -317,34 +368,225 @@ async function loadEventsForDateRange(startDate, endDate) {
   return data || [];
 }
 
-async function loadEventInfoById(eventId, forceRefresh = false) {
-  if (!eventId) return "";
+function normalizeProgramImages(images) {
+  if (!Array.isArray(images)) return [];
+  return images
+    .map((img) => {
+      if (!img) return null;
+      if (typeof img === "string") {
+        return { url: img, path: null, name: "" };
+      }
+      const url = img.url || img.publicUrl || img.href || "";
+      if (!url) return null;
+      return {
+        url: url,
+        path: img.path || null,
+        name: img.name || ""
+      };
+    })
+    .filter(Boolean);
+}
+
+function cloneProgramImages(images) {
+  return normalizeProgramImages(images).map((img) => ({
+    url: img.url,
+    path: img.path || null,
+    name: img.name || ""
+  }));
+}
+
+function areProgramImagesEqual(left, right) {
+  return JSON.stringify(cloneProgramImages(left)) === JSON.stringify(cloneProgramImages(right));
+}
+
+function setProgramImagesEnabled(isEnabled) {
+  programImagesEnabled = Boolean(isEnabled);
+
+  const input = document.getElementById("programInfoImages");
+  const button = document.getElementById("programInfoImagesButton");
+  const note = document.getElementById("programInfoImagesDisabledNote");
+  const zone = document.getElementById("programInfoImageDropzone");
+
+  if (input) input.disabled = !programImagesEnabled;
+  if (button) {
+    button.disabled = !programImagesEnabled;
+    button.classList.toggle("opacity-50", !programImagesEnabled);
+    button.classList.toggle("cursor-not-allowed", !programImagesEnabled);
+  }
+  if (zone) {
+    zone.classList.toggle("opacity-60", !programImagesEnabled);
+    zone.classList.toggle("cursor-not-allowed", !programImagesEnabled);
+  }
+  if (note) note.classList.toggle("hidden", programImagesEnabled);
+}
+
+async function ensureProgramImagesFeatureSupport() {
+  if (programImagesCapabilityChecked) return programImagesEnabled;
+  if (!supabaseClient) return programImagesEnabled;
+
+  try {
+    const { error } = await supabaseClient
+      .from("events")
+      .select("id,images")
+      .limit(1);
+
+    if (error && isMissingColumnError(error)) {
+      setProgramImagesEnabled(false);
+    } else if (!error) {
+      setProgramImagesEnabled(true);
+    }
+  } catch (error) {
+    if (window.DEBUG_MODE) console.warn("Program image capability check failed:", error);
+  }
+
+  programImagesCapabilityChecked = true;
+  return programImagesEnabled;
+}
+
+async function loadEventDetailsById(eventId, forceRefresh = false) {
+  if (!eventId) {
+    return { info: "", images: [] };
+  }
 
   const cached = eventDetailsCache.get(eventId);
   if (!forceRefresh && cached && (Date.now() - cached.timestamp) < EVENT_DETAIL_CACHE_DURATION) {
-    return cached.info;
+    return {
+      info: typeof cached.info === "string" ? cached.info : "",
+      images: cloneProgramImages(cached.images)
+    };
   }
 
-  const { data, error } = await supabaseClient
-    .from('events')
+  let { data, error } = await supabaseClient
+    .from("events")
     .select(EVENT_DETAIL_SELECT_COLUMNS)
-    .eq('id', eventId)
+    .eq("id", eventId)
     .single();
+
+  if (error && isMissingColumnError(error)) {
+    setProgramImagesEnabled(false);
+    programImagesCapabilityChecked = true;
+    const fallback = await supabaseClient
+      .from("events")
+      .select(EVENT_DETAIL_FALLBACK_SELECT_COLUMNS)
+      .eq("id", eventId)
+      .single();
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
 
-  const info = typeof data?.info === "string" ? data.info : "";
+  const details = {
+    info: typeof data?.info === "string" ? data.info : "",
+    images: programImagesEnabled ? normalizeProgramImages(data?.images) : []
+  };
+
   eventDetailsCache.set(eventId, {
-    info: info,
+    info: details.info,
+    images: cloneProgramImages(details.images),
     timestamp: Date.now()
   });
 
   const eventInList = events.find((eventItem) => eventItem.id === eventId);
   if (eventInList) {
-    eventInList.info = info;
+    eventInList.info = details.info;
+    if (programImagesEnabled) {
+      eventInList.images = cloneProgramImages(details.images);
+    }
   }
 
-  return info;
+  return details;
+}
+
+async function loadEventInfoById(eventId, forceRefresh = false) {
+  const details = await loadEventDetailsById(eventId, forceRefresh);
+  return details.info;
+}
+
+async function prefetchEventDetailsForVisibleEventIds(eventIds) {
+  if (!Array.isArray(eventIds) || eventIds.length === 0 || !supabaseClient) return;
+
+  const uniqueIds = [...new Set(eventIds.filter((id) => id !== null && id !== undefined && id !== ""))];
+  if (!uniqueIds.length) return;
+
+  const now = Date.now();
+  const idsToFetch = [];
+
+  uniqueIds.forEach((eventId) => {
+    const cached = eventDetailsCache.get(eventId);
+    if (cached && (now - cached.timestamp) < EVENT_DETAIL_CACHE_DURATION) {
+      const eventInList = events.find((eventItem) => String(eventItem.id) === String(eventId));
+      if (eventInList) {
+        eventInList.info = typeof cached.info === "string" ? cached.info : "";
+        if (programImagesEnabled) {
+          eventInList.images = cloneProgramImages(cached.images);
+        }
+      }
+      setProgramInfoIndicatorColor(eventId, hasProgramInfoValue(cached.info, cached.images, false));
+      return;
+    }
+
+    const inFlightKey = String(eventId);
+    if (prefetchEventDetailsInFlight.has(inFlightKey)) return;
+    prefetchEventDetailsInFlight.add(inFlightKey);
+    idsToFetch.push(eventId);
+  });
+
+  if (!idsToFetch.length) return;
+
+  try {
+    let { data, error } = await supabaseClient
+      .from("events")
+      .select(EVENT_DETAIL_SELECT_COLUMNS)
+      .in("id", idsToFetch);
+
+    if (error && isMissingColumnError(error)) {
+      setProgramImagesEnabled(false);
+      programImagesCapabilityChecked = true;
+      const fallback = await supabaseClient
+        .from("events")
+        .select(EVENT_DETAIL_FALLBACK_SELECT_COLUMNS)
+        .in("id", idsToFetch);
+      data = fallback.data;
+      error = fallback.error;
+    }
+
+    if (error) throw error;
+
+    const rows = Array.isArray(data) ? data : [];
+    const rowsById = new Map(rows.map((row) => [String(row.id), row]));
+    const timestamp = Date.now();
+
+    idsToFetch.forEach((eventId) => {
+      const row = rowsById.get(String(eventId));
+      const details = {
+        info: typeof row?.info === "string" ? row.info : "",
+        images: programImagesEnabled ? normalizeProgramImages(row?.images) : []
+      };
+
+      eventDetailsCache.set(eventId, {
+        info: details.info,
+        images: cloneProgramImages(details.images),
+        timestamp: timestamp
+      });
+
+      const eventInList = events.find((eventItem) => String(eventItem.id) === String(eventId));
+      if (eventInList) {
+        eventInList.info = details.info;
+        if (programImagesEnabled) {
+          eventInList.images = cloneProgramImages(details.images);
+        }
+      }
+
+      setProgramInfoIndicatorColor(eventId, hasProgramInfoValue(details.info, details.images, false));
+    });
+  } catch (error) {
+    if (window.DEBUG_MODE) console.warn("Failed to prefetch event details for list indicators:", error);
+  } finally {
+    idsToFetch.forEach((eventId) => {
+      prefetchEventDetailsInFlight.delete(String(eventId));
+    });
+  }
 }
 
 // =====================================================
@@ -495,6 +737,23 @@ let announcements = [];
 let latestAnnouncementMeta = null;
 let programInfoContent = "";
 let originalProgramInfoContent = "";
+let programImagesEnabled = true;
+let programImagesCapabilityChecked = false;
+let programExistingImages = [];
+let programNewImageFiles = [];
+let programRemovedImages = [];
+let originalProgramImages = [];
+let editorProgramExistingImages = [];
+let editorProgramNewImageFiles = [];
+let editorProgramRemovedImages = [];
+let programEditorPreviewUrls = [];
+let eventImageMap = {};
+let currentProgramImageUrl = "";
+let currentProgramImageName = "";
+let currentProgramImageList = [];
+let currentProgramImageIndex = 0;
+let programImageMaximized = false;
+const prefetchEventDetailsInFlight = new Set();
 let currentSort = "startTime";
 let deleteEventId = null;
 let deleteSectionIdx = null;
@@ -758,6 +1017,7 @@ async function loadFromSupabase() {
     // Load events and assign to global events variable
     showAllSkeletons();
     events = await loadEventsForMonth(currentYear, currentMonth);
+    await ensureProgramImagesFeatureSupport();
     // Render events immediately
     hideAllSkeletons();
     renderCalendar();
@@ -1830,6 +2090,14 @@ setTimeout(() => {
 
 async function confirmDelete() {
   if (deleteEventId) {
+    let imagesToDelete = [];
+    if (programImagesEnabled) {
+      try {
+        const details = await loadEventDetailsById(deleteEventId);
+        imagesToDelete = cloneProgramImages(details.images);
+      } catch (error) {}
+    }
+
     // Remove from local array
     events = events.filter((e) => e.id !== deleteEventId);
     
@@ -1846,9 +2114,13 @@ async function confirmDelete() {
         clearEventsCache();
         events = await loadEventsForMonth(currentYear, currentMonth, true);
       } else {
+        if (imagesToDelete.length > 0 && programImagesEnabled) {
+          await deleteProgramImages(imagesToDelete);
+        }
         clearEventsCache();
       }
       eventDetailsCache.delete(deleteEventId);
+      delete eventImageMap[String(deleteEventId)];
       
       renderEventList();
       renderCalendar();
@@ -2394,6 +2666,7 @@ function renderEventList() {
     return;
   }
   container.innerHTML = "";
+  eventImageMap = {};
 
   let displayEvents = [];
 
@@ -2596,10 +2869,13 @@ function renderEventList() {
 
 
     const infoMarkup = typeof ev.info === "string"
-      ? (ev.info
-        ? sanitizeHTMLWithLinks(ev.info)
-        : '<span class="text-[9px] text-slate-400 italic">No program info available.</span>')
+      ? buildProgramInfoMarkup(ev.id, ev.info, ev.images)
       : '<span class="text-[9px] text-slate-400 italic">Loading program info...</span>';
+    const hasLoadedDetails = eventDetailsCache.has(ev.id);
+    const hasProgramInfo = hasLoadedDetails
+      ? hasProgramInfoValue(ev.info, ev.images, false)
+      : true;
+    const infoIndicatorColor = hasProgramInfo ? "#cb233b" : "#94a3b8";
 
     card.innerHTML = `
       <div class="flex flex-col gap-1 relative">
@@ -2619,8 +2895,8 @@ function renderEventList() {
         ${ev.time || ev.secondTime ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time || ""}${ev.secondTime ? `<br><i class="fa-regular fa-clock mr-1"></i>${ev.secondTime}` : ""}</div>` : ""}
         <div class="mt-1 flex justify-end">
           <button type="button" onclick="toggleEventInfo('${ev.id}')" class="text-[8px] text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer">
-            <span class="font-semibold" style="color: #cb233b;">Program Info</span>
-            <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]" style="color: #cb233b;"></i>
+            <span id="info-label-${ev.id}" class="font-semibold" style="color: ${infoIndicatorColor};">Program Info</span>
+            <i id="info-icon-${ev.id}" class="fa-solid fa-chevron-down text-[7px]" style="color: ${infoIndicatorColor};"></i>
           </button>
         </div>
         <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content overflow-hidden">${infoMarkup}</div>
@@ -2646,6 +2922,9 @@ function renderEventList() {
     paginationContainer.remove();
   }
   container.insertAdjacentHTML('afterend', paginationHtml || '');
+
+  const visibleEventIds = paginatedEvents.map((eventItem) => eventItem?.id).filter(Boolean);
+  prefetchEventDetailsForVisibleEventIds(visibleEventIds);
 }
 
 // =====================================================
@@ -2735,6 +3014,8 @@ function removeSubmitLink(id) {
 
 async function openModal(id = null, dateHint = null) {
   showModal("eventModal", "modalPanel", "eventTitle");
+  await ensureProgramImagesFeatureSupport();
+  setProgramImagesEnabled(programImagesEnabled);
 
   if (id) {
     // Editing existing event
@@ -2756,9 +3037,13 @@ async function openModal(id = null, dateHint = null) {
 
 
     let eventInfo = typeof ev.info === "string" ? ev.info : "";
-    if (typeof ev.info !== "string") {
+    let eventImages = normalizeProgramImages(ev.images);
+    const needsDetailsFetch = typeof ev.info !== "string" || (programImagesEnabled && !Array.isArray(ev.images));
+    if (needsDetailsFetch) {
       try {
-        eventInfo = await loadEventInfoById(ev.id);
+        const details = await loadEventDetailsById(ev.id);
+        eventInfo = details.info || "";
+        eventImages = cloneProgramImages(details.images);
       } catch (error) {
         console.error("Failed to load event details:", error);
       }
@@ -2766,6 +3051,10 @@ async function openModal(id = null, dateHint = null) {
 
     programInfoContent = eventInfo || "";
     originalProgramInfoContent = programInfoContent;
+    programExistingImages = cloneProgramImages(eventImages);
+    programNewImageFiles = [];
+    programRemovedImages = [];
+    originalProgramImages = cloneProgramImages(eventImages);
     updateProgramInfoPreview();
     const infoContainer = document.getElementById("programInfoContainer");
     if (infoContainer) {
@@ -2888,6 +3177,11 @@ async function openModal(id = null, dateHint = null) {
 
     programInfoContent = "";
     originalProgramInfoContent = "";
+    programExistingImages = [];
+    programNewImageFiles = [];
+    programRemovedImages = [];
+    originalProgramImages = [];
+    clearProgramEditorPreviewUrls();
     updateProgramInfoPreview();
 
     // Set date to today or clicked date
@@ -2982,17 +3276,297 @@ function toggleProgramInfo() {
   toggleChevron(icon, !isOpen);
 }
 
-function openRichTextEditor() {
-  const modal = document.getElementById("richTextModal");
-  const panel = document.getElementById("richTextPanel");
+function clearProgramEditorPreviewUrls() {
+  programEditorPreviewUrls.forEach((url) => {
+    try {
+      URL.revokeObjectURL(url);
+    } catch (error) {}
+  });
+  programEditorPreviewUrls = [];
+}
+
+function syncProgramImageDraftFromState() {
+  editorProgramExistingImages = cloneProgramImages(programExistingImages);
+  editorProgramNewImageFiles = Array.isArray(programNewImageFiles) ? programNewImageFiles.slice() : [];
+  editorProgramRemovedImages = cloneProgramImages(programRemovedImages);
+}
+
+function commitProgramImageDraftToState() {
+  programExistingImages = cloneProgramImages(editorProgramExistingImages);
+  programNewImageFiles = Array.isArray(editorProgramNewImageFiles) ? editorProgramNewImageFiles.slice() : [];
+  programRemovedImages = cloneProgramImages(editorProgramRemovedImages);
+}
+
+function renderProgramImagePreviews() {
+  const container = document.getElementById("programInfoImagePreview");
+  if (!container) return;
+
+  clearProgramEditorPreviewUrls();
+  const previewItems = [];
+
+  editorProgramExistingImages.forEach((img, index) => {
+    previewItems.push(`
+      <div class="relative group">
+        <button type="button" onclick="programOpenEditorImage('existing', ${index})" class="block w-full">
+          <img src="${escapeAttribute(img.url)}" alt="Program image" class="w-full h-24 object-cover rounded border border-slate-200" />
+        </button>
+        <button type="button" onclick="programRemoveExistingImage(${index})" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    `);
+  });
+
+  editorProgramNewImageFiles.forEach((file, index) => {
+    const previewUrl = URL.createObjectURL(file);
+    programEditorPreviewUrls.push(previewUrl);
+    previewItems.push(`
+      <div class="relative group">
+        <button type="button" onclick="programOpenEditorImage('new', ${index})" class="block w-full">
+          <img src="${escapeAttribute(previewUrl)}" alt="New program image" class="w-full h-24 object-cover rounded border border-slate-200" />
+        </button>
+        <button type="button" onclick="programRemoveNewImage(${index})" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    `);
+  });
+
+  container.innerHTML = previewItems.join("");
+}
+
+function validateProgramImageFiles(files) {
+  const accepted = [];
+  const rejected = [];
+
+  files.forEach((file) => {
+    if (!file || !file.type || !file.type.startsWith("image/")) {
+      rejected.push(`${file?.name || "unknown-file"} (not an image)`);
+      return;
+    }
+    if (file.size > MAX_PROGRAM_IMAGE_BYTES) {
+      rejected.push(`${file.name} (over 5 MB)`);
+      return;
+    }
+    accepted.push(file);
+  });
+
+  if (rejected.length > 0) {
+    alert(`Some files were skipped:\n- ${rejected.join("\n- ")}`);
+  }
+
+  return accepted;
+}
+
+function addProgramImageFiles(files) {
+  if (!programImagesEnabled) {
+    alert(PROGRAM_IMAGE_DISABLED_MSG);
+    return 0;
+  }
+  const imageFiles = validateProgramImageFiles(Array.isArray(files) ? files : []);
+  if (!imageFiles.length) return 0;
+  editorProgramNewImageFiles = editorProgramNewImageFiles.concat(imageFiles);
+  renderProgramImagePreviews();
+  return imageFiles.length;
+}
+
+function addProgramImageUrls(urls) {
+  const result = { added: 0, skippedData: 0 };
+  if (!programImagesEnabled || !Array.isArray(urls) || !urls.length) return result;
+
+  urls.forEach((url) => {
+    const cleanUrl = typeof url === "string" ? url.trim() : "";
+    if (!cleanUrl) return;
+    if (/^data:image\//i.test(cleanUrl)) {
+      result.skippedData += 1;
+      return;
+    }
+    if (!/^https?:\/\//i.test(cleanUrl)) return;
+
+    const exists = editorProgramExistingImages.some((img) => img.url === cleanUrl);
+    if (!exists) {
+      editorProgramExistingImages.push({ url: cleanUrl, path: null, name: "pasted-image" });
+      result.added += 1;
+    }
+  });
+
+  if (result.added > 0) {
+    renderProgramImagePreviews();
+  }
+  return result;
+}
+
+function programTriggerImagePicker() {
+  if (!programImagesEnabled) {
+    alert(PROGRAM_IMAGE_DISABLED_MSG);
+    return;
+  }
+  const input = document.getElementById("programInfoImages");
+  if (input) input.click();
+}
+
+function programHandleImageSelection(input) {
+  if (!programImagesEnabled) {
+    alert(PROGRAM_IMAGE_DISABLED_MSG);
+    if (input) input.value = "";
+    return;
+  }
+  const files = Array.from(input?.files || []);
+  if (!files.length) return;
+  addProgramImageFiles(files);
+  if (input) input.value = "";
+}
+
+function programSetDropActive(isActive) {
+  const zone = document.getElementById("programInfoImageDropzone");
+  if (!zone) return;
+  if (isActive) {
+    zone.classList.add("ring-2", "ring-blue-300", "bg-blue-50/60");
+  } else {
+    zone.classList.remove("ring-2", "ring-blue-300", "bg-blue-50/60");
+  }
+}
+
+function programHandleImageDragOver(event) {
+  if (!programImagesEnabled) return;
+  event.preventDefault();
+  programSetDropActive(true);
+}
+
+function programHandleImageDragLeave(event) {
+  if (!programImagesEnabled) return;
+  event.preventDefault();
+  programSetDropActive(false);
+}
+
+function programHandleImageDrop(event) {
+  if (!programImagesEnabled) {
+    event.preventDefault();
+    programSetDropActive(false);
+    alert(PROGRAM_IMAGE_DISABLED_MSG);
+    return;
+  }
+  event.preventDefault();
+  programSetDropActive(false);
+  const files = Array.from(event.dataTransfer?.files || []);
+  if (!files.length) return;
+  addProgramImageFiles(files);
+}
+
+function programRemoveExistingImage(index) {
+  const removed = editorProgramExistingImages.splice(index, 1)[0];
+  if (removed) {
+    const alreadyQueued = editorProgramRemovedImages.some(
+      (img) => img.url === removed.url && (img.path || null) === (removed.path || null)
+    );
+    if (!alreadyQueued) {
+      editorProgramRemovedImages.push(removed);
+    }
+  }
+  renderProgramImagePreviews();
+}
+
+function programRemoveNewImage(index) {
+  editorProgramNewImageFiles.splice(index, 1);
+  renderProgramImagePreviews();
+}
+
+function programOpenEditorImage(type, index) {
+  const images = [];
+  editorProgramExistingImages.forEach((img) => {
+    images.push({ url: img.url, name: img.name || "program-image" });
+  });
+  editorProgramNewImageFiles.forEach((file, fileIndex) => {
+    const previewUrl = programEditorPreviewUrls[fileIndex];
+    if (previewUrl) {
+      images.push({ url: previewUrl, name: file.name || "new-program-image" });
+    }
+  });
+
+  let targetIndex = type === "existing" ? index : editorProgramExistingImages.length + index;
+  if (targetIndex < 0) targetIndex = 0;
+  if (!images.length) return;
+  openProgramImageViewerWithList(images, targetIndex);
+}
+
+function extractImagesFromEditor(editor) {
+  const urls = [];
+  if (!editor) return urls;
+  editor.querySelectorAll("img").forEach((img) => {
+    const src = (img.getAttribute("src") || "").trim();
+    if (src) urls.push(src);
+    img.remove();
+  });
+  return urls;
+}
+
+function programHandleEditorPaste(event, editor) {
+  const clipboard = event?.clipboardData;
+  const items = Array.from(clipboard?.items || []);
+  const imageFiles = items
+    .filter((item) => item.type && item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter(Boolean);
+
+  if (imageFiles.length > 0) {
+    event.preventDefault();
+    const plainText = clipboard?.getData("text/plain");
+    if (plainText) {
+      document.execCommand("insertText", false, plainText);
+    }
+    const added = addProgramImageFiles(imageFiles);
+    if (added > 0) {
+      alert("Pasted image added to Program Images.");
+    }
+    setTimeout(() => autoConvertUrlsToLinks(editor), 0);
+    return;
+  }
+
+  setTimeout(() => {
+    const extractedUrls = extractImagesFromEditor(editor);
+    if (extractedUrls.length > 0) {
+      const result = addProgramImageUrls(extractedUrls);
+      if (result.added > 0) {
+        alert("Pasted image was moved to Program Images.");
+      } else if (result.skippedData > 0) {
+        alert("Embedded base64 images are not allowed. Use image upload instead.");
+      }
+    }
+    autoConvertUrlsToLinks(editor);
+  }, 0);
+}
+
+function programHandleEditorDrop(event, editor) {
+  const files = Array.from(event?.dataTransfer?.files || []);
+  if (!files.length) return;
+  if (!files.some((file) => file?.type && file.type.startsWith("image/"))) return;
+
+  event.preventDefault();
+  const added = addProgramImageFiles(files);
+  if (added > 0) {
+    alert("Dropped image added to Program Images.");
+  }
+  setTimeout(() => autoConvertUrlsToLinks(editor), 0);
+}
+
+async function openRichTextEditor() {
+  await ensureProgramImagesFeatureSupport();
+  setProgramImagesEnabled(programImagesEnabled);
+  syncProgramImageDraftFromState();
+  renderProgramImagePreviews();
+
   const editor = document.getElementById("richTextEditor");
-
   editor.innerHTML = programInfoContent || "";
-
-  editor.onpaste = function (e) {
-    setTimeout(() => {
-      autoConvertUrlsToLinks(editor);
-    }, 0);
+  editor.onpaste = function (event) {
+    programHandleEditorPaste(event, editor);
+  };
+  editor.ondragover = function (event) {
+    if ((event.dataTransfer?.types || []).includes("Files")) {
+      event.preventDefault();
+    }
+  };
+  editor.ondrop = function (event) {
+    programHandleEditorDrop(event, editor);
   };
 
   showModal("richTextModal", "richTextPanel", "richTextEditor");
@@ -3044,6 +3618,9 @@ function autoConvertUrlsToLinks(editor) {
 }
 
 function closeRichTextModal() {
+  clearProgramEditorPreviewUrls();
+  programSetDropActive(false);
+  closeProgramImageViewer();
   hideModal("richTextModal", "richTextPanel");
 }
 
@@ -3156,6 +3733,11 @@ function confirmRemoveInfo() {
 
 function removeInfoConfirmed() {
   programInfoContent = "";
+  if (programExistingImages.length > 0) {
+    programRemovedImages = programRemovedImages.concat(cloneProgramImages(programExistingImages));
+  }
+  programExistingImages = [];
+  programNewImageFiles = [];
   updateProgramInfoPreview();
   closeConfirmModal();
   closeRichTextModal();
@@ -3165,7 +3747,7 @@ function saveRichText() {
   const editor = document.getElementById("richTextEditor");
   const nextContent = editor.innerHTML.trim();
   if (containsEmbeddedDataImage(nextContent)) {
-    alert("Embedded base64 images are not allowed in Program Info. Upload images to a URL and paste the URL instead.");
+    alert("Embedded base64 images are not allowed in Program Info. Use Program Images upload instead.");
     return;
   }
 
@@ -3176,6 +3758,7 @@ function saveRichText() {
   }
 
   programInfoContent = nextContent;
+  commitProgramImageDraftToState();
   updateProgramInfoPreview();
   closeRichTextModal();
 }
@@ -3210,6 +3793,196 @@ function updateSubcategories(categoryValue) {
   });
 }
 
+function buildProgramInfoMarkup(eventId, info, images) {
+  const normalizedImages = normalizeProgramImages(images);
+  const mapKey = String(eventId);
+  eventImageMap[mapKey] = normalizedImages.map((img) => ({
+    url: img.url,
+    name: img.name || "program-image"
+  }));
+
+  const imagesHtml = normalizedImages.length > 0
+    ? `<div class="mb-2 flex flex-wrap gap-2 items-start justify-start">${normalizedImages.map((img, index) => `<button type="button" onclick="openEventCardImage('${mapKey}', ${index})" class="block cursor-pointer"><div class="h-[60px] max-w-full bg-white border border-slate-200 rounded overflow-hidden hover:opacity-95 transition-opacity flex items-start justify-start cursor-pointer"><img src="${escapeAttribute(img.url)}" alt="Program image" class="h-[60px] w-auto max-w-full object-contain object-left-top cursor-pointer" loading="lazy" /></div></button>`).join("")}</div>`
+    : "";
+
+  const infoHtml = info
+    ? sanitizeHTMLWithLinks(info)
+    : '<span class="text-[9px] text-slate-400 italic">No program info available.</span>';
+
+  return `${imagesHtml}${infoHtml}`;
+}
+
+function openEventCardImage(eventId, index) {
+  const images = eventImageMap[String(eventId)] || [];
+  if (!images.length) return;
+  openProgramImageViewerWithList(images, index);
+}
+
+function openProgramImageViewer(url, name = "") {
+  openProgramImageViewerWithList([{ url, name: name || "program-image" }], 0);
+}
+
+function openProgramImageViewerWithList(images, index) {
+  const modal = document.getElementById("programImageModal");
+  if (!modal || !Array.isArray(images) || images.length === 0) return;
+  currentProgramImageList = images;
+  currentProgramImageIndex = Math.min(Math.max(index, 0), images.length - 1);
+  updateProgramImageViewer();
+  modal.classList.remove("hidden");
+}
+
+function updateProgramImageViewer() {
+  const img = document.getElementById("programImagePreviewLarge");
+  const counter = document.getElementById("programImageCounter");
+  const prevBtn = document.getElementById("programImagePrev");
+  const nextBtn = document.getElementById("programImageNext");
+  if (!img) return;
+
+  const current = currentProgramImageList[currentProgramImageIndex];
+  if (!current) return;
+
+  currentProgramImageUrl = current.url;
+  currentProgramImageName = current.name || "program-image";
+  img.src = currentProgramImageUrl;
+  img.alt = currentProgramImageName;
+  if (counter) counter.textContent = `${currentProgramImageIndex + 1} / ${currentProgramImageList.length}`;
+
+  const isPrevDisabled = currentProgramImageIndex <= 0;
+  const isNextDisabled = currentProgramImageIndex >= currentProgramImageList.length - 1;
+
+  if (prevBtn) {
+    prevBtn.disabled = isPrevDisabled;
+    prevBtn.classList.toggle("opacity-40", isPrevDisabled);
+    prevBtn.classList.toggle("hidden", isPrevDisabled);
+  }
+  if (nextBtn) {
+    nextBtn.disabled = isNextDisabled;
+    nextBtn.classList.toggle("opacity-40", isNextDisabled);
+    nextBtn.classList.toggle("hidden", isNextDisabled);
+  }
+}
+
+function showPrevProgramImage() {
+  if (currentProgramImageIndex <= 0) return;
+  currentProgramImageIndex -= 1;
+  updateProgramImageViewer();
+}
+
+function showNextProgramImage() {
+  if (currentProgramImageIndex >= currentProgramImageList.length - 1) return;
+  currentProgramImageIndex += 1;
+  updateProgramImageViewer();
+}
+
+function closeProgramImageViewer() {
+  const modal = document.getElementById("programImageModal");
+  const img = document.getElementById("programImagePreviewLarge");
+  if (img) img.src = "";
+  if (modal) modal.classList.add("hidden");
+  currentProgramImageUrl = "";
+  currentProgramImageName = "";
+  currentProgramImageList = [];
+  currentProgramImageIndex = 0;
+  exitProgramImageFullscreen();
+}
+
+function handleProgramImageOverlayClick(event) {
+  const panel = document.getElementById("programImagePanel");
+  const frame = document.getElementById("programImageFrame");
+  const target = event?.target;
+  if (!panel || !target) return;
+
+  if (!programImageMaximized) {
+    if (!panel.contains(target)) {
+      closeProgramImageViewer();
+    }
+    return;
+  }
+
+  if (frame && !frame.contains(target)) {
+    exitProgramImageFullscreen();
+  }
+}
+
+async function copyProgramImage() {
+  if (!currentProgramImageUrl) return;
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      const response = await fetch(currentProgramImageUrl);
+      const blob = await response.blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      alert("Image copied to clipboard.");
+      return;
+    }
+  } catch (error) {}
+
+  try {
+    await navigator.clipboard.writeText(currentProgramImageUrl);
+    alert("Image link copied to clipboard.");
+  } catch (error) {
+    alert("Unable to copy image. Please use Download.");
+  }
+}
+
+function downloadProgramImage() {
+  if (!currentProgramImageUrl) return;
+  const link = document.createElement("a");
+  link.href = currentProgramImageUrl;
+  link.download = currentProgramImageName || "program-image";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function toggleProgramImageFullscreen() {
+  const modal = document.getElementById("programImageModal");
+  const icon = document.getElementById("programImageFullscreenIcon");
+  if (!modal) return;
+  programImageMaximized = !programImageMaximized;
+  modal.classList.toggle("image-modal-full", programImageMaximized);
+  if (icon) {
+    icon.classList.toggle("fa-expand", !programImageMaximized);
+    icon.classList.toggle("fa-compress", programImageMaximized);
+  }
+}
+
+function exitProgramImageFullscreen() {
+  const modal = document.getElementById("programImageModal");
+  const icon = document.getElementById("programImageFullscreenIcon");
+  programImageMaximized = false;
+  if (modal) modal.classList.remove("image-modal-full");
+  if (icon) {
+    icon.classList.remove("fa-compress");
+    icon.classList.add("fa-expand");
+  }
+}
+
+async function uploadProgramImages(eventId, files) {
+  const uploaded = [];
+  for (const file of files) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniquePart = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const path = `events/program-info/${eventId}/${uniquePart}-${safeName}`;
+    const { error } = await supabaseClient.storage
+      .from(PROGRAM_IMAGE_BUCKET)
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    const { data } = supabaseClient.storage.from(PROGRAM_IMAGE_BUCKET).getPublicUrl(path);
+    if (data?.publicUrl) {
+      uploaded.push({ url: data.publicUrl, path: path, name: file.name });
+    }
+  }
+  return uploaded;
+}
+
+async function deleteProgramImages(images) {
+  const paths = normalizeProgramImages(images).map((img) => img.path).filter(Boolean);
+  if (!paths.length) return;
+  try {
+    await supabaseClient.storage.from(PROGRAM_IMAGE_BUCKET).remove(paths);
+  } catch (error) {}
+}
+
 async function toggleEventInfo(eventId) {
   const container = document.getElementById("event-info-" + eventId);
   const icon = document.getElementById("info-icon-" + eventId);
@@ -3223,26 +3996,26 @@ async function toggleEventInfo(eventId) {
   }
 
   const eventData = events.find((eventItem) => eventItem.id === eventId);
-  const needsDetailsFetch = !eventData || typeof eventData.info !== "string";
+  const needsDetailsFetch = !eventData
+    || typeof eventData.info !== "string"
+    || (programImagesEnabled && !Array.isArray(eventData.images));
 
   if (needsDetailsFetch) {
     container.innerHTML = '<span class="text-[9px] text-slate-400 italic">Loading program info...</span>';
     container.classList.remove("hidden");
     toggleChevron(icon, true);
     try {
-      const info = await loadEventInfoById(eventId);
-      container.innerHTML = info
-        ? sanitizeHTMLWithLinks(info)
-        : '<span class="text-[9px] text-slate-400 italic">No program info available.</span>';
+      const details = await loadEventDetailsById(eventId);
+      container.innerHTML = buildProgramInfoMarkup(eventId, details.info, details.images);
+      setProgramInfoIndicatorColor(eventId, hasProgramInfoValue(details.info, details.images, false));
     } catch (error) {
       console.error("Failed to load program info:", error);
       container.innerHTML = '<span class="text-[9px] text-red-500 italic">Failed to load program info.</span>';
     }
   } else {
     container.classList.remove("hidden");
-    if (!eventData.info) {
-      container.innerHTML = '<span class="text-[9px] text-slate-400 italic">No program info available.</span>';
-    }
+    container.innerHTML = buildProgramInfoMarkup(eventId, eventData.info || "", eventData.images);
+    setProgramInfoIndicatorColor(eventId, hasProgramInfoValue(eventData.info, eventData.images, false));
     toggleChevron(icon, true);
   }
 }
@@ -3410,7 +4183,7 @@ async function saveEvent() {
 
   const infoChanged = programInfoVal !== originalProgramInfoContent;
   if (infoChanged && containsEmbeddedDataImage(programInfoVal)) {
-    alert("Embedded base64 images are not allowed in Program Info. Upload images to a URL and paste the URL instead.");
+    alert("Embedded base64 images are not allowed in Program Info. Use Program Images upload instead.");
     return;
   }
 
@@ -3435,46 +4208,140 @@ async function saveEvent() {
     submitLinks: submitLinks,
   };
 
+  const imagesChanged = !areProgramImagesEqual(programExistingImages, originalProgramImages)
+    || programNewImageFiles.length > 0
+    || programRemovedImages.length > 0;
 
-  if (id) {
-    // Update existing event - update directly in events table
-    const { error: updateError } = await supabaseClient
-      .from('events')
-      .update(eventData)
-      .eq('id', id);
-    
-    if (updateError) {
-      console.error("Error updating event:", updateError);
-      alert("Failed to update event. Please try again.");
-      return;
+  let uploadedImages = [];
+  let savedEvent = { ...eventData };
+  let imagesColumnMissing = false;
+
+  try {
+    if (id) {
+      const updatePayload = { ...eventData };
+      let finalImages = cloneProgramImages(programExistingImages);
+
+      if (programImagesEnabled && imagesChanged) {
+        if (programNewImageFiles.length > 0) {
+          uploadedImages = await uploadProgramImages(id, programNewImageFiles);
+          finalImages = finalImages.concat(uploadedImages);
+        }
+        updatePayload.images = finalImages;
+      }
+
+      let { error: updateError } = await supabaseClient
+        .from("events")
+        .update(updatePayload)
+        .eq("id", id);
+
+      if (updateError && isMissingColumnError(updateError) && programImagesEnabled) {
+        imagesColumnMissing = true;
+        setProgramImagesEnabled(false);
+        programImagesCapabilityChecked = true;
+        if (uploadedImages.length > 0) {
+          await deleteProgramImages(uploadedImages);
+          uploadedImages = [];
+        }
+        const retry = await supabaseClient
+          .from("events")
+          .update(eventData)
+          .eq("id", id);
+        updateError = retry.error;
+      }
+
+      if (updateError) throw updateError;
+
+      savedEvent = { ...eventData };
+      if (programImagesEnabled) {
+        savedEvent.images = imagesChanged
+          ? cloneProgramImages(finalImages)
+          : cloneProgramImages(programExistingImages);
+      }
+    } else {
+      const { error: insertError } = await supabaseClient
+        .from("events")
+        .insert([eventData]);
+
+      if (insertError) throw insertError;
+
+      savedEvent = { ...eventData };
+
+      if (programImagesEnabled && imagesChanged) {
+        let finalImages = cloneProgramImages(programExistingImages);
+        if (programNewImageFiles.length > 0) {
+          uploadedImages = await uploadProgramImages(eventData.id, programNewImageFiles);
+          finalImages = finalImages.concat(uploadedImages);
+        }
+
+        if (finalImages.length > 0) {
+          let { error: imageUpdateError } = await supabaseClient
+            .from("events")
+            .update({ images: finalImages })
+            .eq("id", eventData.id);
+
+          if (imageUpdateError && isMissingColumnError(imageUpdateError)) {
+            imagesColumnMissing = true;
+            setProgramImagesEnabled(false);
+            programImagesCapabilityChecked = true;
+            if (uploadedImages.length > 0) {
+              await deleteProgramImages(uploadedImages);
+              uploadedImages = [];
+            }
+            finalImages = [];
+          } else if (imageUpdateError) {
+            throw imageUpdateError;
+          }
+        }
+
+        if (programImagesEnabled) {
+          savedEvent.images = cloneProgramImages(finalImages);
+        }
+      }
     }
-    
-    // Update local array
-    const index = events.findIndex((e) => e.id === id);
-    if (index !== -1) events[index] = eventData;
-    eventDetailsCache.set(id, { info: eventData.info || "", timestamp: Date.now() });
-  } else {
-    // Add new event - insert directly into events table
-    const { error: insertError } = await supabaseClient
-      .from('events')
-      .insert([eventData]);
-    
-    if (insertError) {
-      console.error("Error inserting event:", insertError);
-      alert("Failed to add event. Please try again.");
-      return;
+
+    if (programImagesEnabled && programRemovedImages.length > 0) {
+      await deleteProgramImages(programRemovedImages);
     }
-    
-    // Add to local array
-    events.push(eventData);
-    eventDetailsCache.set(eventData.id, { info: eventData.info || "", timestamp: Date.now() });
+  } catch (error) {
+    console.error("Error saving event:", error);
+    if (uploadedImages.length > 0) {
+      await deleteProgramImages(uploadedImages);
+    }
+    if (/bucket|storage/i.test(error?.message || "")) {
+      alert("Image upload failed. Please check the Supabase storage bucket.");
+    } else {
+      alert("Failed to save event. Please try again.");
+    }
+    return;
   }
 
+  if (id) {
+    const index = events.findIndex((e) => e.id === id);
+    if (index !== -1) events[index] = savedEvent;
+  } else {
+    events.push(savedEvent);
+  }
+  eventDetailsCache.set(savedEvent.id, {
+    info: savedEvent.info || "",
+    images: cloneProgramImages(savedEvent.images),
+    timestamp: Date.now()
+  });
+
+  originalProgramInfoContent = savedEvent.info || "";
+  programExistingImages = cloneProgramImages(savedEvent.images);
+  programNewImageFiles = [];
+  programRemovedImages = [];
+  originalProgramImages = cloneProgramImages(savedEvent.images);
+  clearProgramEditorPreviewUrls();
+
   clearEventsCache();
-  originalProgramInfoContent = eventData.info || "";
   closeModal();
   renderCalendar();
   renderEventList();
+
+  if (imagesColumnMissing) {
+    alert("Program saved, but images were skipped because the `events.images` column is missing.");
+  }
 }
 
 function deleteEvent(id) {
