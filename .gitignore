@@ -13,6 +13,7 @@ build/
 # Configuration files with sensitive data (local development only)
 config.private.js
 supabase.config.js
+js/supabase.config.js
 
 # IDE and editor files
 .idea/

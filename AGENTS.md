@@ -1,217 +1,172 @@
-# AGENTS.md - NADI Calendar & Leave Management System
+# AGENTS.md - NADI Calendar, Leave, and Reminder System
 
 ## Project Overview
-A vanilla JavaScript calendar and leave management system for NADI Pulau Pinang sites (18 locations). Uses Supabase as backend. No build tools or package manager - static files served directly.
+Vanilla JavaScript web app for NADI Pulau Pinang (18 sites) with:
+- Calendar management
+- Leave request workflow (staff + supervisors)
+- Announcement board
+- Reminder system
 
-**Primary Deployment:** Embedded as iframe/URL in **Google Sites**
-- Hosted on GitHub Pages: `https://afu-it.github.io/nadi-homepage/`
-- Embedded in Google Sites for easy access by staff
-- Must work within Google Sites iframe constraints (no modals, sandboxed environment)
+Primary deployment is GitHub Pages, embedded in Google Sites via iframe:
+- `https://afu-it.github.io/nadi-homepage/`
+- Must remain iframe-safe (storage fallback, no dependency on popup windows)
+- No build step, no package manager requirement for runtime
 
 ## Technology Stack
-- **Frontend:** HTML5, Vanilla JavaScript (ES6+), Tailwind CSS (CDN)
-- **Backend:** Supabase (PostgreSQL + Realtime)
-- **Icons:** Font Awesome 6.4.0 (CDN)
-- **Sanitization:** DOMPurify (CDN)
-- **No bundler/build step** - direct browser execution
+- Frontend: HTML5, Vanilla JavaScript (ES6+), Tailwind CSS (CDN)
+- Backend: Supabase (PostgreSQL + Realtime)
+- Icons: Font Awesome 6.4.0 (CDN)
+- Sanitization: DOMPurify (CDN)
+- Static architecture: direct browser execution
 
-## Build/Lint/Test Commands
+## Development Commands
 
-### Development Server
+### Local Server
 ```bash
-# Using VS Code Live Server (recommended)
-# Right-click index.html -> "Open with Live Server"
+# VS Code Live Server
+# Right-click index.html -> Open with Live Server
 
-# Or using Python
+# Python
 python -m http.server 5500
 
-# Or using Node.js
+# Node
 npx serve -p 5500
 ```
 
-### Syntax Checking
+### JavaScript Syntax Check
 ```bash
-# Check individual JavaScript file
-node --check leave-integrated.js
-node --check app.js
-node --check config.js
+node --check js/config.js
+node --check js/app.js
+node --check js/leave-integrated.js
+node --check js/password-utils.js
+node --check js/reminder-system.js
 
-# Check all JS files
-node --check leave-integrated.js && node --check app.js && node --check config.js
+node --check js/config.js && node --check js/app.js && node --check js/leave-integrated.js && node --check js/password-utils.js && node --check js/reminder-system.js
 ```
 
-### No Formal Test Suite
-This project has no automated tests. Manual testing required:
-1. Open `index.html` in browser
-2. Triple-click header logo to access Site Settings
-3. Test leave management via Leave Management button
+### Manual Testing
+1. Open `index.html`.
+2. Navigate month left/right and verify auto-selected date behavior.
+3. Open Leave panel and submit/cancel a test request flow.
+4. Open Announcements page and verify CRUD + filter behavior.
+5. Open Reminder panel and verify create/edit/delete sync.
 
-## File Structure
+## Current File Structure
+```text
+├── index.html
+├── announcements.html
+├── AGENTS.md
+├── README.md
+├── .gitignore
+├── css/
+│   ├── styles.css
+│   ├── leave-system.css
+│   └── reminder-system.css
+└── js/
+    ├── app.js
+    ├── config.js
+    ├── leave-integrated.js
+    ├── password-utils.js
+    ├── reminder-system.js
+    ├── supabase.js
+    └── supabase.config.js
 ```
-├── index.html           # Main calendar page
-├── app.js               # Main calendar logic (~3400 lines)
-├── leave-integrated.js  # Leave management system (~2700 lines)
-├── config.js            # Constants, categories, Supabase client
-├── supabase.js          # Supabase client library (CDN bundle)
-├── styles.css           # Main calendar styles
-├── leave-system.css     # Leave management styles
-├── announcements.html   # Announcements admin page
-└── README.md            # Project documentation
-```
 
-## Code Style Guidelines
+## Critical Egress Rules (Supabase)
+The `events` table is the primary bandwidth risk. Follow these rules strictly:
 
-### JavaScript Conventions
-
-#### Naming
-- **Functions:** camelCase, verb prefix (`loadData`, `renderCalendar`, `handleClick`)
-- **Async functions:** Always prefixed with action verb (`async function loadUserLeaveRequests()`)
-- **Variables:** camelCase (`currentMonth`, `leaveRequestsCache`)
-- **Constants:** camelCase for objects, UPPER_SNAKE for primitives (`window.DEBUG_MODE`)
-- **DOM IDs:** camelCase (`leaveCalendarGrid`, `settingsModal`)
-- **CSS Classes:** kebab-case (`offday-line-m`, `replacement-connector`)
-
-#### Functions
+1. Never use `select('*')` on `events`.
+2. Use projected columns:
+   - Summary list: `EVENT_SUMMARY_SELECT_COLUMNS`
+   - Detail modal: `EVENT_DETAIL_SELECT_COLUMNS`
+3. Query events by month window only:
 ```javascript
-// Async function with try-catch
-async function loadData() {
-  try {
-    const { data, error } = await supabaseClient.from('table').select('*');
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Error loading data:', error);
-    showToast('Error loading data', 'error');
-  }
-}
+const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
-// Sync function
-function renderCalendar() {
-  const grid = document.getElementById('calendarGrid');
-  if (!grid) return;
-  // ... implementation
-}
+const { data, error } = await supabaseClient
+  .from('events')
+  .select(EVENT_SUMMARY_SELECT_COLUMNS)
+  .lte('start', lastDay)
+  .gte('end', firstDay)
+  .order('start', { ascending: true });
 ```
+4. Keep month cache enabled (`eventsCache`, local cache key `events_cache`).
+5. Do not prefetch full-year/full-table events in browser.
+6. Preserve this navigation behavior:
+   - Moving to non-current month: auto-select last date of that month.
+   - Returning to current local month: auto-select local today date.
 
-#### Error Handling
-- Always wrap Supabase calls in try-catch
-- Use `if (error) throw error;` pattern for Supabase errors
-- Show user-friendly errors via `showToast(message, 'error')`
-- Log technical errors with `console.error()`
-- Use `window.DEBUG_MODE` guard for verbose logging
+## Supabase Data Patterns
 
-#### DOM Manipulation
-```javascript
-// Prefer getElementById for single elements
-const element = document.getElementById('myElement');
-if (!element) return;  // Always null-check
-
-// Use template literals for HTML generation
-container.innerHTML = `
-  <div class="card">
-    <span>${escapedValue}</span>
-  </div>
-`;
-
-// Escape user input before rendering
-${req.notes ? `<div>${req.notes.replace(/\n/g, '<br>')}</div>` : ''}
-```
-
-#### Event Listeners
-```javascript
-// Use onclick for dynamically generated HTML
-<button onclick="handleAction('${id}')">Click</button>
-
-// Use addEventListener for static elements
-document.getElementById('btn').addEventListener('click', handler);
-
-// Debounce resize handlers
-let resizeTimeout;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimeout);
-  resizeTimeout = setTimeout(() => { /* handler */ }, 100);
-});
-```
-
-### CSS Conventions
-
-#### Class Naming (leave-system.css)
-```css
-/* Component: .component-name */
-.offday-line-m { }
-.offday-line-am { }
-
-/* Modifier: .component-name-modifier */
-.replacement-line-m-orange { }
-.replacement-line-am-orange-upper { }
-
-/* State: .state-name */
-.badge-pending { }
-.badge-approved { }
-```
-
-#### Tailwind Usage
-- Use Tailwind classes inline for layout and spacing
-- Use custom CSS for complex animations and pseudo-elements
-- Common patterns: `flex`, `grid`, `gap-*`, `p-*`, `m-*`, `rounded-*`
-
-### Supabase Patterns
-
-#### Database IDs (site_settings table)
+### `site_settings` IDs in use
 | ID | Purpose |
 |----|---------|
-| 1  | Basic config (title, subtitle) |
-| 10 | Manager offdays array |
-| 11 | Assistant Manager offdays array |
-| 12 | Manager replacements array |
-| 13 | AM replacements array |
-| 20 | Public holidays object |
-| 21 | School holidays object |
-| 30 | Custom sections array |
+| 1  | Basic config (title, subtitle, filters) |
+| 2  | Runtime backup snapshot |
+| 10 | Manager offdays |
+| 11 | Assistant Manager offdays |
+| 12 | Manager replacements |
+| 13 | Assistant Manager replacements |
+| 20 | Public holidays |
+| 21 | School holidays |
+| 30 | Custom sections + deletion logs |
 | 99 | Full backup |
 
-#### Query Pattern
+### Query Standard
 ```javascript
 const { data, error } = await supabaseClient
   .from('table_name')
-  .select('*')
-  .eq('column', value)
-  .order('column', { ascending: true });
+  .select('needed,columns,only')
+  .eq('column', value);
 
 if (error) throw error;
 ```
 
-## Important Implementation Notes
+### Performance Pattern
+- Batch `site_settings` loads into one `.in('id', [...])` query where possible.
+- Keep real-time subscriptions scoped and cleaned up.
+- Reload only affected month data after event updates/deletes.
 
-### Modal System
-- Use `z-50` for standard modals, `z-[60]` for nested modals
-- Always add backdrop blur: `bg-slate-900/60 backdrop-blur-sm`
-- Close with specific ID targeting, not `this.closest('.fixed').remove()`
+## JavaScript Conventions
 
-### Date Formatting
-```javascript
-// Standard date string format: YYYY-MM-DD
-const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+### Naming
+- Functions: `camelCase` with verb prefix (`loadData`, `renderCalendar`)
+- Variables: `camelCase`
+- Constants: `UPPER_SNAKE` for primitive constants, `camelCase` for objects
+- DOM IDs: `camelCase`
+- CSS classes: `kebab-case`
 
-// Display format
-new Date(dateStr).toLocaleDateString('en-MY', {
-  weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
-});
-```
+### Error Handling
+- Wrap Supabase calls in `try/catch`.
+- Use `if (error) throw error;`.
+- Show user-facing failures with `showToast(message, 'error')`.
+- Keep debug logs behind `window.DEBUG_MODE`.
 
-### Color Codes
-- **Manager:** Blue `#00aff0` (`bg-blue-*`, `text-blue-*`)
-- **Assistant Manager:** Green `#90cf53` (`bg-green-*`, `text-green-*`)
-- **Replacement (staff):** Orange `#ff8c00`
-- **Pending:** Yellow (`bg-yellow-*`)
-- **Approved:** Green (`bg-green-*`)
-- **Rejected:** Red (`bg-red-*`)
+### DOM Safety
+- Null-check all queried elements before use.
+- Sanitize user-generated HTML via DOMPurify helpers.
+- Avoid attaching duplicate listeners on repeated renders.
+
+## CSS Conventions
+- Use Tailwind utility classes for layout/spacing.
+- Keep complex visuals and connector lines in dedicated CSS files.
+- Maintain role colors:
+  - Manager: blue `#00aff0`
+  - Assistant Manager: green `#90cf53`
+  - Replacement markers: orange `#ff8c00`
+
+## UI and Iframe Notes
+- App runs inside Google Sites iframe; keep storage fallback logic intact.
+- Keep overlay/modal z-index layering consistent:
+  - Standard overlays: `z-50`
+  - Nested overlays: `z-[60]` or above
+- Prefer targeted close handlers by element ID.
 
 ## Common Pitfalls to Avoid
-
-1. **Don't use `console.log` in production** - use `if (window.DEBUG_MODE) console.log()`
-2. **Don't add event listeners in loops** - they accumulate on each call
-3. **Always null-check DOM elements** before accessing properties
-4. **Escape user input** when rendering to prevent XSS
-5. **Use specific IDs for modals** to avoid removing wrong elements
-6. **Don't store sensitive data in localStorage** except session tokens
+1. Querying full `events` payload (`select('*')`) instead of projected monthly queries.
+2. Breaking month navigation auto-selected date behavior.
+3. Forgetting to clear/reload month cache after event mutation.
+4. Adding unguarded `console.log` in production paths.
+5. Rendering unsanitized rich text from announcements/reminders.
+6. Breaking static path assumptions (`css/...`, `js/...`) in HTML files.
