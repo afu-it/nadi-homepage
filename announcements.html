@@ -136,6 +136,26 @@
             </button>
           </div>
 
+          <div class="p-4 border-b border-slate-200 bg-white">
+            <div class="relative">
+              <input
+                type="text"
+                id="announcementSearch"
+                placeholder="Search announcements..."
+                class="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-nadi"
+                oninput="annHandleSearch(this.value)"
+              />
+              <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+              <button
+                id="announcementSearchClear"
+                onclick="annClearSearch()"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 hidden"
+              >
+                <i class="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </div>
+          </div>
+
           <div id="announcementListContainer" class="p-4 space-y-4">
             <p class="text-sm text-slate-400 text-center py-8">Loading announcements...</p>
           </div>
@@ -391,6 +411,8 @@
       let currentAnnouncementFilter = "all";
       let currentSSOSubFilter = "";
       let currentSSOSubSubFilter = "";
+      let announcementSearchQuery = "";
+      let announcementSearchTimeout = null;
       let annEditingId = null;
       const ANNOUNCEMENT_IMAGE_BUCKET = "announcement-images";
       let announcementImagesEnabled = true;
@@ -1063,6 +1085,52 @@
         return text;
       }
 
+      // Debounce function for search
+      function debounceAnnouncementSearch(func, wait) {
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(announcementSearchTimeout);
+            func(...args);
+          };
+          clearTimeout(announcementSearchTimeout);
+          announcementSearchTimeout = setTimeout(later, wait);
+        };
+      }
+
+      // Handle search input with debounce
+      const debouncedAnnouncementSearch = debounceAnnouncementSearch((query) => {
+        announcementSearchQuery = query.toLowerCase().trim();
+        renderAnnouncementList();
+      }, 300);
+
+      function annHandleSearch(value) {
+        const clearBtn = document.getElementById("announcementSearchClear");
+        if (clearBtn) {
+          clearBtn.classList.toggle("hidden", !value);
+        }
+        debouncedAnnouncementSearch(value);
+      }
+
+      function annClearSearch() {
+        const searchInput = document.getElementById("announcementSearch");
+        if (searchInput) {
+          searchInput.value = "";
+        }
+        const clearBtn = document.getElementById("announcementSearchClear");
+        if (clearBtn) {
+          clearBtn.classList.add("hidden");
+        }
+        announcementSearchQuery = "";
+        renderAnnouncementList();
+      }
+
+      // Highlight search term in text
+      function highlightSearchText(text) {
+        if (!text || !announcementSearchQuery) return text;
+        const regex = new RegExp(`(${announcementSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return text.replace(regex, '<mark class="bg-yellow-200 text-slate-800 px-0.5 rounded">$1</mark>');
+      }
+
       function setAnnouncementFilter(filter) {
         currentAnnouncementFilter = filter;
         currentSSOSubFilter = "";
@@ -1177,10 +1245,27 @@
         } else if (filter !== "all") {
           filtered = announcements.filter((a) => a.category === filter);
         }
-        
+
+        // Apply search filter
+        if (announcementSearchQuery) {
+          filtered = filtered.filter((ann) => {
+            const searchText = announcementSearchQuery.toLowerCase();
+            return (
+              (ann.title && ann.title.toLowerCase().includes(searchText)) ||
+              (ann.content && ann.content.toLowerCase().includes(searchText)) ||
+              (ann.category && ann.category.toLowerCase().includes(searchText)) ||
+              (ann.ssoMain && ann.ssoMain.toLowerCase().includes(searchText)) ||
+              (ann.ssoSub && ann.ssoSub.toLowerCase().includes(searchText))
+            );
+          });
+        }
+
         filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         if (!filtered || filtered.length === 0) {
-          container.innerHTML = '<div class="text-center py-12"><div class="text-slate-300 text-4xl mb-3"><i class="fa-regular fa-calendar-xmark"></i></div><p class="text-slate-500 text-sm">No announcements yet</p></div>';
+          const emptyMessage = announcementSearchQuery
+            ? '<div class="text-center py-12"><div class="text-slate-300 text-4xl mb-3"><i class="fa-solid fa-magnifying-glass"></i></div><p class="text-slate-500 text-sm">No announcements found for "' + escapeHtml(announcementSearchQuery) + '"</p></div>'
+            : '<div class="text-center py-12"><div class="text-slate-300 text-4xl mb-3"><i class="fa-regular fa-calendar-xmark"></i></div><p class="text-slate-500 text-sm">No announcements yet</p></div>';
+          container.innerHTML = emptyMessage;
           return;
         }
           container.innerHTML = filtered.map((ann) => {
@@ -1244,7 +1329,7 @@
               <div class="flex justify-between items-start">
                 <div class="flex-1 pr-2">
                   ${topLeftLabel}
-                  <h3 class="text-sm font-bold text-slate-800 leading-tight">${sanitizeHTML(ann.title)}</h3>
+                  <h3 class="text-sm font-bold text-slate-800 leading-tight">${sanitizeHTML(highlightSearchText(ann.title))}</h3>
                   ${bottomLeftLabel}
                 </div>
                 <div class="flex gap-1.5">
@@ -1252,7 +1337,7 @@
                   <button onclick="annShowDeleteModal('${ann.id}')" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
                 </div>
               </div>
-              <div class="text-xs text-black mt-2 leading-relaxed bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 break-all overflow-hidden ann-content-break" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(convertBoldSyntax(ann.content)) : ""}</div>
+              <div class="text-xs text-black mt-2 leading-relaxed bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 break-all overflow-hidden ann-content-break" style="font-size: 11px;">${ann.content ? sanitizeHTMLWithLinks(convertBoldSyntax(highlightSearchText(ann.content))) : ""}</div>
               ${imagesHtml}
               <div class="pt-2 border-t border-slate-100 mt-3">
                 <div class="flex justify-between items-end">
@@ -1494,11 +1579,12 @@
               // Function to convert URLs in text nodes while preserving URL encoding
               const convertUrls = (node) => {
                 if (node.nodeType === Node.TEXT_NODE) {
-                  // Match URLs that may contain URL-encoded characters
-                  const urlRegex = /(https?:\/\/[^\s<"]+)/gi;
-                  const newHtml = node.textContent.replace(urlRegex, function(url) {
-                    if (!url.startsWith("http")) {
-                      url = "https://" + url;
+                  // Match URLs with protocol and domain-only URLs (e.g., dilea.nadi.my)
+                  const urlRegex = /(https?:\/\/[^\s<"]+)|((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s<"]*)?)/gi;
+                  const newHtml = node.textContent.replace(urlRegex, function(url, fullUrl, domainUrl) {
+                    // If matched domain-only URL, prepend https://
+                    if (domainUrl) {
+                      url = "https://" + domainUrl;
                     }
                     // Escape the URL before using it in href to preserve encoding
                     const escapedUrl = url.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -1533,10 +1619,11 @@
               document.execCommand("insertHTML", false, processedHtml);
             } else if (text) {
               // Plain text - preserve line breaks
-              const urlRegex = /(https?:\/\/[^\s<"]+)/gi;
-              let processedText = text.replace(urlRegex, function(url) {
-                if (!url.startsWith("http")) {
-                  url = "https://" + url;
+              const urlRegex = /(https?:\/\/[^\s<"]+)|((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s<"]*)?)/gi;
+              let processedText = text.replace(urlRegex, function(url, fullUrl, domainUrl) {
+                // If matched domain-only URL, prepend https://
+                if (domainUrl) {
+                  url = "https://" + domainUrl;
                 }
                 // Escape the URL before using it in href to preserve encoding
                 const escapedUrl = url.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
