@@ -48,6 +48,8 @@ function buildLeavePanelMenu(activeKey) {
 
 function handleLeaveMenuAction(action, btn) {
   if (action === 'leave') {
+    // Close any open leave modals first
+    document.querySelectorAll('.leave-modal').forEach(el => el.remove());
     showLeavePanel();
     return;
   }
@@ -60,7 +62,10 @@ function handleLeaveMenuAction(action, btn) {
     return;
   }
   if (action === 'close') {
-    const modal = btn.closest('.leave-modal');
+    // Try different modal selectors
+    let modal = btn.closest('.leave-modal');
+    if (!modal) modal = btn.closest('.fixed');
+    if (!modal) modal = btn.closest('[class*="modal"]');
     if (modal) modal.remove();
   }
 }
@@ -382,21 +387,60 @@ function initLeaveManagement() {
 
 // Update login button based on user state
 function updateLoginButton() {
-  const loginBtn = document.getElementById('leaveLoginBtn');
+  const loginBtn = document.getElementById('loginBtn');
   if (!loginBtn) return;
-  
+
   if (currentLeaveUser) {
-    // User is logged in - show user info
+    // User is logged in - show role + site with dropdown
+    const roleSite = `${currentLeaveUser.role} - ${currentLeaveUser.site_name}`;
     loginBtn.innerHTML = `
-      <i class="fa-solid fa-user-check text-[#2228a4]"></i>
-      <span class="hidden sm:inline">${currentLeaveUser.full_name}</span>
+      <i class="fa-solid fa-user-check text-[#2228a4] text-xs"></i>
+      <span class="ml-1">${roleSite}</span>
+      <i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
     `;
-    loginBtn.title = `Logged in as ${currentLeaveUser.full_name} (${currentLeaveUser.role})`;
+    loginBtn.title = `Logged in as ${currentLeaveUser.full_name}`;
+    loginBtn.classList.add('logged-in');
+    loginBtn.onclick = toggleLogoutDropdown;
   } else {
     // Not logged in - show login button
-    loginBtn.innerHTML = `<i class="fa-solid fa-calendar-check text-[#2228a4]"></i>`;
-    loginBtn.title = 'Leave Management Login';
+    loginBtn.innerHTML = `
+      <i class="fa-solid fa-user text-[#2228a4] text-xs"></i>
+      <span class="ml-1">Login</span>
+    `;
+    loginBtn.title = 'Login';
+    loginBtn.classList.remove('logged-in');
+    loginBtn.onclick = showLeaveLogin;
   }
+}
+
+// Toggle logout dropdown
+function toggleLogoutDropdown(e) {
+  e.stopPropagation();
+  const dropdown = document.getElementById('logoutDropdown');
+  if (dropdown) {
+    dropdown.classList.toggle('hidden');
+  }
+}
+
+// Close logout dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const loginBtn = document.getElementById('loginBtn');
+  const dropdown = document.getElementById('logoutDropdown');
+  if (dropdown && !dropdown.classList.contains('hidden')) {
+    if (!loginBtn.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  }
+});
+
+// Logout user
+function logoutUser() {
+  currentLeaveUser = null;
+  leaveStorage.removeItem('leave_user');
+  updateLoginButton();
+  const dropdown = document.getElementById('logoutDropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+  showToast('Logged out successfully', 'success');
 }
 
 // Show login modal
@@ -615,10 +659,6 @@ function showUserMenu() {
       <button onclick="showStaffCalendarsPanel()" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 rounded flex items-center gap-2">
         <i class="fa-solid fa-users text-blue-600"></i> View Staff Calendars
       </button>` : ''}
-      <hr class="my-2">
-      <button onclick="handleLeaveLogout()" class="w-full text-left px-3 py-2 text-sm hover:bg-red-50 rounded flex items-center gap-2 text-red-600">
-        <i class="fa-solid fa-right-from-bracket"></i> Logout
-      </button>
     </div>
   `;
   document.body.appendChild(menu);
@@ -690,6 +730,13 @@ function customConfirm(message) {
 
 // Show leave request panel with calendar
 function showLeavePanel() {
+  // Check if user is logged in
+  if (!currentLeaveUser) {
+    showToast('Please login first', 'warning');
+    showLeaveLogin();
+    return;
+  }
+
   if (currentLeaveUser?.role === 'Supervisor') {
     showStaffCalendarsPanel();
     return;
@@ -792,9 +839,6 @@ function showLeavePanel() {
         <div class="text-xs text-slate-500">
           <i class="fa-solid fa-info-circle mr-1"></i> Click on a date to request leave
         </div>
-        <button onclick="handleLeaveLogout()" class="btn btn-danger btn-sm">
-          <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
-        </button>
       </div>
     </div>
   `;
@@ -2014,9 +2058,6 @@ async function showNADIAvailability() {
             <span>Off/Leave</span>
           </div>
         </div>
-        <button onclick="handleLeaveLogout()" class="btn btn-danger btn-sm text-xs px-3 py-1">
-          <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
-        </button>
       </div>
     </div>
   `;
@@ -2053,11 +2094,6 @@ function showAdminPanel() {
         <div id="adminRequestsList">
           <div class="text-center py-8"><div class="spinner mx-auto"></div></div>
         </div>
-      </div>
-      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
-        <button onclick="handleLeaveLogout()" class="btn btn-danger btn-sm">
-          <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
-        </button>
       </div>
     </div>
   `;
@@ -2471,7 +2507,10 @@ async function showDeletionLog() {
           `}
         </div>
         <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
-          <button onclick="this.closest('.fixed').remove()" class="btn btn-secondary btn-sm">Close</button>
+          <button type="button" class="lm-tab" onclick="handleLeaveMenuAction('close', this)">
+            <i class="fa-solid fa-xmark"></i>
+            <span>Close</span>
+          </button>
         </div>
       </div>
     `;
@@ -2757,7 +2796,10 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
         <button onclick="document.getElementById('staffCalendarViewPanel').remove(); showStaffCalendarsPanel();" class="btn btn-secondary btn-sm">
           <i class="fa-solid fa-arrow-left mr-1"></i> Back
         </button>
-        <button onclick="document.getElementById('staffCalendarViewPanel').remove()" class="btn btn-secondary btn-sm">Close</button>
+        <button type="button" class="lm-tab" onclick="handleLeaveMenuAction('close', this)">
+          <i class="fa-solid fa-xmark"></i>
+          <span>Close</span>
+        </button>
       </div>
     </div>
   `;
@@ -3115,18 +3157,18 @@ if (document.readyState === 'loading') {
 // Additional fallback for iframe contexts (Google Sites)
 window.addEventListener('load', function() {
   // Re-initialize if button doesn't have content
-  const loginBtn = document.getElementById('leaveLoginBtn');
+  const loginBtn = document.getElementById('loginBtn');
   if (loginBtn && !loginBtn.innerHTML.trim()) {
-    console.log('Leave button empty - reinitializing...');
+    console.log('Login button empty - reinitializing...');
     initLeaveManagement();
   }
 });
 
 // Force update button on any interaction (backup for iframe)
 setTimeout(() => {
-  const loginBtn = document.getElementById('leaveLoginBtn');
+  const loginBtn = document.getElementById('loginBtn');
   if (loginBtn && !loginBtn.innerHTML.trim()) {
-    console.log('Leave button still empty after timeout - forcing update...');
+    console.log('Login button still empty after timeout - forcing update...');
     updateLoginButton();
   }
 }, 500);

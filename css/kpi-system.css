@@ -1,0 +1,345 @@
+/* ============================================
+   KPI System Styles
+   ============================================ */
+
+/* KPI Overlay - Centered Modal */
+.kpi-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.kpi-overlay.open {
+  visibility: visible;
+  opacity: 1;
+}
+
+.kpi-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.kpi-dialog {
+  position: relative;
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.95) translateY(20px);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kpi-overlay.open .kpi-dialog {
+  transform: scale(1) translateY(0);
+}
+
+/* Header */
+.kpi-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+.kpi-dialog-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.kpi-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.kpi-icon-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* Controls */
+.kpi-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.kpi-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kpi-control-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #0f172a;
+  background: #fff;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.kpi-select:focus {
+  outline: none;
+  border-color: #2228a4;
+  box-shadow: 0 0 0 3px rgba(34, 40, 164, 0.1);
+}
+
+.kpi-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.kpi-month-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.kpi-month-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.kpi-month-display {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  min-width: 90px;
+  text-align: center;
+}
+
+/* Body */
+.kpi-dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+/* Categories Grid */
+.kpi-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .kpi-categories-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Category Accordion */
+.kpi-category {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+
+.kpi-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem;
+  background: #f8fafc;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.kpi-category-header:hover {
+  background: #f1f5f9;
+}
+
+.kpi-category-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.kpi-category-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.kpi-category-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.kpi-category-progress {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+}
+
+.kpi-category-progress.complete {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.kpi-category-chevron {
+  color: #94a3b8;
+  transition: transform 0.2s;
+}
+
+.kpi-category.open .kpi-category-chevron {
+  transform: rotate(180deg);
+}
+
+.kpi-category-body {
+  display: block;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Sub-KPI Items */
+.kpi-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  border-radius: 8px;
+  margin-bottom: 0.25rem;
+  transition: background 0.15s;
+}
+
+.kpi-item:hover {
+  background: #f8fafc;
+}
+
+.kpi-item:last-child {
+  border-bottom: none;
+}
+
+/* Custom Checkbox */
+.kpi-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #22c55e;
+}
+
+.kpi-item-label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+}
+
+/* Category Colors */
+.kpi-color-entrepreneur { background: #facc15; }
+.kpi-color-learning { background: #3b82f6; }
+.kpi-color-wellbeing { background: #10b981; }
+.kpi-color-awareness { background: #8b5cf6; }
+.kpi-color-gov { background: #ef4444; }
+
+/* Empty State */
+.kpi-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #64748b;
+}
+
+.kpi-empty i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: #cbd5e1;
+}
+
+/* Loading State */
+.kpi-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.kpi-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #2228a4;
+  border-radius: 50%;
+  animation: kpi-spin 0.8s linear infinite;
+}
+
+@keyframes kpi-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Scrollbar */
+.kpi-dialog-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.kpi-dialog-body::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.kpi-dialog-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.kpi-dialog-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

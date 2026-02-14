@@ -166,8 +166,9 @@
     <div id="addForm" class="hidden fixed top-20 right-4 w-[92vw] max-w-md bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
       <div class="px-5 py-4 bg-nadi flex justify-between items-center">
         <h3 class="text-sm font-bold text-white">Create Announcement</h3>
-        <button onclick="annHideAddForm()" class="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors">
-          <i class="fa-solid fa-xmark text-xs"></i>
+        <button type="button" class="lm-tab !bg-white/20 !text-white hover:!bg-white/30 rounded-full" onclick="annHideAddForm()">
+          <i class="fa-solid fa-xmark"></i>
+          <span>Close</span>
         </button>
       </div>
       <div class="p-5 space-y-4 max-h-[calc(100vh-180px)] overflow-y-auto">
