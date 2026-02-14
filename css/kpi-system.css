@@ -270,12 +270,65 @@
   border-bottom: none;
 }
 
-/* Custom Checkbox */
-.kpi-item input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+/* HeroUI-style Checkbox */
+.kpi-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border: 2px solid #cbd5e1;
+  border-radius: 8px;
   cursor: pointer;
-  accent-color: #22c55e;
+  position: relative;
+  transition: all 0.2s ease;
+  background: #fff;
+}
+
+.kpi-checkbox:hover {
+  opacity: 0.8;
+}
+
+.kpi-checkbox:checked {
+  border-color: transparent;
+}
+
+.kpi-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 6px;
+  height: 11px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.kpi-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Category-specific checkbox colors - white default, colored when checked */
+.kpi-checkbox-entrepreneur:checked {
+  background: #facc15;
+}
+
+.kpi-checkbox-learning:checked {
+  background: #3b82f6;
+}
+
+.kpi-checkbox-wellbeing:checked {
+  background: #10b981;
+}
+
+.kpi-checkbox-awareness:checked {
+  background: #8b5cf6;
+}
+
+.kpi-checkbox-gov:checked {
+  background: #ef4444;
 }
 
 .kpi-item-label {
@@ -283,6 +336,27 @@
   font-weight: 500;
   color: #334155;
   cursor: pointer;
+}
+
+/* Label formatting for Lifelong Learning - stacked */
+.kpi-label-stacked {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.kpi-label-prefix {
+  font-size: 0.5625rem;
+  font-style: italic;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.kpi-label-partner {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #334155;
 }
 
 /* Category Colors */

@@ -45,24 +45,6 @@ const kpiCategories = {
 class KpiStore {
   constructor() {
     this.records = new Map(); // key: "siteId-category-sub-month", value: record
-    this.sites = [];
-  }
-
-  // Load sites
-  async loadSites() {
-    try {
-      const { data, error } = await supabaseClient
-        .from('sites')
-        .select('site_id, site_name')
-        .order('site_name');
-
-      if (error) throw error;
-      this.sites = data || [];
-      return this.sites;
-    } catch (error) {
-      console.error('Error loading sites:', error);
-      return [];
-    }
   }
 
   // Get records key
@@ -170,25 +152,13 @@ class KpiUI {
     this.openCategories = new Set(['entrepreneur', 'learning', 'wellbeing', 'awareness', 'gov']); // All categories open
   }
 
-  // Render site dropdown
-  renderSiteSelect() {
-    const select = document.getElementById('kpiSiteSelect');
-    if (!select) return;
+  // Render site label (for logged-in user)
+  renderSiteLabel() {
+    const label = document.getElementById('kpiSiteLabel');
+    if (!label) return;
 
-    select.innerHTML = this.store.sites.map(site =>
-      `<option value="${site.site_id}">${site.site_name}</option>`
-    ).join('');
-
-    // Select first site by default or preserve previous
-    if (this.manager.currentSiteId && this.store.sites.length > 0) {
-      const exists = this.store.sites.find(s => s.site_id === this.manager.currentSiteId);
-      if (exists) {
-        select.value = this.manager.currentSiteId;
-      }
-    } else if (this.store.sites.length > 0) {
-      this.manager.currentSiteId = this.store.sites[0].site_id;
-      select.value = this.manager.currentSiteId;
-    }
+    const siteName = this.manager.currentSiteName || '-';
+    label.textContent = siteName;
   }
 
   // Render month display
@@ -199,6 +169,21 @@ class KpiUI {
     const date = new Date(this.manager.currentYear, this.manager.currentMonth - 1, 1);
     const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     display.textContent = monthName;
+  }
+
+  // Format label - put prefix above main text in Lifelong Learning
+  formatLabel(category, sub) {
+    if (category === 'learning') {
+      // Match patterns like "Nurture x eKelas", "Skillforge x eSport", "NADI Book x TinyTechies"
+      const match = sub.match(/^(.+?)\s+x\s+(.+)$/i);
+      if (match) {
+        return `<div class="kpi-label-stacked">
+          <span class="kpi-label-prefix">${match[1]}</span>
+          <span class="kpi-label-partner">${match[2]}</span>
+        </div>`;
+      }
+    }
+    return sub;
   }
 
   // Render categories
@@ -227,13 +212,14 @@ class KpiUI {
           <div class="kpi-category-body">
             ${info.subs.map(sub => {
               const isDone = this.store.isDone(currentSiteId, category, sub, currentYearMonth);
+              const formattedLabel = this.formatLabel(category, sub);
               return `
                 <label class="kpi-item" style="cursor: pointer;">
-                  <input type="checkbox"
+                  <input type="checkbox" class="kpi-checkbox kpi-checkbox-${category}"
                     ${isDone ? 'checked' : ''}
                     onchange="kpiManager.toggleKpiItem('${category}', '${sub.replace(/'/g, "\\'")}', this.checked)"
                   >
-                  <span class="kpi-item-label">${sub}</span>
+                  <span class="kpi-item-label">${formattedLabel}</span>
                 </label>
               `;
             }).join('')}
@@ -274,6 +260,7 @@ class KpiManager {
 
     // Get current month from global calendar or use current date
     this.currentSiteId = null;
+    this.currentSiteName = null;
     this.currentMonth = new Date().getMonth() + 1;
     this.currentYear = new Date().getFullYear();
     this.currentYearMonth = this.getYearMonthString();
@@ -284,14 +271,18 @@ class KpiManager {
     return `${this.currentYear}-${String(this.currentMonth).padStart(2, '0')}`;
   }
 
-  // Initialize
-  async init() {
-    // Load sites
-    await this.store.loadSites();
-    this.ui.renderSiteSelect();
+  // Initialize with logged-in user
+  initWithUser(user) {
+    if (user && user.site_id) {
+      this.currentSiteId = user.site_id;
+      this.currentSiteName = user.site_name || '-';
+    }
+  }
 
-    // Load initial data
-    await this.loadData();
+  // Initialize (legacy - called on DOM ready but data loaded on open)
+  async init() {
+    // Site will be set when panel opens (based on currentLeaveUser)
+    this.ui.renderSiteLabel();
   }
 
   // Load data for current site and month
@@ -301,6 +292,7 @@ class KpiManager {
     this.ui.renderLoading();
     await this.store.loadForSiteMonth(this.currentSiteId, this.currentYearMonth);
     this.ui.renderMonthDisplay();
+    this.ui.renderSiteLabel();
     await this.ui.renderCategories();
     this.updateBadge();
   }
@@ -335,12 +327,6 @@ class KpiManager {
     } else {
       this.openPanel();
     }
-  }
-
-  // Change site
-  async changeSite(siteId) {
-    this.currentSiteId = siteId;
-    await this.loadData();
   }
 
   // Change month
@@ -390,7 +376,7 @@ class KpiManager {
     }
   }
 
-  // Update badge count
+  // Update badge count - shows remaining KPIs to complete
   updateBadge() {
     const badge = document.getElementById('kpiBadge');
     if (!badge) return;
@@ -402,12 +388,17 @@ class KpiManager {
     }
 
     const totalKPIs = Object.values(kpiCategories).reduce((sum, cat) => sum + cat.subs.length, 0);
+    const remaining = totalKPIs - totalDone;
 
-    if (totalDone > 0) {
-      badge.textContent = totalDone;
+    // Show remaining count (default 13, subtract done)
+    // When 0 remaining (all done), hide badge or show check
+    if (remaining > 0) {
+      badge.textContent = remaining;
       badge.classList.remove('hidden');
     } else {
-      badge.classList.add('hidden');
+      // All 13 done - show 13 with different style (optional: hide or show check)
+      badge.textContent = totalKPIs;
+      badge.classList.remove('hidden');
     }
   }
 }
@@ -421,6 +412,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   await kpiManager.init();
 });
 
+// Handle KPI button click - check login first
+function handleKpiButtonClick() {
+  // Check if user is logged in (currentLeaveUser is defined in leave-integrated.js)
+  if (typeof currentLeaveUser === 'undefined' || !currentLeaveUser) {
+    // Show login modal first
+    if (typeof showLeaveLogin === 'function') {
+      showLeaveLogin();
+    }
+    return;
+  }
+
+  // Set the site from logged-in user
+  kpiManager.initWithUser(currentLeaveUser);
+
+  // Load data and open panel
+  kpiManager.loadData().then(() => {
+    kpiManager.openPanel();
+  });
+}
+
 // Global functions for onclick handlers
 function toggleKpiPanel() {
   if (kpiManager) {
@@ -431,12 +442,6 @@ function toggleKpiPanel() {
 function closeKpiPanel() {
   if (kpiManager) {
     kpiManager.closePanel();
-  }
-}
-
-function changeKpiSite(siteId) {
-  if (kpiManager) {
-    kpiManager.changeSite(siteId);
   }
 }
 

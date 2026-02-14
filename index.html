@@ -94,7 +94,7 @@
             <!-- KPI Button -->
             <button
               id="kpiBtn"
-              onclick="toggleKpiPanel()"
+              onclick="handleKpiButtonClick()"
               class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-2.5 py-1.5 h-[30px] rounded shadow flex items-center justify-center transition-colors relative cursor-pointer"
               title="KPI Tracking"
               aria-expanded="false"
@@ -1952,9 +1952,9 @@
         <div class="kpi-controls">
           <div class="kpi-control-group">
             <label class="kpi-control-label">Site</label>
-            <select id="kpiSiteSelect" class="kpi-select" onchange="changeKpiSite(this.value)">
-              <!-- Sites loaded dynamically -->
-            </select>
+            <span id="kpiSiteLabel" class="kpi-select" style="display: inline-block; cursor: default;">
+              <!-- Site set dynamically -->
+            </span>
           </div>
           <div class="kpi-control-group" style="margin-left: auto;">
             <label class="kpi-control-label">Month</label>
