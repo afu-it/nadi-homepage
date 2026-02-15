@@ -46,24 +46,27 @@ node --check js/config.js && node --check js/app.js && node --check js/leave-int
 ├── css/
 │   ├── styles.css          # Main calendar styling
 │   ├── leave-system.css    # Leave management UI
-│   └── reminder-system.css
+│   ├── reminder-system.css
+│   └── kpi-system.css      # KPI tracking system UI
 └── js/
     ├── app.js              # Calendar rendering, navigation, event display
     ├── config.js           # Constants, holiday data, site settings defaults
     ├── leave-integrated.js # Complete leave workflow (requests, approvals, dashboard)
     ├── password-utils.js   # PBKDF2-SHA256 hashing for supervisor auth
     ├── reminder-system.js  # Personal reminder CRUD
+    ├── kpi-system.js       # KPI tracking system (store, UI, manager classes)
     ├── supabase.js         # Supabase client library
     └── supabase.config.js # Credentials (never commit)
 ```
 
 ### Database Schema (Supabase)
-- **sites**: 18 NADI locations
+- **sites**: 18 NADI locations (site_id is UUID)
 - **leave_users**: Staff (Manager/AM) and Supervisors with roles
 - **leave_requests**: Leave/replacement day submissions with status workflow
 - **site_settings**: Config stored by ID (offdays, holidays, title/subtitle, backups)
 - **events**: Program/announcement data with rich text and images
 - **reminders**: Personal user reminders
+- **kpi_records**: KPI tracking with categories/sub-KPIs, site/month tracking
 
 ### Key Supabase Patterns
 - Use projected columns only, never `select('*')` on events
@@ -83,6 +86,15 @@ node --check js/config.js && node --check js/app.js && node --check js/leave-int
 | 21 | School holidays |
 | 30 | Custom sections |
 | 99 | Full backup |
+
+### KPI Categories (kpi_records table)
+| Category | Sub-KPIs |
+|----------|----------|
+| entrepreneur | Preneur, EmpowHer, Kidventure |
+| learning | Nurture x eKelas Keusahawanan (Maxis), Nurture x DiLea, Nurture x Cybersecurity, eKelas Maxis, NADI Book x TinyTechies, Skillforge x eSport, Skillforge x Mahir |
+| wellbeing | CARE |
+| awareness | KIS |
+| gov | MyDigital ID |
 
 ## Critical Rules
 
@@ -117,3 +129,4 @@ const { data } = await supabaseClient
 3. Forgetting to clear/reload month cache after event mutations
 4. Rendering unsanitized HTML from announcements/reminders
 5. Breaking static path assumptions (`css/`, `js/`) in HTML
+6. Using inconsistent close button styles - use `lm-tab` class with X icon + "Close" text

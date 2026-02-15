@@ -35,6 +35,7 @@
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/leave-system.css" />
     <link rel="stylesheet" href="css/reminder-system.css" />
+    <link rel="stylesheet" href="css/kpi-system.css" />
     <script>
       (function () {
         try {
@@ -90,32 +91,60 @@
               <span id="reminderBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white text-white text-[9px] flex items-center justify-center font-bold">0</span>
             </button>
 
-            <!-- Leave Management Button -->
+            <!-- KPI Button -->
             <button
-              id="leaveLoginBtn"
-              onclick="showLeaveLogin()"
-              class="interactive-hover-btn"
-              title="Leave Management"
+              id="kpiBtn"
+              onclick="handleKpiButtonClick()"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-2.5 py-1.5 h-[30px] rounded shadow flex items-center justify-center transition-colors relative cursor-pointer"
+              title="KPI Tracking"
+              aria-expanded="false"
+              aria-controls="kpiOverlay"
             >
-              <span class="interactive-hover-btn__text">
-                <i class="fa-solid fa-calendar-days"></i>
-                Leave
-              </span>
-              <span class="interactive-hover-btn__overlay">
-                <span>Leave</span>
-                <i class="fa-solid fa-arrow-right"></i>
-              </span>
-              <span class="interactive-hover-btn__bg"></span>
+              <i class="fa-solid fa-bullseye text-[#2228a4] text-xs"></i>
+              <span class="ml-1">KPI</span>
+              <span id="kpiBadge" class="hidden absolute -top-1 -right-2 min-w-[20px] h-4 px-1 bg-red-500 text-white text-[9px] flex items-center justify-center font-bold rounded-full border-2 border-white">0</span>
             </button>
 
+            <!-- Leave Button -->
+            <button
+              id="leaveBtn"
+              onclick="showNADIAvailability()"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-2.5 py-1.5 h-[30px] rounded shadow flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              title="Leave Management"
+            >
+              <i class="fa-solid fa-calendar-days"></i>
+              <span>Leave</span>
+            </button>
+
+            <!-- Announcement Link -->
             <a
               href="announcements.html"
               id="announcementBtn"
-              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors relative"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 h-[30px] rounded shadow flex items-center gap-1 transition-colors relative"
             >
               <i class="fa-solid fa-bullhorn text-[#2228a4]"></i> Announcements
               <span id="newAnnouncementDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
             </a>
+
+            <!-- Login Button with Dropdown -->
+            <div class="relative">
+              <button
+                id="loginBtn"
+                onclick="showLeaveLogin()"
+                class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-2.5 py-1.5 h-[30px] rounded shadow flex items-center justify-center transition-colors relative cursor-pointer"
+                title="Login"
+              >
+                <i class="fa-solid fa-user text-[#2228a4] text-xs"></i>
+                <span class="ml-1">Login</span>
+              </button>
+              <!-- Logout Dropdown -->
+              <div id="logoutDropdown" class="hidden absolute right-0 top-full mt-1 z-50">
+                <button onclick="logoutUser()" class="px-2.5 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md flex items-center gap-1.5 transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+                  <i class="fa-solid fa-sign-out-alt text-[10px]"></i>
+                  Logout
+                </button>
+              </div>
+            </div>
             <div id="current-date-header" class="hidden sm:flex flex-col items-end border-l border-white/20 pl-3"></div>
           </div>
       </div>
@@ -938,10 +967,12 @@
           >
             <h3 class="text-base font-bold text-slate-900" id="modalTitle">New Program</h3>
             <button
+              type="button"
+              class="lm-tab"
               onclick="closeModal()"
-              class="w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500"
             >
-              <i class="fa-solid fa-xmark text-xs"></i>
+              <i class="fa-solid fa-xmark"></i>
+              <span>Close</span>
             </button>
           </div>
           <div class="p-4 space-y-3">
@@ -1653,12 +1684,12 @@
               <p class="reminder-dialog-subtitle">Stay ahead of weekly routines, month-end tasks, and quarter closes.</p>
             </div>
             <button
+              type="button"
+              class="lm-tab"
               onclick="closeReminderPanel()"
-              class="reminder-icon-btn"
-              aria-label="Close reminder panel"
-              title="Close"
             >
               <i class="fa-solid fa-xmark"></i>
+              <span>Close</span>
             </button>
           </header>
 
@@ -1900,16 +1931,56 @@
       </div>
     </div>
 
-    <!-- Leave Management Login Modal -->
+    <!-- KPI Panel Overlay -->
+    <div id="kpiOverlay" class="kpi-overlay" aria-hidden="true">
+      <div class="kpi-backdrop" onclick="closeKpiPanel()" aria-hidden="true"></div>
+      <div class="kpi-dialog" role="dialog" aria-modal="true" aria-labelledby="kpiDialogTitle">
+        <header class="kpi-dialog-header">
+          <h2 id="kpiDialogTitle" class="kpi-dialog-title">KPI Tracking</h2>
+          <button type="button" class="lm-tab" onclick="closeKpiPanel()">
+            <i class="fa-solid fa-xmark"></i>
+            <span>Close</span>
+          </button>
+        </header>
+        <div class="kpi-controls">
+          <div class="kpi-control-group">
+            <label class="kpi-control-label">Site</label>
+            <span id="kpiSiteLabel" class="kpi-select" style="display: inline-block; cursor: default;">
+              <!-- Site set dynamically -->
+            </span>
+          </div>
+          <div class="kpi-control-group" style="margin-left: auto;">
+            <label class="kpi-control-label">Month</label>
+            <div class="kpi-month-nav">
+              <button type="button" class="kpi-month-btn" onclick="changeKpiMonth('prev')" aria-label="Previous month">
+                <i class="fa-solid fa-chevron-left text-xs"></i>
+              </button>
+              <span id="kpiMonthDisplay" class="kpi-month-display">January 2026</span>
+              <button type="button" class="kpi-month-btn" onclick="changeKpiMonth('next')" aria-label="Next month">
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="kpi-dialog-body">
+          <div id="kpiCategories">
+            <!-- KPI categories loaded dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Login Modal -->
     <div id="leaveLoginModal" class="fixed inset-0 z-50 hidden">
       <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveLogin()"></div>
       <div class="fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md my-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
           <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
             <div class="flex items-center justify-between">
-              <h2 class="text-xl font-bold text-slate-800">Leave Management Login</h2>
-              <button onclick="closeLeaveLogin()" class="text-slate-400 hover:text-slate-600">
-                <i class="fa-solid fa-xmark text-lg"></i>
+              <h2 class="text-xl font-bold text-slate-800">Login</h2>
+              <button type="button" class="lm-tab" onclick="closeLeaveLogin()">
+                <i class="fa-solid fa-xmark"></i>
+                <span>Close</span>
               </button>
             </div>
           </div>
@@ -1995,5 +2066,6 @@
     <script src="js/app.js"></script>
     <script src="js/leave-integrated.js"></script>
     <script src="js/reminder-system.js"></script>
+    <script src="js/kpi-system.js"></script>
   </body>
 </html>

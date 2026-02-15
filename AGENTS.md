@@ -6,6 +6,7 @@ Vanilla JavaScript web app for NADI Pulau Pinang (18 sites) with:
 - Leave request workflow (staff + supervisors)
 - Announcement board
 - Reminder system
+- KPI tracking system (categories + sub-KPIs per site/month)
 
 Primary deployment is GitHub Pages, embedded in Google Sites via iframe:
 - `https://afu-it.github.io/nadi-homepage/`
@@ -40,8 +41,9 @@ node --check js/app.js
 node --check js/leave-integrated.js
 node --check js/password-utils.js
 node --check js/reminder-system.js
+node --check js/kpi-system.js
 
-node --check js/config.js && node --check js/app.js && node --check js/leave-integrated.js && node --check js/password-utils.js && node --check js/reminder-system.js
+node --check js/config.js && node --check js/app.js && node --check js/leave-integrated.js && node --check js/password-utils.js && node --check js/reminder-system.js && node --check js/kpi-system.js
 ```
 
 ### Manual Testing
@@ -55,6 +57,11 @@ node --check js/config.js && node --check js/app.js && node --check js/leave-int
    - Pasted images are separated into Program Images (not embedded in rich text).
    - Program card shows images at top of Program Info area.
    - Clicking image opens viewer with next/prev, fullscreen, copy, and download.
+7. Open KPI panel and verify:
+   - Site dropdown loads all 18 sites.
+   - Month navigation works correctly.
+   - Checkboxes toggle and persist to database.
+   - Progress counts update per category.
 
 ## Current File Structure
 ```text
@@ -66,13 +73,15 @@ node --check js/config.js && node --check js/app.js && node --check js/leave-int
 ├── css/
 │   ├── styles.css
 │   ├── leave-system.css
-│   └── reminder-system.css
+│   ├── reminder-system.css
+│   └── kpi-system.css
 └── js/
     ├── app.js
     ├── config.js
     ├── leave-integrated.js
     ├── password-utils.js
     ├── reminder-system.js
+    ├── kpi-system.js
     ├── supabase.js
     └── supabase.config.js
 ```
@@ -137,6 +146,15 @@ const { data, error } = await supabaseClient
 | 30 | Custom sections + deletion logs |
 | 99 | Full backup |
 
+### KPI Categories (kpi_records table)
+| Category Key | Label | Sub-KPIs |
+|-------------|-------|----------|
+| entrepreneur | Entrepreneurship | Preneur, EmpowHer, Kidventure |
+| learning | Lifelong Learning | Nurture x eKelas Keusahawanan (Maxis), Nurture x DiLea, Nurture x Cybersecurity, eKelas Maxis, NADI Book x TinyTechies, Skillforge x eSport, Skillforge x Mahir |
+| wellbeing | Wellbeing | CARE |
+| awareness | Awareness | KIS |
+| gov | Gov Initiative | MyDigital ID |
+
 ### Query Standard
 ```javascript
 const { data, error } = await supabaseClient
@@ -194,3 +212,4 @@ if (error) throw error;
 4. Adding unguarded `console.log` in production paths.
 5. Rendering unsanitized rich text from announcements/reminders.
 6. Breaking static path assumptions (`css/...`, `js/...`) in HTML files.
+7. Using inconsistent close button styles - use `lm-tab` class with X icon + "Close" text.

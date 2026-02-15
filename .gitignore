@@ -42,3 +42,7 @@ coverage/
 # Backup files
 *.backup
 *.bak
+
+# Claude/Agent instruction files (local development)
+AGENTS.md
+CLAUDE.md
