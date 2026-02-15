@@ -102,32 +102,25 @@
             >
               <i class="fa-solid fa-bullseye text-[#2228a4] text-xs"></i>
               <span class="ml-1">KPI</span>
-              <span id="kpiBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white text-white text-[9px] flex items-center justify-center font-bold">0</span>
+              <span id="kpiBadge" class="hidden absolute -top-1 -right-2 min-w-[20px] h-4 px-1 bg-red-500 text-white text-[9px] flex items-center justify-center font-bold rounded-full border-2 border-white">0</span>
             </button>
 
             <!-- Leave Button -->
             <button
               id="leaveBtn"
               onclick="showNADIAvailability()"
-              class="interactive-hover-btn"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-2.5 py-1.5 h-[30px] rounded shadow flex items-center justify-center gap-1 transition-colors cursor-pointer"
               title="Leave Management"
             >
-              <span class="interactive-hover-btn__text">
-                <i class="fa-solid fa-calendar-days"></i>
-                Leave
-              </span>
-              <span class="interactive-hover-btn__overlay">
-                <span>Leave</span>
-                <i class="fa-solid fa-arrow-right"></i>
-              </span>
-              <span class="interactive-hover-btn__bg"></span>
+              <i class="fa-solid fa-calendar-days"></i>
+              <span>Leave</span>
             </button>
 
             <!-- Announcement Link -->
             <a
               href="announcements.html"
               id="announcementBtn"
-              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 rounded shadow flex items-center gap-1 transition-colors relative"
+              class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-3 py-1.5 h-[30px] rounded shadow flex items-center gap-1 transition-colors relative"
             >
               <i class="fa-solid fa-bullhorn text-[#2228a4]"></i> Announcements
               <span id="newAnnouncementDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
@@ -145,9 +138,9 @@
                 <span class="ml-1">Login</span>
               </button>
               <!-- Logout Dropdown -->
-              <div id="logoutDropdown" class="hidden absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50 min-w-[150px]">
-                <button onclick="logoutUser()" class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2">
-                  <i class="fa-solid fa-sign-out-alt text-slate-500"></i>
+              <div id="logoutDropdown" class="hidden absolute right-0 top-full mt-1 z-50">
+                <button onclick="logoutUser()" class="px-2.5 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md flex items-center gap-1.5 transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+                  <i class="fa-solid fa-sign-out-alt text-[10px]"></i>
                   Logout
                 </button>
               </div>

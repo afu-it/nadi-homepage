@@ -410,6 +410,13 @@ let kpiManager;
 document.addEventListener('DOMContentLoaded', async () => {
   kpiManager = new KpiManager();
   await kpiManager.init();
+
+  // Check if user is already logged in (from previous session)
+  // and load KPI data to show badge
+  if (typeof currentLeaveUser !== 'undefined' && currentLeaveUser && currentLeaveUser.site_id) {
+    kpiManager.initWithUser(currentLeaveUser);
+    await kpiManager.loadData();
+  }
 });
 
 // Handle KPI button click - check login first
