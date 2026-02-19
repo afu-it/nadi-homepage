@@ -81,6 +81,7 @@
               <button data-ann-filter="Urgent" onclick="setAnnouncementFilter('Urgent')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-red-500 text-white hover:bg-red-600">Urgent</button>
               <button data-ann-filter="TP" onclick="setAnnouncementFilter('TP')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">TP</button>
               <button data-ann-filter="Samudra" onclick="setAnnouncementFilter('Samudra')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">Samudra</button>
+              <button data-ann-filter="MCMC" onclick="setAnnouncementFilter('MCMC')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">MCMC</button>
               <button data-ann-filter="Maxis" onclick="setAnnouncementFilter('Maxis')" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">Maxis</button>
               <button data-ann-filter="SSO" onclick="setAnnouncementFilter('SSO')" id="btnFilterSSO" class="px-4 py-2 text-xs font-bold rounded-lg transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">SSO</button>
             </div>
@@ -176,7 +177,7 @@
           <label for="announcementTitle" class="sr-only">Title</label>
           <input type="text" id="announcementTitle" name="announcementTitle" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-nadi" placeholder="Title..." />
         </div>
-        <div class="grid grid-cols-5 gap-1">
+        <div class="grid grid-cols-6 gap-1">
           <label class="relative cursor-pointer group">
             <input type="radio" id="annCategoryUrgent" name="annCategory" value="Urgent" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-red-700 peer-checked:border-red-400 peer-checked:bg-red-50 text-center transition-all flex items-center justify-center">
@@ -193,6 +194,12 @@
             <input type="radio" id="annCategorySamudra" name="annCategory" value="Samudra" onchange="annCategoryChanged()" class="peer sr-only" />
             <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-cyan-700 peer-checked:border-cyan-400 peer-checked:bg-cyan-50 text-center transition-all flex items-center justify-center">
               <span class="text-[9px] font-bold uppercase">Samudra</span>
+            </div>
+          </label>
+          <label class="relative cursor-pointer group">
+            <input type="radio" id="annCategoryMCMC" name="annCategory" value="MCMC" onchange="annCategoryChanged()" class="peer sr-only" />
+            <div class="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 peer-checked:text-sky-700 peer-checked:border-sky-400 peer-checked:bg-sky-50 text-center transition-all flex items-center justify-center">
+              <span class="text-[9px] font-bold uppercase">MCMC</span>
             </div>
           </label>
           <label class="relative cursor-pointer group">
@@ -1295,6 +1302,8 @@
           } else if (categoryValue === "Urgent" || categoryValue === "urgent") {
             topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #dc2626; color: white;">URGENT</span></div>`;
             bottomLeftLabel = ``;
+          } else if (categoryValue === "MCMC" || categoryValue === "mcmc") {
+            topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #0ea5e9; color: white;">MCMC</span></div>`;
           } else if (categoryValue === "Maxis" || categoryValue === "maxis") {
             topLeftLabel = `<div class="mb-[10px] justify-start"><span class="inline-flex items-center gap-1 text-[8px] font-bold px-2 py-0.5 rounded uppercase text-left" style="background-color: #46c910; color: white;">MAXIS</span></div>`;
           } else if (categoryValue === "Samudra" || categoryValue === "samudra") {
