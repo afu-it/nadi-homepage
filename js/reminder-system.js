@@ -1014,7 +1014,11 @@ class ReminderManager {
     const overlay = document.getElementById('reminderOverlay');
     const button = document.getElementById('reminderBtn');
     if (overlay) {
-      overlay.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          overlay.classList.add('open');
+        });
+      });
       overlay.setAttribute('aria-hidden', 'false');
       if ('inert' in overlay) {
         overlay.inert = false;
@@ -1035,7 +1039,7 @@ class ReminderManager {
       if (overlay.contains(document.activeElement)) {
         document.activeElement.blur();
       }
-      overlay.classList.add('hidden');
+      overlay.classList.remove('open');
       overlay.setAttribute('aria-hidden', 'true');
       if ('inert' in overlay) {
         overlay.inert = true;
@@ -1048,7 +1052,7 @@ class ReminderManager {
 
   togglePanel() {
     const overlay = document.getElementById('reminderOverlay');
-    if (overlay && !overlay.classList.contains('hidden')) {
+    if (overlay && overlay.classList.contains('open')) {
       this.closeModal();
     } else {
       this.openModal();

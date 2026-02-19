@@ -152,6 +152,77 @@ class KpiUI {
     this.openCategories = new Set(['entrepreneur', 'learning', 'wellbeing', 'awareness', 'gov']); // All categories open
   }
 
+  clearMonthTransitionClasses() {
+    const display = document.getElementById('kpiMonthDisplay');
+    const container = document.getElementById('kpiCategories');
+
+    if (display) {
+      display.classList.remove(
+        'kpi-month-out-prev',
+        'kpi-month-out-next',
+        'kpi-month-in-prev',
+        'kpi-month-in-next',
+        'kpi-month-in-active'
+      );
+    }
+
+    if (container) {
+      container.classList.remove(
+        'kpi-categories-out-prev',
+        'kpi-categories-out-next',
+        'kpi-categories-in-prev',
+        'kpi-categories-in-next',
+        'kpi-categories-in-active'
+      );
+    }
+  }
+
+  setMonthNavDisabled(disabled) {
+    document.querySelectorAll('.kpi-month-btn').forEach((button) => {
+      button.disabled = disabled;
+      button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    });
+  }
+
+  startMonthTransition(direction) {
+    const display = document.getElementById('kpiMonthDisplay');
+    const container = document.getElementById('kpiCategories');
+
+    this.clearMonthTransitionClasses();
+
+    if (display) {
+      display.classList.add(direction === 'prev' ? 'kpi-month-out-prev' : 'kpi-month-out-next');
+    }
+
+    if (container) {
+      container.classList.add(direction === 'prev' ? 'kpi-categories-out-prev' : 'kpi-categories-out-next');
+    }
+  }
+
+  runMonthTransitionIn(direction) {
+    const display = document.getElementById('kpiMonthDisplay');
+    const container = document.getElementById('kpiCategories');
+
+    if (display) {
+      display.classList.remove('kpi-month-out-prev', 'kpi-month-out-next');
+      display.classList.add(direction === 'prev' ? 'kpi-month-in-prev' : 'kpi-month-in-next');
+    }
+
+    if (container) {
+      container.classList.remove('kpi-categories-out-prev', 'kpi-categories-out-next');
+      container.classList.add(direction === 'prev' ? 'kpi-categories-in-prev' : 'kpi-categories-in-next');
+    }
+
+    requestAnimationFrame(() => {
+      if (display) display.classList.add('kpi-month-in-active');
+      if (container) container.classList.add('kpi-categories-in-active');
+    });
+
+    setTimeout(() => {
+      this.clearMonthTransitionClasses();
+    }, 300);
+  }
+
   // Render site label (for logged-in user)
   renderSiteLabel() {
     const label = document.getElementById('kpiSiteLabel');
@@ -264,6 +335,7 @@ class KpiManager {
     this.currentMonth = new Date().getMonth() + 1;
     this.currentYear = new Date().getFullYear();
     this.currentYearMonth = this.getYearMonthString();
+    this.isMonthChanging = false;
   }
 
   // Get year-month string (e.g., "2026-01")
@@ -331,6 +403,13 @@ class KpiManager {
 
   // Change month
   async changeMonth(direction) {
+    if (!this.currentSiteId || this.isMonthChanging) return;
+
+    const navDirection = direction === 'prev' ? 'prev' : 'next';
+    this.isMonthChanging = true;
+    this.ui.setMonthNavDisabled(true);
+    this.ui.startMonthTransition(navDirection);
+
     if (direction === 'prev') {
       if (this.currentMonth === 1) {
         this.currentMonth = 12;
@@ -348,7 +427,18 @@ class KpiManager {
     }
 
     this.currentYearMonth = this.getYearMonthString();
-    await this.loadData();
+
+    try {
+      await this.store.loadForSiteMonth(this.currentSiteId, this.currentYearMonth);
+      this.ui.renderMonthDisplay();
+      this.ui.renderSiteLabel();
+      await this.ui.renderCategories();
+      this.ui.runMonthTransitionIn(navDirection);
+      this.updateBadge();
+    } finally {
+      this.ui.setMonthNavDisabled(false);
+      this.isMonthChanging = false;
+    }
   }
 
   // Toggle category accordion

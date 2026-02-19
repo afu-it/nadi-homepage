@@ -1679,7 +1679,7 @@
     </div>
 
     <!-- Reminder Panel -->
-    <div id="reminderOverlay" class="reminder-overlay hidden" aria-hidden="true">
+    <div id="reminderOverlay" class="reminder-overlay" aria-hidden="true">
       <div class="reminder-backdrop" onclick="closeReminderPanel()" aria-hidden="true"></div>
       <div class="reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="reminderDialogTitle">
         <div class="reminder-shell">
@@ -1977,7 +1977,7 @@
     </div>
 
     <!-- Login Modal -->
-    <div id="leaveLoginModal" class="fixed inset-0 z-50 hidden">
+    <div id="leaveLoginModal" class="fixed inset-0 z-50" aria-hidden="true">
       <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveLogin()"></div>
       <div class="fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md my-4 max-h-[calc(100vh-2rem)] overflow-y-auto">

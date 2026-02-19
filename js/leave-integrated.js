@@ -22,6 +22,66 @@ let leaveRequestsCache = {
 let siteAvailabilityCache = [];
 let adminRequestsCache = [];
 let adminAllStaffCache = [];
+const LEAVE_MODAL_TRANSITION_MS = 280;
+
+function queueLeaveModalOpen(modal) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      modal.classList.add('open');
+    });
+  });
+}
+
+function openLeaveModal(modal) {
+  if (!modal) return;
+
+  if (modal._leaveCloseTimeout) {
+    clearTimeout(modal._leaveCloseTimeout);
+    modal._leaveCloseTimeout = null;
+  }
+  modal.dataset.leaveClosing = '0';
+  modal.setAttribute('aria-hidden', 'false');
+  queueLeaveModalOpen(modal);
+}
+
+function closeLeaveModal(modal, options = {}) {
+  if (!modal) return;
+
+  if (modal._leaveCloseTimeout) {
+    clearTimeout(modal._leaveCloseTimeout);
+    modal._leaveCloseTimeout = null;
+  }
+  const { immediate = false, onClosed = null } = options;
+  const finishClose = () => {
+    if (modal.isConnected) {
+      modal.remove();
+    }
+    if (typeof onClosed === 'function') {
+      onClosed();
+    }
+  };
+
+  if (immediate) {
+    finishClose();
+    return;
+  }
+
+  if (modal.dataset.leaveClosing === '1') return;
+  modal.dataset.leaveClosing = '1';
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+
+  modal._leaveCloseTimeout = setTimeout(() => {
+    modal._leaveCloseTimeout = null;
+    finishClose();
+  }, LEAVE_MODAL_TRANSITION_MS);
+}
+
+function closeAllLeaveModals(immediate = false) {
+  document.querySelectorAll('.leave-modal').forEach((modal) => {
+    closeLeaveModal(modal, { immediate });
+  });
+}
 
 function buildLeavePanelMenu(activeKey) {
   const isSupervisor = currentLeaveUser?.role === 'Supervisor';
@@ -49,7 +109,7 @@ function buildLeavePanelMenu(activeKey) {
 function handleLeaveMenuAction(action, btn) {
   if (action === 'leave') {
     // Close any open leave modals first
-    document.querySelectorAll('.leave-modal').forEach(el => el.remove());
+    closeAllLeaveModals(true);
     showLeavePanel();
     return;
   }
@@ -66,7 +126,7 @@ function handleLeaveMenuAction(action, btn) {
     let modal = btn.closest('.leave-modal');
     if (!modal) modal = btn.closest('.fixed');
     if (!modal) modal = btn.closest('[class*="modal"]');
-    if (modal) modal.remove();
+    if (modal) closeLeaveModal(modal);
   }
 }
 
@@ -450,14 +510,22 @@ function showLeaveLogin() {
     showNADIAvailability();
   } else {
     // Show login modal
-    document.getElementById('leaveLoginModal').classList.remove('hidden');
+    const loginModal = document.getElementById('leaveLoginModal');
+    if (!loginModal) return;
+
+    loginModal.setAttribute('aria-hidden', 'false');
+    queueLeaveModalOpen(loginModal);
     loadSitesForLogin();
   }
 }
 
 // Close login modal
 function closeLeaveLogin() {
-  document.getElementById('leaveLoginModal').classList.add('hidden');
+  const loginModal = document.getElementById('leaveLoginModal');
+  if (!loginModal) return;
+
+  loginModal.classList.remove('open');
+  loginModal.setAttribute('aria-hidden', 'true');
 }
 
 // Load sites for login dropdown
@@ -638,8 +706,8 @@ function showUserMenu() {
   const isSupervisor = currentLeaveUser.role === 'Supervisor';
   
   menu.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/20" onclick="this.parentElement.remove()"></div>
-    <div class="relative bg-white rounded-lg shadow-xl p-4 w-64 animate-slideIn">
+    <div class="fixed inset-0 bg-slate-900/20" onclick="closeLeaveModal(this.parentElement)"></div>
+    <div class="relative bg-white rounded-lg shadow-xl p-4 w-64">
       <div class="border-b border-slate-200 pb-3 mb-3">
         <div class="font-bold text-sm text-slate-800">${currentLeaveUser.full_name}</div>
         <div class="text-xs text-slate-500">${currentLeaveUser.role}</div>
@@ -662,6 +730,7 @@ function showUserMenu() {
     </div>
   `;
   document.body.appendChild(menu);
+  openLeaveModal(menu);
 }
 
 // Logout
@@ -741,12 +810,12 @@ function showLeavePanel() {
     showStaffCalendarsPanel();
     return;
   }
-  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
+  closeAllLeaveModals(true);
   
   const panel = document.createElement('div');
   panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveModal(this.parentElement)"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-7xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-start justify-between gap-4">
         <div>
@@ -843,6 +912,7 @@ function showLeavePanel() {
     </div>
   `;
   document.body.appendChild(panel);
+  openLeaveModal(panel);
   
   // Add event listeners for month navigation using event delegation on the panel
   // This prevents duplicate listeners when panel is re-opened
@@ -2013,13 +2083,13 @@ async function showNADIAvailability() {
   });
   
   // Remove any existing modals
-  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
+  closeAllLeaveModals(true);
   
   // Create modal
   const modal = document.createElement('div');
   modal.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveModal(this.parentElement)"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-3xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-start justify-between gap-4">
         <div>
@@ -2063,18 +2133,19 @@ async function showNADIAvailability() {
   `;
   
   document.body.appendChild(modal);
+  openLeaveModal(modal);
 }
 
 // Show admin panel (for supervisors)
 function showAdminPanel() {
   if (currentLeaveUser?.role !== 'Supervisor') return;
   
-  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
+  closeAllLeaveModals(true);
   
   const panel = document.createElement('div');
   panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveModal(this.parentElement)"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-5xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-purple-50 to-white">
         <div class="flex items-start justify-between gap-4">
@@ -2098,6 +2169,7 @@ function showAdminPanel() {
     </div>
   `;
   document.body.appendChild(panel);
+  openLeaveModal(panel);
   
   loadAllLeaveRequests();
 }
@@ -2469,9 +2541,9 @@ async function showDeletionLog() {
     const deletionLogs = settings?.deletion_logs || [];
     
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4';
+    modal.className = 'leave-modal fixed inset-0 z-[60] flex items-center justify-center p-4';
     modal.innerHTML = `
-      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveModal(this.parentElement)"></div>
       <div class="relative bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-red-50 to-white">
           <h2 class="text-xl font-bold text-slate-800">Deletion Log</h2>
@@ -2516,6 +2588,7 @@ async function showDeletionLog() {
     `;
     
     document.body.appendChild(modal);
+    openLeaveModal(modal);
     
   } catch (error) {
     alert('Failed to load deletion log: ' + error.message);
@@ -2556,13 +2629,13 @@ let staffViewSites = [];
 async function showStaffCalendarsPanel() {
   if (currentLeaveUser?.role !== 'Supervisor') return;
   
-  document.querySelectorAll('.leave-modal').forEach(el => el.remove());
+  closeAllLeaveModals(true);
   
   const panel = document.createElement('div');
   panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.id = 'staffCalendarsPanel';
   panel.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="document.getElementById('staffCalendarsPanel').remove()"></div>
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveModal(document.getElementById('staffCalendarsPanel'))"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-md my-4 overflow-hidden">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
         <h2 class="text-xl font-bold text-slate-800">View Staff Calendars</h2>
@@ -2576,6 +2649,7 @@ async function showStaffCalendarsPanel() {
     </div>
   `;
   document.body.appendChild(panel);
+  openLeaveModal(panel);
   
   await loadStaffViewForm();
 }
@@ -2676,16 +2750,31 @@ async function handleViewStaffCalendar() {
       return;
     }
     
-    // Close current panel
-    document.getElementById('staffCalendarsPanel')?.remove();
-    
-    // Open staff calendar view
-    viewStaffCalendarById(user.user_id, user.full_name, user.role, user.sites?.site_name || 'Unknown');
+    // Close current panel then open staff calendar view
+    const currentPanel = document.getElementById('staffCalendarsPanel');
+    const openStaffCalendar = () => {
+      viewStaffCalendarById(user.user_id, user.full_name, user.role, user.sites?.site_name || 'Unknown');
+    };
+
+    if (currentPanel) {
+      closeLeaveModal(currentPanel, { onClosed: openStaffCalendar });
+    } else {
+      openStaffCalendar();
+    }
     
   } catch (error) {
     console.error('Error finding staff:', error);
     showToast('Error loading staff', 'error');
   }
+}
+
+function returnToStaffCalendarsPanel() {
+  const panel = document.getElementById('staffCalendarViewPanel');
+  if (panel) {
+    closeLeaveModal(panel, { onClosed: () => showStaffCalendarsPanel() });
+    return;
+  }
+  showStaffCalendarsPanel();
 }
 
 // View staff calendar by ID (called after selection)
@@ -2718,7 +2807,7 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
   panel.className = 'leave-modal fixed left-0 right-0 top-0 z-50 flex items-start justify-center pt-4 px-4 overflow-y-auto max-h-screen';
   panel.id = 'staffCalendarViewPanel';
   panel.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="document.getElementById('staffCalendarViewPanel').remove()"></div>
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeLeaveModal(document.getElementById('staffCalendarViewPanel'))"></div>
     <div class="relative bg-white rounded-xl shadow-xl w-full max-w-6xl my-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
       <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white flex items-start justify-between gap-4">
         <div class="flex items-center gap-3">
@@ -2793,7 +2882,7 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
         </div>
       </div>
       <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between">
-        <button onclick="document.getElementById('staffCalendarViewPanel').remove(); showStaffCalendarsPanel();" class="btn btn-secondary btn-sm">
+        <button onclick="returnToStaffCalendarsPanel()" class="btn btn-secondary btn-sm">
           <i class="fa-solid fa-arrow-left mr-1"></i> Back
         </button>
         <button type="button" class="lm-tab" onclick="handleLeaveMenuAction('close', this)">
@@ -2804,6 +2893,7 @@ async function viewStaffCalendarById(userId, fullName, role, siteName) {
     </div>
   `;
   document.body.appendChild(panel);
+  openLeaveModal(panel);
   
   renderViewingCalendar();
   displayViewingRequestsList();
