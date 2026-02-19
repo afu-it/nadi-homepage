@@ -1943,10 +1943,20 @@
       <div class="kpi-dialog" role="dialog" aria-modal="true" aria-labelledby="kpiDialogTitle">
         <header class="kpi-dialog-header">
           <h2 id="kpiDialogTitle" class="kpi-dialog-title">KPI Tracking</h2>
-          <button type="button" class="lm-tab" onclick="closeKpiPanel()">
-            <i class="fa-solid fa-xmark"></i>
-            <span>Close</span>
-          </button>
+          <div class="kpi-header-actions">
+            <button type="button" id="kpiPanelSwitchBtn" class="kpi-header-switch" onclick="switchKpiPanelTab()">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>KPI Info</span>
+            </button>
+            <button type="button" id="kpiHeaderSaveBtn" class="kpi-header-save hidden" onclick="saveKpiInfoContent()">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>Save Info</span>
+            </button>
+            <button type="button" class="lm-tab" onclick="closeKpiPanel()">
+              <i class="fa-solid fa-xmark"></i>
+              <span>Close</span>
+            </button>
+          </div>
         </header>
         <div class="kpi-controls">
           <div class="kpi-control-group">

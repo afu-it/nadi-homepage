@@ -3231,9 +3231,15 @@ function showToast(message, type = 'info') {
   const icons = { success: 'check-circle', error: 'exclamation-circle', info: 'info-circle' };
   toast.innerHTML = `<i class="fa-solid fa-${icons[type] || 'info-circle'}"></i><span class="text-xs font-semibold">${message}</span>`;
   document.body.appendChild(toast);
+  // Trigger animation on next frame
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      toast.classList.add('show');
+    });
+  });
   setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 200);
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
   }, 1600);
 }
 

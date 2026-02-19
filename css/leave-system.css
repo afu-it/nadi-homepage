@@ -363,7 +363,7 @@ body {
   position: fixed;
   top: 12px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(0.95) translateY(20px);
   background: white;
   padding: 8px 14px;
   border-radius: 10px;
@@ -372,20 +372,17 @@ body {
   align-items: center;
   gap: 8px;
   z-index: 9999;
-  animation: slideInDown 0.3s ease-out;
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, visibility 0.2s ease;
   max-width: 90%;
   min-width: 160px;
 }
 
-@keyframes slideInDown {
-  from {
-    transform: translateX(-50%) translateY(-100px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-  }
+.toast.show {
+  transform: translateX(-50%) scale(1) translateY(0);
+  opacity: 1;
+  visibility: visible;
 }
 
 .toast-success {

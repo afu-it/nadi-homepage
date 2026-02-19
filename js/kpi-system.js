@@ -3,6 +3,8 @@
    ============================================ */
 
 const KPI_TABLE = 'kpi_records';
+const KPI_SELECT_COLUMNS = 'id,site_id,kpi_category,kpi_sub,year_month,is_done,completed_at,updated_at';
+const KPI_INFO_SETTINGS_ID = 31;
 
 // KPI Categories and Sub-KPIs
 const kpiCategories = {
@@ -47,6 +49,14 @@ class KpiStore {
     this.records = new Map(); // key: "siteId-category-sub-month", value: record
   }
 
+  setRecords(records) {
+    this.records.clear();
+    for (const record of records || []) {
+      const key = this.getKey(record.site_id, record.kpi_category, record.kpi_sub, record.year_month);
+      this.records.set(key, record);
+    }
+  }
+
   // Get records key
   getKey(siteId, category, sub, yearMonth) {
     return `${siteId}-${category}-${sub}-${yearMonth}`;
@@ -57,23 +67,90 @@ class KpiStore {
     try {
       const { data, error } = await supabaseClient
         .from(KPI_TABLE)
-        .select('*')
+        .select(KPI_SELECT_COLUMNS)
         .eq('site_id', siteId)
         .eq('year_month', yearMonth);
 
       if (error) throw error;
 
-      // Build records map
-      this.records.clear();
-      for (const record of data || []) {
-        const key = this.getKey(record.site_id, record.kpi_category, record.kpi_sub, record.year_month);
-        this.records.set(key, record);
-      }
+      this.setRecords(data || []);
 
       return data || [];
     } catch (error) {
       console.error('Error loading KPI records:', error);
       return [];
+    }
+  }
+
+  async loadForSitesMonth(siteIds, yearMonth) {
+    if (!Array.isArray(siteIds) || !siteIds.length) {
+      this.records.clear();
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabaseClient
+        .from(KPI_TABLE)
+        .select(KPI_SELECT_COLUMNS)
+        .in('site_id', siteIds)
+        .eq('year_month', yearMonth);
+
+      if (error) throw error;
+
+      this.setRecords(data || []);
+
+      return data || [];
+    } catch (error) {
+      console.error('Error loading KPI records:', error);
+      return [];
+    }
+  }
+
+  async loadKpiInfoSettings() {
+    try {
+      const { data, error } = await supabaseClient
+        .from('site_settings')
+        .select('settings')
+        .eq('id', KPI_INFO_SETTINGS_ID)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data?.settings?.kpiInfoByKey || {};
+    } catch (error) {
+      console.error('Error loading KPI info settings:', error);
+      return {};
+    }
+  }
+
+  async saveKpiInfoSettings(infoByKey) {
+    const safeInfoByKey = infoByKey && typeof infoByKey === 'object' ? infoByKey : {};
+    try {
+      const { data: existing, error: existingError } = await supabaseClient
+        .from('site_settings')
+        .select('settings')
+        .eq('id', KPI_INFO_SETTINGS_ID)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      const nextSettings = {
+        ...(existing?.settings || {}),
+        kpiInfoByKey: safeInfoByKey,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabaseClient
+        .from('site_settings')
+        .upsert({
+          id: KPI_INFO_SETTINGS_ID,
+          settings: nextSettings
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error saving KPI info settings:', error);
+      throw error;
     }
   }
 
@@ -184,6 +261,12 @@ class KpiUI {
     });
   }
 
+  updateDialogWidth(isWide) {
+    const dialog = document.querySelector('#kpiOverlay .kpi-dialog');
+    if (!dialog) return;
+    dialog.classList.toggle('kpi-dialog-wide', Boolean(isWide));
+  }
+
   startMonthTransition(direction) {
     const display = document.getElementById('kpiMonthDisplay');
     const container = document.getElementById('kpiCategories');
@@ -223,13 +306,130 @@ class KpiUI {
     }, 300);
   }
 
-  // Render site label (for logged-in user)
-  renderSiteLabel() {
+  renderTabState() {
+    const title = document.getElementById('kpiDialogTitle');
+    const switchBtn = document.getElementById('kpiPanelSwitchBtn');
+    const saveBtn = document.getElementById('kpiHeaderSaveBtn');
+    const controls = document.querySelector('#kpiOverlay .kpi-controls');
+    const body = document.querySelector('#kpiOverlay .kpi-dialog-body');
+
+    const isInfo = this.manager.activePanel === 'info';
+
+    if (title) {
+      title.textContent = isInfo ? 'KPI Info' : 'KPI Tracking';
+    }
+
+    if (switchBtn) {
+      switchBtn.innerHTML = isInfo
+        ? '<i class="fa-solid fa-list-check"></i><span>KPI Tracking</span>'
+        : '<i class="fa-solid fa-circle-info"></i><span>KPI Info</span>';
+    }
+
+    if (controls) {
+      controls.classList.toggle('kpi-controls-hidden', isInfo);
+    }
+
+    if (body) {
+      body.classList.toggle('kpi-info-mode', isInfo);
+    }
+
+    if (saveBtn) {
+      saveBtn.classList.toggle('hidden', !isInfo);
+      if (isInfo) {
+        saveBtn.innerHTML = this.manager.isInfoEditMode
+          ? '<i class="fa-solid fa-floppy-disk"></i><span>Save Info</span>'
+          : '<i class="fa-solid fa-pen"></i><span>Edit Mode</span>';
+        saveBtn.classList.toggle('kpi-header-edit-mode', !this.manager.isInfoEditMode);
+      }
+    }
+  }
+
+  renderKpiInfoPanel() {
+    const container = document.getElementById('kpiCategories');
+    if (!container) return;
+
+    const allSubKpis = this.getAllSubKpis();
+    const isEditable = this.manager.isInfoEditMode;
+
+    const cardsHtml = allSubKpis.map((item, index) => {
+      const key = this.manager.getKpiInfoKey(item.category, item.sub);
+      const rawHtml = this.manager.kpiInfoByKey[key] || '';
+      const safeHtml = typeof sanitizeHTMLWithLinks === 'function' ? sanitizeHTMLWithLinks(rawHtml) : rawHtml;
+      const editorId = `kpiInfoEditor-${index}`;
+
+      if (isEditable) {
+        return `
+          <section class="kpi-info-card">
+            <div class="kpi-info-header">
+              <div class="kpi-info-title-wrap">
+                <span class="kpi-info-index">${index + 1}</span>
+                <div>
+                  <div class="kpi-info-title">${this.getShortSubLabel(item.sub)}</div>
+                  <div class="kpi-info-subtitle">${item.sub}</div>
+                </div>
+              </div>
+              <span class="kpi-info-category kpi-info-category-${item.category}">${kpiCategories[item.category]?.label || item.category}</span>
+            </div>
+            <div class="kpi-info-toolbar" id="${editorId}-toolbar">
+              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'bold')"><i class="fa-solid fa-bold"></i></button>
+              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'italic')"><i class="fa-solid fa-italic"></i></button>
+              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'underline')"><i class="fa-solid fa-underline"></i></button>
+              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'insertUnorderedList')"><i class="fa-solid fa-list-ul"></i></button>
+              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'insertOrderedList')"><i class="fa-solid fa-list-ol"></i></button>
+              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoLink('${editorId}')"><i class="fa-solid fa-link"></i></button>
+            </div>
+            <div
+              id="${editorId}"
+              class="kpi-info-editor"
+              data-kpi-key="${key}"
+              contenteditable="true"
+              spellcheck="true"
+            >${safeHtml}</div>
+          </section>
+        `;
+      }
+
+      return `
+        <section class="kpi-info-card">
+          <div class="kpi-info-header">
+            <div class="kpi-info-title-wrap">
+              <span class="kpi-info-index">${index + 1}</span>
+              <div>
+                <div class="kpi-info-title">${this.getShortSubLabel(item.sub)}</div>
+                <div class="kpi-info-subtitle">${item.sub}</div>
+              </div>
+            </div>
+            <span class="kpi-info-category kpi-info-category-${item.category}">${kpiCategories[item.category]?.label || item.category}</span>
+          </div>
+          <div class="kpi-info-view">${safeHtml || '<span class="kpi-info-empty">No information yet.</span>'}</div>
+        </section>
+      `;
+    }).join('');
+
+    container.innerHTML = `<div class="kpi-info-grid">${cardsHtml}</div>`;
+  }
+
+  renderSiteControl() {
     const label = document.getElementById('kpiSiteLabel');
     if (!label) return;
 
-    const siteName = this.manager.currentSiteName || '-';
-    label.textContent = siteName;
+    if (!this.manager.isSupervisor) {
+      const siteName = this.manager.currentSiteName || '-';
+      label.innerHTML = '';
+      label.textContent = siteName;
+      label.style.cursor = 'default';
+      label.style.padding = '';
+      label.style.border = '';
+      label.style.background = '';
+      return;
+    }
+
+    label.innerHTML = '';
+    label.textContent = `All Sites (${this.manager.availableSites.length || 18})`;
+    label.style.cursor = 'default';
+    label.style.padding = '';
+    label.style.border = '';
+    label.style.background = '';
   }
 
   // Render month display
@@ -262,45 +462,157 @@ class KpiUI {
     const container = document.getElementById('kpiCategories');
     if (!container) return;
 
-    const { currentSiteId, currentYearMonth } = this.manager;
+    if (this.manager.viewMode === 'all') {
+      container.innerHTML = this.renderAllSitesMatrix();
+      return;
+    }
 
-    let html = '<div class="kpi-categories-grid">';
+    container.innerHTML = this.renderSingleSiteMatrix();
+  }
+
+  getAllSubKpis() {
+    const allSubKpis = [];
     for (const [category, info] of Object.entries(kpiCategories)) {
-      const progress = this.store.getCategoryProgress(currentSiteId, category, currentYearMonth);
-      const isComplete = progress.done === progress.total;
+      for (const sub of info.subs) {
+        allSubKpis.push({ category, sub });
+      }
+    }
+    return allSubKpis;
+  }
 
-      html += `
-        <div class="kpi-category">
-          <div class="kpi-category-header">
-            <div class="kpi-category-left">
-              <div class="kpi-category-color kpi-color-${category}"></div>
-              <span class="kpi-category-title">${info.label}</span>
-            </div>
-            <div class="kpi-category-right">
-              <span class="kpi-category-progress ${isComplete ? 'complete' : ''}">${progress.done}/${progress.total}</span>
-            </div>
-          </div>
-          <div class="kpi-category-body">
-            ${info.subs.map(sub => {
-              const isDone = this.store.isDone(currentSiteId, category, sub, currentYearMonth);
-              const formattedLabel = this.formatLabel(category, sub);
-              return `
-                <label class="kpi-item" style="cursor: pointer;">
-                  <input type="checkbox" class="kpi-checkbox kpi-checkbox-${category}"
-                    ${isDone ? 'checked' : ''}
-                    onchange="kpiManager.toggleKpiItem('${category}', '${sub.replace(/'/g, "\\'")}', this.checked)"
-                  >
-                  <span class="kpi-item-label">${formattedLabel}</span>
-                </label>
-              `;
-            }).join('')}
-          </div>
+  getShortSubLabel(sub) {
+    const shortLabels = {
+      'Nurture x eKelas Keusahawanan (Maxis)': 'eKelas Keusahawanan',
+      'Nurture x DiLea': 'DiLea',
+      'Nurture x Cybersecurity': 'Cybersecurity',
+      'eKelas Maxis': 'eKelas Maxis',
+      'NADI Book x TinyTechies': 'Tinytechies',
+      'Skillforge x eSport': 'eSport',
+      'Skillforge x Mahir': 'Mahir',
+      'MyDigital ID': 'MyDigital ID'
+    };
+    return shortLabels[sub] || sub;
+  }
+
+  renderAllSitesMatrix() {
+    const allSubKpis = this.getAllSubKpis();
+    const { availableSites, currentYearMonth } = this.manager;
+    const categoryGroups = Object.entries(kpiCategories).map(([key, info]) => ({
+      key,
+      label: info.label,
+      count: info.subs.length
+    }));
+
+    if (!availableSites.length) {
+      return `
+        <div class="kpi-empty">
+          <i class="fa-solid fa-folder-open"></i>
+          <p>No sites found</p>
         </div>
       `;
     }
-    html += '</div>';
 
-    container.innerHTML = html;
+    let html = `
+      <div class="kpi-matrix-wrap">
+        <table class="kpi-matrix-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Site</th>
+              ${categoryGroups.map((group) => `<th class="kpi-matrix-group kpi-matrix-group-${group.key}" colspan="${group.count}">${group.label}</th>`).join('')}
+              <th rowspan="2">Total</th>
+            </tr>
+            <tr>
+              ${allSubKpis.map((item, index) => `<th class="kpi-matrix-col-${item.category}" title="${item.sub}"><div class="kpi-matrix-head"><span class="kpi-matrix-head-num">${index + 1}</span><span class="kpi-matrix-head-text">${this.getShortSubLabel(item.sub)}</span></div></th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    for (const site of availableSites) {
+      let doneCount = 0;
+      const rowCells = allSubKpis.map((item) => {
+        const done = this.store.isDone(site.site_id, item.category, item.sub, currentYearMonth);
+        if (done) doneCount++;
+        return `<td class="kpi-matrix-col-${item.category}"><span class="kpi-matrix-dot ${done ? 'done' : ''}" title="${done ? 'Done' : 'Pending'}"></span></td>`;
+      }).join('');
+
+      html += `
+        <tr>
+          <td class="kpi-matrix-site">${site.site_name}</td>
+          ${rowCells}
+          <td class="kpi-matrix-total">${doneCount}/13</td>
+        </tr>
+      `;
+    }
+
+    html += `
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    return html;
+  }
+
+  renderSingleSiteMatrix() {
+    const { currentSiteId, currentSiteName, currentYearMonth } = this.manager;
+    if (!currentSiteId) {
+      return `
+        <div class="kpi-empty">
+          <i class="fa-solid fa-folder-open"></i>
+          <p>No site selected</p>
+        </div>
+      `;
+    }
+
+    const allSubKpis = this.getAllSubKpis();
+    const categoryGroups = Object.entries(kpiCategories).map(([key, info]) => ({
+      key,
+      label: info.label,
+      count: info.subs.length
+    }));
+
+    let doneCount = 0;
+    const rowCells = allSubKpis.map((item) => {
+      const done = this.store.isDone(currentSiteId, item.category, item.sub, currentYearMonth);
+      if (done) doneCount++;
+      return `
+        <td class="kpi-matrix-col-${item.category}">
+          <label title="${done ? 'Done' : 'Pending'}">
+            <input
+              type="checkbox"
+              class="kpi-checkbox kpi-checkbox-${item.category} kpi-matrix-checkbox"
+              ${done ? 'checked' : ''}
+              onchange="kpiManager.toggleKpiItem('${item.category}', '${item.sub.replace(/'/g, "\\'")}', this.checked)"
+            >
+          </label>
+        </td>
+      `;
+    }).join('');
+
+    return `
+      <div class="kpi-matrix-wrap">
+        <table class="kpi-matrix-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Site</th>
+              ${categoryGroups.map((group) => `<th class="kpi-matrix-group kpi-matrix-group-${group.key}" colspan="${group.count}">${group.label}</th>`).join('')}
+              <th rowspan="2">Total</th>
+            </tr>
+            <tr>
+              ${allSubKpis.map((item, index) => `<th class="kpi-matrix-col-${item.category}" title="${item.sub}"><div class="kpi-matrix-head"><span class="kpi-matrix-head-num">${index + 1}</span><span class="kpi-matrix-head-text">${this.getShortSubLabel(item.sub)}</span></div></th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="kpi-matrix-site">${currentSiteName || '-'}</td>
+              ${rowCells}
+              <td class="kpi-matrix-total">${doneCount}/13</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   // Render loading state
@@ -336,6 +648,13 @@ class KpiManager {
     this.currentYear = new Date().getFullYear();
     this.currentYearMonth = this.getYearMonthString();
     this.isMonthChanging = false;
+    this.isSupervisor = false;
+    this.availableSites = [];
+    this.viewMode = 'single';
+    this.activePanel = 'tracking';
+    this.isInfoEditMode = false;
+    this.kpiInfoByKey = {};
+    this.isKpiInfoLoaded = false;
   }
 
   // Get year-month string (e.g., "2026-01")
@@ -345,6 +664,16 @@ class KpiManager {
 
   // Initialize with logged-in user
   initWithUser(user) {
+    this.isSupervisor = user?.role === 'Supervisor';
+
+    if (this.isSupervisor) {
+      this.currentSiteId = null;
+      this.currentSiteName = 'All Sites';
+      this.viewMode = 'all';
+      return;
+    }
+
+    this.viewMode = 'single';
     if (user && user.site_id) {
       this.currentSiteId = user.site_id;
       this.currentSiteName = user.site_name || '-';
@@ -354,19 +683,69 @@ class KpiManager {
   // Initialize (legacy - called on DOM ready but data loaded on open)
   async init() {
     // Site will be set when panel opens (based on currentLeaveUser)
-    this.ui.renderSiteLabel();
+    this.ui.renderSiteControl();
+    this.ui.renderTabState();
+  }
+
+  async loadSites() {
+    const { data, error } = await supabaseClient
+      .from('sites')
+      .select('site_id, site_name')
+      .order('site_name');
+
+    if (error) throw error;
+
+    this.availableSites = data || [];
   }
 
   // Load data for current site and month
   async loadData() {
-    if (!this.currentSiteId) return;
+    if (!this.currentSiteId && this.viewMode !== 'all') return;
 
     this.ui.renderLoading();
-    await this.store.loadForSiteMonth(this.currentSiteId, this.currentYearMonth);
+
+    try {
+      if (this.isSupervisor) {
+        if (!this.availableSites.length) {
+          await this.loadSites();
+        }
+
+        if (this.viewMode === 'all') {
+          const siteIds = this.availableSites.map((site) => site.site_id);
+          await this.store.loadForSitesMonth(siteIds, this.currentYearMonth);
+        } else {
+          await this.store.loadForSiteMonth(this.currentSiteId, this.currentYearMonth);
+        }
+      } else {
+        await this.store.loadForSiteMonth(this.currentSiteId, this.currentYearMonth);
+      }
+    } catch (error) {
+      console.error('Error loading KPI data:', error);
+      this.ui.renderEmpty();
+      return;
+    }
+
     this.ui.renderMonthDisplay();
-    this.ui.renderSiteLabel();
-    await this.ui.renderCategories();
+    this.ui.renderSiteControl();
+    this.ui.renderTabState();
+    this.ui.updateDialogWidth(true);
+    await this.renderActivePanel();
     this.updateBadge();
+  }
+
+  async renderActivePanel() {
+    if (this.activePanel === 'info') {
+      await this.ensureKpiInfoLoaded();
+      this.ui.renderKpiInfoPanel();
+      return;
+    }
+    await this.ui.renderCategories();
+  }
+
+  async ensureKpiInfoLoaded(force = false) {
+    if (this.isKpiInfoLoaded && !force) return;
+    this.kpiInfoByKey = await this.store.loadKpiInfoSettings();
+    this.isKpiInfoLoaded = true;
   }
 
   // Open panel
@@ -375,6 +754,7 @@ class KpiManager {
     if (!overlay) return;
 
     overlay.classList.add('open');
+    this.ui.updateDialogWidth(true);
     overlay.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   }
@@ -403,7 +783,7 @@ class KpiManager {
 
   // Change month
   async changeMonth(direction) {
-    if (!this.currentSiteId || this.isMonthChanging) return;
+    if ((!this.currentSiteId && this.viewMode !== 'all') || this.isMonthChanging) return;
 
     const navDirection = direction === 'prev' ? 'prev' : 'next';
     this.isMonthChanging = true;
@@ -429,10 +809,15 @@ class KpiManager {
     this.currentYearMonth = this.getYearMonthString();
 
     try {
-      await this.store.loadForSiteMonth(this.currentSiteId, this.currentYearMonth);
+      if (this.viewMode === 'all') {
+        const siteIds = this.availableSites.map((site) => site.site_id);
+        await this.store.loadForSitesMonth(siteIds, this.currentYearMonth);
+      } else {
+        await this.store.loadForSiteMonth(this.currentSiteId, this.currentYearMonth);
+      }
       this.ui.renderMonthDisplay();
-      this.ui.renderSiteLabel();
-      await this.ui.renderCategories();
+      this.ui.renderSiteControl();
+      await this.renderActivePanel();
       this.ui.runMonthTransitionIn(navDirection);
       this.updateBadge();
     } finally {
@@ -453,7 +838,7 @@ class KpiManager {
 
   // Toggle KPI item
   async toggleKpiItem(category, sub, isDone) {
-    if (!this.currentSiteId) return;
+    if (!this.currentSiteId || this.viewMode === 'all') return;
 
     try {
       await this.store.toggleKpi(this.currentSiteId, category, sub, this.currentYearMonth, isDone);
@@ -470,6 +855,11 @@ class KpiManager {
   updateBadge() {
     const badge = document.getElementById('kpiBadge');
     if (!badge) return;
+
+    if (!this.currentSiteId || this.viewMode === 'all') {
+      badge.classList.add('hidden');
+      return;
+    }
 
     let totalDone = 0;
     for (const category of Object.keys(kpiCategories)) {
@@ -489,6 +879,104 @@ class KpiManager {
       // All 13 done - show 13 with different style (optional: hide or show check)
       badge.textContent = totalKPIs;
       badge.classList.remove('hidden');
+    }
+  }
+
+  getKpiInfoKey(category, sub) {
+    return `${category}::${sub}`;
+  }
+
+  async setActivePanel(panel) {
+    this.activePanel = panel === 'info' ? 'info' : 'tracking';
+    if (this.activePanel !== 'info') {
+      this.isInfoEditMode = false;
+    }
+    this.ui.renderTabState();
+    await this.renderActivePanel();
+  }
+
+  applyInfoFormat(editorId, command) {
+    const editor = document.getElementById(editorId);
+    if (!editor || this.activePanel !== 'info' || !this.isInfoEditMode) return;
+    editor.focus();
+    document.execCommand(command, false, null);
+  }
+
+  applyInfoLink(editorId) {
+    const editor = document.getElementById(editorId);
+    if (!editor || this.activePanel !== 'info' || !this.isInfoEditMode) return;
+    const value = window.prompt('Enter URL (https://...)');
+    if (!value) return;
+    const url = value.trim();
+    if (!url) return;
+    editor.focus();
+    document.execCommand('createLink', false, url);
+  }
+
+  toggleInfoCardEdit(editorId, buttonElement) {
+    if (!this.isInfoEditMode) return;
+    const editor = document.getElementById(editorId);
+    const toolbar = document.getElementById(`${editorId}-toolbar`);
+    if (!editor) return;
+
+    const isEditing = editor.getAttribute('contenteditable') === 'true';
+    const nextEditing = !isEditing;
+    editor.setAttribute('contenteditable', nextEditing ? 'true' : 'false');
+
+    if (toolbar) {
+      toolbar.classList.toggle('hidden', !nextEditing);
+    }
+
+    if (buttonElement) {
+      buttonElement.innerHTML = nextEditing
+        ? '<i class="fa-solid fa-check"></i><span>Done</span>'
+        : '<i class="fa-solid fa-pen"></i><span>Edit</span>';
+      buttonElement.classList.toggle('active', nextEditing);
+    }
+
+    if (nextEditing) {
+      editor.focus();
+    }
+  }
+
+  async saveInfoContent() {
+    if (this.activePanel !== 'info') return;
+
+    if (!this.isInfoEditMode) {
+      this.isInfoEditMode = true;
+      this.ui.renderTabState();
+      this.ui.renderKpiInfoPanel();
+      return;
+    }
+
+    const editors = Array.from(document.querySelectorAll('.kpi-info-editor[data-kpi-key]'));
+    const nextInfoByKey = {};
+
+    for (const editor of editors) {
+      const key = editor.getAttribute('data-kpi-key');
+      if (!key) continue;
+      const raw = editor.innerHTML || '';
+      const safe = typeof sanitizeHTMLWithLinks === 'function' ? sanitizeHTMLWithLinks(raw) : raw;
+      const plain = safe.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+      if (plain) {
+        nextInfoByKey[key] = safe;
+      }
+    }
+
+    try {
+      await this.store.saveKpiInfoSettings(nextInfoByKey);
+      this.kpiInfoByKey = nextInfoByKey;
+      this.isKpiInfoLoaded = true;
+      this.isInfoEditMode = false;
+      this.ui.renderTabState();
+      this.ui.renderKpiInfoPanel();
+      if (typeof showToast === 'function') {
+        showToast('KPI information saved', 'success');
+      }
+    } catch (error) {
+      if (typeof showToast === 'function') {
+        showToast('Failed to save KPI information', 'error');
+      }
     }
   }
 }
@@ -545,6 +1033,19 @@ function closeKpiPanel() {
 function changeKpiMonth(direction) {
   if (kpiManager) {
     kpiManager.changeMonth(direction);
+  }
+}
+
+function switchKpiPanelTab(panel) {
+  if (!kpiManager) return;
+
+  const nextPanel = panel || (kpiManager.activePanel === 'info' ? 'tracking' : 'info');
+  kpiManager.setActivePanel(nextPanel);
+}
+
+function saveKpiInfoContent() {
+  if (kpiManager) {
+    kpiManager.saveInfoContent();
   }
 }
 
