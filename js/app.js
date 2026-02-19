@@ -8,6 +8,60 @@ function toLocalISOString(date) {
   return `${y}-${m}-${d}`;
 }
 
+function isValidDateParts(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const candidate = new Date(year, month - 1, day);
+  return candidate.getFullYear() === year
+    && candidate.getMonth() === month - 1
+    && candidate.getDate() === day;
+}
+
+function isoDateToDisplay(isoDate) {
+  const match = typeof isoDate === "string" ? isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+  if (!match) return "";
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+  if (!isValidDateParts(year, month, day)) return "";
+
+  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${String(year).padStart(4, "0")}`;
+}
+
+function parseDateInputToIso(dateStr) {
+  const raw = typeof dateStr === "string" ? dateStr.trim() : "";
+  if (!raw) return "";
+
+  let year;
+  let month;
+  let day;
+
+  const displayMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (displayMatch) {
+    day = parseInt(displayMatch[1], 10);
+    month = parseInt(displayMatch[2], 10);
+    year = parseInt(displayMatch[3], 10);
+  } else {
+    const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!isoMatch) return "";
+    year = parseInt(isoMatch[1], 10);
+    month = parseInt(isoMatch[2], 10);
+    day = parseInt(isoMatch[3], 10);
+  }
+
+  if (!isValidDateParts(year, month, day)) return "";
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function normalizeProgramDateInput(input) {
+  if (!input) return "";
+  const isoDate = parseDateInputToIso(input.value);
+  if (!isoDate) return "";
+  input.value = isoDateToDisplay(isoDate);
+  return isoDate;
+}
+
 function addRange(name, startStr, endStr) {
   let curr = new Date(startStr);
   const last = new Date(endStr);
@@ -1243,12 +1297,19 @@ async function loadLatestAnnouncementMeta() {
     console.error("editableHeader element not found!");
   }
 
-  document.getElementById("startDate").addEventListener("change", function () {
-    const startDate = this.value;
-    const endDateInput = document.getElementById("endDate");
-    endDateInput.value = startDate;
-    endDateInput.min = startDate;
-  });
+  const startDateInput = document.getElementById("startDate");
+  const endDateInput = document.getElementById("endDate");
+  if (startDateInput && endDateInput) {
+    startDateInput.addEventListener("change", function () {
+      const startDateIso = normalizeProgramDateInput(this);
+      if (!startDateIso) return;
+      endDateInput.value = isoDateToDisplay(startDateIso);
+    });
+
+    endDateInput.addEventListener("change", function () {
+      normalizeProgramDateInput(this);
+    });
+  }
 
   document.querySelectorAll('input[name="category"]').forEach((radio) => {
     radio.addEventListener("change", function () {
@@ -3031,8 +3092,10 @@ async function openModal(id = null, dateHint = null) {
     document.getElementById("modalTitle").textContent = "Edit Program";
     document.getElementById("eventId").value = ev.id;
     document.getElementById("eventTitle").value = ev.title;
-    document.getElementById("startDate").value = ev.start;
-    document.getElementById("endDate").value = ev.end;
+    const eventStartDisplay = isoDateToDisplay(ev.start);
+    const eventEndDisplay = isoDateToDisplay(ev.end || ev.start);
+    document.getElementById("startDate").value = eventStartDisplay;
+    document.getElementById("endDate").value = eventEndDisplay;
 
 
 
@@ -3191,8 +3254,9 @@ async function openModal(id = null, dateHint = null) {
     }
     
     document.getElementById("modalTitle").textContent = "New Program";
-    document.getElementById("startDate").value = dateToUse;
-    document.getElementById("endDate").value = dateToUse;
+    const displayDateToUse = isoDateToDisplay(dateToUse);
+    document.getElementById("startDate").value = displayDateToUse;
+    document.getElementById("endDate").value = displayDateToUse;
     
     document.getElementById("timeHour").value = "09";
     document.getElementById("timeMinute").value = "00";
@@ -4087,8 +4151,11 @@ async function saveEvent() {
   const subcategoryVal = document.getElementById("subcategory").value;
   const programInfoVal = programInfoContent;
   const id = document.getElementById("eventId").value;
-  const start = document.getElementById("startDate").value;
-  const end = document.getElementById("endDate").value;
+  const startDateInputValue = document.getElementById("startDate").value.trim();
+  const endDateInputValue = document.getElementById("endDate").value.trim();
+  const start = parseDateInputToIso(startDateInputValue);
+  const parsedEnd = parseDateInputToIso(endDateInputValue);
+  const end = parsedEnd || start;
   const title = document.getElementById("eventTitle").value;
 
   const radios = document.getElementsByName("category");
@@ -4163,8 +4230,18 @@ async function saveEvent() {
 
 
   // Validation with visual feedback
-  if (!start || !title) {
+  if (!startDateInputValue || !title) {
     alert("Start Date and Title are required.");
+    return;
+  }
+
+  if (!start) {
+    alert("Start Date must be in dd/mm/yyyy format.");
+    return;
+  }
+
+  if (endDateInputValue && !parsedEnd) {
+    alert("End Date must be in dd/mm/yyyy format.");
     return;
   }
   
