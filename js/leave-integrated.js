@@ -23,6 +23,172 @@ let siteAvailabilityCache = [];
 let adminRequestsCache = [];
 let adminAllStaffCache = [];
 const LEAVE_MODAL_TRANSITION_MS = 280;
+let leaveLoginSitesById = new Map();
+
+function getStoredNadi4uPassword() {
+  let raw = null;
+  try {
+    raw = window.safeStorage?.getItem ? window.safeStorage.getItem('nadi4uSettings') : null;
+  } catch (error) {
+    raw = null;
+  }
+
+  if (!raw) {
+    try {
+      raw = localStorage.getItem('nadi4uSettings');
+    } catch (error) {
+      raw = null;
+    }
+  }
+
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    const password = typeof parsed?.password === 'string' ? parsed.password : '';
+    return password || '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function setStoredNadi4uPassword(password) {
+  const normalizedPassword = typeof password === 'string' ? password : '';
+  let settings = {};
+  let raw = null;
+
+  try {
+    raw = window.safeStorage?.getItem ? window.safeStorage.getItem('nadi4uSettings') : null;
+  } catch (error) {
+    raw = null;
+  }
+
+  if (!raw) {
+    try {
+      raw = localStorage.getItem('nadi4uSettings');
+    } catch (error) {
+      raw = null;
+    }
+  }
+
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        settings = parsed;
+      }
+    } catch (error) {}
+  }
+
+  settings.password = normalizedPassword;
+  const serialized = JSON.stringify(settings);
+
+  try {
+    if (window.safeStorage?.setItem) {
+      window.safeStorage.setItem('nadi4uSettings', serialized);
+    }
+  } catch (error) {}
+
+  try {
+    localStorage.setItem('nadi4uSettings', serialized);
+  } catch (error) {}
+}
+
+function mapLeaveRoleToNadiAppRole(role) {
+  const normalized = String(role || '').trim().toLowerCase();
+  if (normalized === 'manager') return 'manager';
+  if (normalized === 'assistant manager') return 'assistantmanager';
+  return '';
+}
+
+function toLeaveSiteSlug(siteName) {
+  const raw = String(siteName || '').trim().toLowerCase();
+  if (!raw) return '';
+  const withoutPrefix = raw.replace(/^nadi\s+/, '');
+  return withoutPrefix
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/_/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function buildLeaveNadiAppEmailPreview() {
+  const selectedSiteId = document.querySelector('input[name="loginSite"]:checked')?.value || '';
+  const selectedRole = document.querySelector('input[name="loginRole"]:checked')?.value || '';
+  const mappedRole = mapLeaveRoleToNadiAppRole(selectedRole);
+  const siteName = leaveLoginSitesById.get(String(selectedSiteId)) || '';
+  const siteSlug = toLeaveSiteSlug(siteName);
+
+  if (!mappedRole || !siteSlug) return '';
+  return `${mappedRole}@${siteSlug}.nadi.my`;
+}
+
+function refreshLeaveNadi4uEmailPreview() {
+  const emailInput = document.getElementById('loginNadi4uEmail');
+  if (!emailInput) return '';
+
+  const shouldLoginNadi4u = document.getElementById('loginNadi4uTogether')?.checked === true;
+  if (!shouldLoginNadi4u) {
+    emailInput.value = '';
+    return '';
+  }
+
+  const email = buildLeaveNadiAppEmailPreview();
+  emailInput.value = email;
+  return email;
+}
+
+function toggleLeaveNadi4uPasswordVisibility(checked) {
+  const passwordInput = document.getElementById('loginNadi4uPassword');
+  if (!passwordInput) return;
+  passwordInput.type = checked ? 'text' : 'password';
+}
+
+function toggleLeaveNadi4uPasswordField(checked) {
+  const emailWrapper = document.getElementById('loginNadi4uEmailWrap');
+  const emailInput = document.getElementById('loginNadi4uEmail');
+  const wrapper = document.getElementById('loginNadi4uPasswordWrap');
+  const input = document.getElementById('loginNadi4uPassword');
+  const showPassword = document.getElementById('loginNadi4uShowPassword');
+  if (!wrapper || !input) return;
+
+  if (checked) {
+    if (emailWrapper) emailWrapper.classList.remove('hidden');
+    wrapper.classList.remove('hidden');
+    if (!input.value) {
+      input.value = getStoredNadi4uPassword();
+    }
+    toggleLeaveNadi4uPasswordVisibility(false);
+    if (showPassword) showPassword.checked = false;
+    refreshLeaveNadi4uEmailPreview();
+  } else {
+    if (emailWrapper) emailWrapper.classList.add('hidden');
+    if (emailInput) emailInput.value = '';
+    wrapper.classList.add('hidden');
+    input.value = '';
+    input.type = 'password';
+    if (showPassword) showPassword.checked = false;
+  }
+}
+
+function bindLeaveNadi4uPreviewListeners() {
+  document.querySelectorAll('input[name="loginRole"]').forEach((input) => {
+    if (input.dataset.nadiPreviewBound === '1') return;
+    input.addEventListener('change', refreshLeaveNadi4uEmailPreview);
+    input.dataset.nadiPreviewBound = '1';
+  });
+}
+
+function bindLeaveNadi4uPasswordPersist() {
+  const passwordInput = document.getElementById('loginNadi4uPassword');
+  if (!passwordInput || passwordInput.dataset.nadiPasswordBound === '1') return;
+
+  passwordInput.addEventListener('input', () => {
+    setStoredNadi4uPassword(passwordInput.value);
+  });
+  passwordInput.dataset.nadiPasswordBound = '1';
+}
 
 function queueLeaveModalOpen(modal) {
   requestAnimationFrame(() => {
@@ -457,6 +623,7 @@ function updateLoginButton() {
       <i class="fa-solid fa-user-check text-[#2228a4] text-xs"></i>
       <span class="ml-1">${roleSite}</span>
       <i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
+      <span id="nadi4uHeaderBadgeDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>
     `;
     loginBtn.title = `Logged in as ${currentLeaveUser.full_name}`;
     loginBtn.classList.add('logged-in');
@@ -466,19 +633,65 @@ function updateLoginButton() {
     loginBtn.innerHTML = `
       <i class="fa-solid fa-user text-[#2228a4] text-xs"></i>
       <span class="ml-1">Login</span>
+      <i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
+      <span id="nadi4uHeaderBadgeDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>
     `;
-    loginBtn.title = 'Login';
+    loginBtn.title = 'Account menu';
     loginBtn.classList.remove('logged-in');
-    loginBtn.onclick = showLeaveLogin;
+    loginBtn.onclick = toggleLogoutDropdown;
+  }
+
+  renderLeaveQuickActions();
+  if (typeof window.refreshNadi4uHeaderMenuState === 'function') {
+    window.refreshNadi4uHeaderMenuState();
+  }
+  if (typeof window.updateNadi4uHeaderBadge === 'function') {
+    window.updateNadi4uHeaderBadge();
+  }
+}
+
+function renderLeaveQuickActions() {
+  const stateEl = document.getElementById('leaveQuickState');
+  const actionsEl = document.getElementById('leaveQuickActions');
+  if (!stateEl || !actionsEl) return;
+
+  if (currentLeaveUser) {
+    stateEl.textContent = `${currentLeaveUser.role} - ${currentLeaveUser.site_name}`;
+    actionsEl.innerHTML = `
+      <button type="button" onclick="logoutUser()" class="w-full px-2.5 py-1.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-md flex items-center justify-center gap-1.5 transition-colors">
+        <i class="fa-solid fa-sign-out-alt text-[10px]"></i>
+        Logout
+      </button>
+    `;
+  } else {
+    stateEl.textContent = 'Not logged in';
+    actionsEl.innerHTML = `
+      <button type="button" onclick="showLeaveLogin()" class="w-full px-2.5 py-1.5 text-xs font-bold text-white bg-[#2228a4] hover:bg-[#1b2086] rounded-md flex items-center justify-center gap-1.5 transition-colors">
+        <i class="fa-solid fa-right-to-bracket text-[10px]"></i>
+        LOGIN
+      </button>
+    `;
   }
 }
 
 // Toggle logout dropdown
 function toggleLogoutDropdown(e) {
-  e.stopPropagation();
+  if (e && typeof e.stopPropagation === 'function') {
+    e.stopPropagation();
+  }
+
   const dropdown = document.getElementById('logoutDropdown');
-  if (dropdown) {
-    dropdown.classList.toggle('hidden');
+  if (!dropdown) return;
+
+  renderLeaveQuickActions();
+  if (typeof window.refreshNadi4uHeaderMenuState === 'function') {
+    window.refreshNadi4uHeaderMenuState();
+  }
+
+  dropdown.classList.toggle('hidden');
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) {
+    loginBtn.setAttribute('aria-expanded', dropdown.classList.contains('hidden') ? 'false' : 'true');
   }
 }
 
@@ -486,9 +699,10 @@ function toggleLogoutDropdown(e) {
 document.addEventListener('click', function(e) {
   const loginBtn = document.getElementById('loginBtn');
   const dropdown = document.getElementById('logoutDropdown');
-  if (dropdown && !dropdown.classList.contains('hidden')) {
+  if (loginBtn && dropdown && !dropdown.classList.contains('hidden')) {
     if (!loginBtn.contains(e.target) && !dropdown.contains(e.target)) {
       dropdown.classList.add('hidden');
+      loginBtn.setAttribute('aria-expanded', 'false');
     }
   }
 });
@@ -500,11 +714,17 @@ function logoutUser() {
   updateLoginButton();
   const dropdown = document.getElementById('logoutDropdown');
   if (dropdown) dropdown.classList.add('hidden');
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) loginBtn.setAttribute('aria-expanded', 'false');
   showToast('Logged out successfully', 'success');
 }
 
 // Show login modal
 function showLeaveLogin() {
+  if (typeof window.closeHeaderLoginMenu === 'function') {
+    window.closeHeaderLoginMenu();
+  }
+
   if (currentLeaveUser) {
     // Already logged in - open availability panel directly
     showNADIAvailability();
@@ -515,7 +735,14 @@ function showLeaveLogin() {
 
     loginModal.setAttribute('aria-hidden', 'false');
     queueLeaveModalOpen(loginModal);
+    bindLeaveNadi4uPreviewListeners();
+    bindLeaveNadi4uPasswordPersist();
     loadSitesForLogin();
+    const nadi4uTick = document.getElementById('loginNadi4uTogether');
+    if (nadi4uTick) {
+      nadi4uTick.checked = false;
+    }
+    toggleLeaveNadi4uPasswordField(false);
   }
 }
 
@@ -540,8 +767,10 @@ async function loadSitesForLogin() {
     
     const grid = document.getElementById('loginSiteGrid');
     grid.innerHTML = '';
+    leaveLoginSitesById = new Map();
     
     sites.forEach(site => {
+      leaveLoginSitesById.set(String(site.site_id), site.site_name);
       const label = document.createElement('label');
       label.className = 'relative cursor-pointer';
       label.innerHTML = `
@@ -552,6 +781,11 @@ async function loadSitesForLogin() {
       `;
       grid.appendChild(label);
     });
+
+    grid.querySelectorAll('input[name="loginSite"]').forEach((input) => {
+      input.addEventListener('change', refreshLeaveNadi4uEmailPreview);
+    });
+    refreshLeaveNadi4uEmailPreview();
   } catch (error) {
     console.error('Error loading sites:', error);
   }
@@ -574,10 +808,43 @@ async function handleStaffLogin(e) {
   
   const siteId = document.querySelector('input[name="loginSite"]:checked')?.value;
   const role = document.querySelector('input[name="loginRole"]:checked')?.value;
+  const shouldLoginNadi4u = document.getElementById('loginNadi4uTogether')?.checked === true;
+  const nadi4uPasswordInput = document.getElementById('loginNadi4uPassword');
+  const nadi4uPassword = shouldLoginNadi4u
+    ? (typeof nadi4uPasswordInput?.value === 'string' && nadi4uPasswordInput.value !== ''
+      ? nadi4uPasswordInput.value
+      : getStoredNadi4uPassword())
+    : '';
+  const submitBtn = e?.target?.querySelector('button[type="submit"]');
+  const originalSubmitText = submitBtn ? submitBtn.innerHTML : '';
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = shouldLoginNadi4u
+      ? '<i class="fa-solid fa-spinner fa-spin"></i> Login + NADI4U...'
+      : '<i class="fa-solid fa-spinner fa-spin"></i> Logging in...';
+  }
   
   if (!siteId || !role) {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalSubmitText;
+    }
     alert('Please select both site and role');
     return;
+  }
+
+  if (shouldLoginNadi4u && !nadi4uPassword) {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalSubmitText;
+    }
+    alert('Please enter NADI APP password');
+    return;
+  }
+
+  if (shouldLoginNadi4u) {
+    setStoredNadi4uPassword(nadi4uPassword);
   }
   
   try {
@@ -611,11 +878,41 @@ async function handleStaffLogin(e) {
     subscribeToLeaveUpdates();
     
     showToast(`Welcome, ${user.full_name}!`, 'success');
+
+    if (shouldLoginNadi4u) {
+      showToast('Logging in NADI4U Smart Services...', 'info');
+
+      if (typeof window.loginNadi4uWithLeaveAccessContext === 'function') {
+        try {
+          const nadi4uResult = await window.loginNadi4uWithLeaveAccessContext({
+            siteId: currentLeaveUser.site_id,
+            siteName: currentLeaveUser.site_name,
+            role: currentLeaveUser.role,
+            password: nadi4uPassword,
+            autoSync: true,
+            source: 'leaveAccessTick'
+          });
+
+          const scheduleCount = nadi4uResult?.syncResult?.scheduleCount ?? 0;
+          const eventCount = nadi4uResult?.syncResult?.eventCount ?? 0;
+          showToast(`NADI4U logged in & synced (${scheduleCount} schedules, ${eventCount} events)`, 'success');
+        } catch (nadi4uError) {
+          showToast(`Leave login done. NADI4U failed: ${nadi4uError.message}`, 'error');
+        }
+      } else {
+        showToast('Leave login done. NADI4U helper unavailable.', 'error');
+      }
+    }
     
     // Manual: do not auto-open panels on login
     
   } catch (error) {
     alert(error.message || 'Login failed');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalSubmitText;
+    }
   }
 }
 

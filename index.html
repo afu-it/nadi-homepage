@@ -59,6 +59,7 @@
       })();
     </script>
     <script src="js/supabase.js"></script>
+    <script src="js/nadi4u-api.js"></script>
   </head>
   <body class="min-h-screen flex flex-col text-slate-800 font-sans">
     <header class="sticky top-0 z-40 header-bg shadow-md">
@@ -130,19 +131,55 @@
             <div class="relative">
               <button
                 id="loginBtn"
-                onclick="showLeaveLogin()"
+                onclick="toggleLogoutDropdown(event)"
                 class="text-[10px] font-bold text-[#2228a4] bg-white hover:bg-slate-100 px-2.5 py-1.5 h-[30px] rounded shadow flex items-center justify-center transition-colors relative cursor-pointer"
                 title="Login"
+                aria-haspopup="menu"
+                aria-expanded="false"
               >
                 <i class="fa-solid fa-user text-[#2228a4] text-xs"></i>
                 <span class="ml-1">Login</span>
+                <i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
+                <span id="nadi4uHeaderBadgeDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>
               </button>
-              <!-- Logout Dropdown -->
-              <div id="logoutDropdown" class="hidden absolute right-0 top-full mt-1 z-50">
-                <button onclick="logoutUser()" class="px-2.5 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md flex items-center gap-1.5 transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
-                  <i class="fa-solid fa-sign-out-alt text-[10px]"></i>
-                  Logout
-                </button>
+              <div id="logoutDropdown" class="hidden absolute right-0 top-full mt-2 z-50 w-[320px]">
+                <div class="rounded-xl border border-slate-200 bg-white shadow-xl p-3 space-y-3">
+                  <div id="leaveQuickSection" class="rounded-lg border border-slate-200 p-2.5">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-[9px] font-bold uppercase tracking-wide text-slate-500">NADI SCSB</span>
+                    </div>
+                    <p id="leaveQuickState" class="text-[10px] text-slate-600 mb-2">Not logged in</p>
+                    <div id="leaveQuickActions" class="space-y-1.5"></div>
+                  </div>
+
+                  <div id="nadi4uHeaderSection" class="rounded-lg border border-cyan-200 bg-cyan-50/50 p-2.5 space-y-2">
+                    <div>
+                      <div class="text-[9px] font-bold uppercase tracking-wide text-cyan-700">NADI APP</div>
+                      <p id="nadi4uHeaderState" class="text-[10px] text-cyan-800 mt-1">Not connected</p>
+                    </div>
+
+                    <div id="nadi4uHeaderInlineStatus" class="hidden px-2 py-1.5 rounded text-[10px]"></div>
+
+                    <div class="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        id="nadi4uHeaderLoginSyncBtn"
+                        onclick="loginNadi4uFromHeader(event)"
+                        class="px-2 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-[10px] font-bold rounded transition-colors"
+                      >
+                        <i class="fa-solid fa-rotate-right mr-1"></i>Refresh
+                      </button>
+                      <button
+                        type="button"
+                        id="nadi4uHeaderLogoutBtn"
+                        onclick="logoutNadi4uFromHeaderMenu()"
+                        class="hidden px-2 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-[10px] font-bold rounded border border-red-200 transition-colors"
+                      >
+                        <i class="fa-solid fa-sign-out-alt mr-1"></i>Logout
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div id="current-date-header" class="hidden sm:flex flex-col items-end border-l border-white/20 pl-3"></div>
@@ -323,7 +360,30 @@
 
           <div class="w-full md:w-5/12 order-2 md:order-1 flex flex-col">
             <div class="flex items-center gap-3 mb-2">
-              <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
+              <div class="flex items-center gap-1.5">
+                <button
+                  id="programListPrevBtn"
+                  onclick="changeProgramListView(-1)"
+                  class="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Show recent events"
+                  aria-label="Show recent events"
+                >
+                  <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                </button>
+                <div class="flex flex-col leading-tight">
+                  <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
+                  <span id="programsListModeLabel" class="text-[10px] font-semibold text-slate-500">Recent Events</span>
+                </div>
+                <button
+                  id="programListNextBtn"
+                  onclick="changeProgramListView(1)"
+                  class="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Show Smart Services NADI4U"
+                  aria-label="Show Smart Services NADI4U"
+                >
+                  <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </button>
+              </div>
               <div class="flex gap-2 ml-auto">
                 <button
                   onclick="toggleFilter()"
@@ -332,6 +392,7 @@
                   <i class="fa-solid fa-filter text-[10px]"></i>
                 </button>
                 <button
+                  id="programListSortBtn"
                   onclick="toggleSort()"
                   class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-purple-600 hover:border-purple-300 shadow-sm"
                   title="Sort"
@@ -528,6 +589,17 @@
                 <div>
                   <h4 class="text-sm font-bold text-slate-800">Manage School Holidays</h4>
                   <p class="text-[10px] text-slate-500">Add & edit school breaks on calendar</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
+              </button>
+
+              <button
+                onclick="openNADI4USettings()"
+                class="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-nadi hover:bg-slate-50 transition-all flex justify-between items-center group"
+              >
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">NADI4U API Settings</h4>
+                  <p class="text-[10px] text-slate-500">Configure Smart Services sync</p>
                 </div>
                 <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-nadi text-xs"></i>
               </button>
@@ -948,6 +1020,131 @@
                 class="px-5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded shadow"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+
+          <!-- NADI4U Settings View -->
+          <div id="nadi4uSettingsView" class="hidden flex-col h-full w-full">
+            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-600">
+                  <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 class="text-base font-bold text-slate-900">NADI4U Login</h3>
+              </div>
+            </div>
+
+            <!-- Logged Out View -->
+            <div id="nadi4uLoginView" class="p-4 space-y-4 flex-1 overflow-y-auto">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p class="text-[10px] text-blue-800">
+                  <i class="fa-solid fa-info-circle mr-1"></i>
+                  Login with your NADI4U account to sync Smart Services schedule automatically.
+                </p>
+              </div>
+
+              <div>
+                <label for="nadi4uEmail" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Email</label>
+                <input
+                  type="email"
+                  id="nadi4uEmail"
+                  autocomplete="email"
+                  class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                  placeholder="your.email@nadi.my"
+                />
+              </div>
+
+              <div>
+                <label for="nadi4uPassword" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Password</label>
+                <input
+                  type="password"
+                  id="nadi4uPassword"
+                  autocomplete="current-password"
+                  class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                  placeholder="Your NADI4U password"
+                />
+              </div>
+
+              <button
+                onclick="loginNADI4U(event)"
+                class="w-full px-3 py-2 bg-nadi hover:bg-nadi-hover text-white text-[10px] font-bold rounded shadow"
+              >
+                <i class="fa-solid fa-sign-in-alt mr-1"></i> Login to NADI4U
+              </button>
+
+              <div class="border-t border-slate-200 pt-4">
+                <p class="text-[9px] text-slate-500 text-center mb-2">Or enter API credentials manually:</p>
+                <div>
+                  <label for="nadi4uApiKey" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">API Key</label>
+                  <input
+                    type="text"
+                    id="nadi4uApiKey"
+                    autocomplete="off"
+                    class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                    placeholder="Paste apikey from browser"
+                  />
+                </div>
+
+                <div class="mt-2">
+                  <label for="nadi4uToken" class="text-[9px] font-bold text-slate-400 uppercase block mb-1">Authorization Token</label>
+                  <input
+                    type="password"
+                    id="nadi4uToken"
+                    autocomplete="off"
+                    class="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] outline-none focus:border-slate-400"
+                    placeholder="Paste Bearer token from browser"
+                  />
+                </div>
+
+                <button
+                  onclick="saveNADI4USettings()"
+                  class="w-full mt-2 px-3 py-2 bg-slate-600 hover:bg-slate-700 text-white text-[10px] font-bold rounded shadow"
+                >
+                  Save Manual Credentials
+                </button>
+              </div>
+            </div>
+
+            <!-- Logged In View -->
+            <div id="nadi4uLoggedInView" class="hidden p-4 space-y-4 flex-1 overflow-y-auto">
+              <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid fa-check-circle text-green-600"></i>
+                  <span class="text-[10px] font-bold text-green-800">Logged in to NADI4U</span>
+                </div>
+                <p id="nadi4uUserEmail" class="text-[9px] text-green-700"></p>
+              </div>
+
+              <div class="flex gap-2">
+                <button
+                  onclick="testNADI4UConnection()"
+                  class="flex-1 px-3 py-2 bg-slate-600 hover:bg-slate-700 text-white text-[10px] font-bold rounded shadow"
+                >
+                  <i class="fa-solid fa-plug mr-1"></i> Test
+                </button>
+                <button
+                  onclick="syncNADI4UData()"
+                  class="flex-1 px-3 py-2 bg-nadi hover:bg-nadi-hover text-white text-[10px] font-bold rounded shadow"
+                >
+                  <i class="fa-solid fa-sync mr-1"></i> Sync Now
+                </button>
+              </div>
+
+              <div id="nadi4uStatus" class="hidden p-3 rounded-lg text-[10px]"></div>
+
+              <div id="nadi4uDataPreview" class="hidden">
+                <div class="text-[9px] font-bold text-slate-400 uppercase mb-2">Data Preview</div>
+                <div class="bg-slate-100 rounded p-2 max-h-40 overflow-auto">
+                  <pre id="nadi4uPreviewContent" class="text-[9px] text-slate-600 whitespace-pre-wrap"></pre>
+                </div>
+              </div>
+
+              <button
+                onclick="logoutNADI4U()"
+                class="w-full px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-[10px] font-bold rounded border border-red-200"
+              >
+                <i class="fa-solid fa-sign-out-alt mr-1"></i> Logout
               </button>
             </div>
           </div>
@@ -2027,6 +2224,49 @@
                   </div>
                 </label>
               </div>
+            </div>
+
+            <label class="flex items-center gap-2 p-2.5 rounded-lg border border-cyan-200 bg-cyan-50 cursor-pointer">
+              <input
+                type="checkbox"
+                id="loginNadi4uTogether"
+                onchange="toggleLeaveNadi4uPasswordField(this.checked)"
+                class="w-4 h-4 text-cyan-600 border-slate-300 rounded focus:ring-cyan-500"
+              />
+              <span class="text-[11px] font-semibold text-cyan-900 leading-none">
+                Login NADI APP
+              </span>
+            </label>
+
+            <div id="loginNadi4uEmailWrap" class="hidden">
+              <label for="loginNadi4uEmail" class="form-label">NADI APP Email</label>
+              <input
+                type="text"
+                id="loginNadi4uEmail"
+                class="form-input bg-slate-100"
+                placeholder="Select site and role first"
+                readonly
+              />
+            </div>
+
+            <div id="loginNadi4uPasswordWrap" class="hidden">
+              <label for="loginNadi4uPassword" class="form-label">NADI APP Password</label>
+              <input
+                type="password"
+                id="loginNadi4uPassword"
+                class="form-input"
+                placeholder="Enter NADI APP password"
+                autocomplete="current-password"
+              />
+              <label class="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="loginNadi4uShowPassword"
+                  onchange="toggleLeaveNadi4uPasswordVisibility(this.checked)"
+                  class="w-4 h-4 text-cyan-600 border-slate-300 rounded focus:ring-cyan-500"
+                />
+                <span>Show password</span>
+              </label>
             </div>
             
             <button type="submit" class="w-full btn btn-primary btn-lg">

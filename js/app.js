@@ -93,12 +93,115 @@ function sanitizeHTML(html) {
   return temp.innerHTML;
 }
 
+function linkifyPlainTextUrlsInElement(rootElement) {
+  if (!rootElement || typeof document === "undefined") return;
+
+  const showTextFilter = typeof NodeFilter !== "undefined" ? NodeFilter.SHOW_TEXT : 4;
+  const walker = document.createTreeWalker(rootElement, showTextFilter);
+  const textNodes = [];
+  let node = walker.nextNode();
+
+  while (node) {
+    const textValue = typeof node.nodeValue === "string" ? node.nodeValue : "";
+    const parentTagName = node.parentElement?.tagName?.toLowerCase() || "";
+    const hasUrlLikeText =
+      textValue.includes("http://") ||
+      textValue.includes("https://") ||
+      /\b(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.nadi\.my\b/i.test(textValue);
+    if (hasUrlLikeText) {
+      if (parentTagName !== "a" && parentTagName !== "script" && parentTagName !== "style") {
+        textNodes.push(node);
+      }
+    }
+    node = walker.nextNode();
+  }
+
+  const normalizeUrlForAnchor = (rawUrl) => {
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed) return "";
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+
+    const nadiDomainMatch = trimmed.match(/^((?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.nadi\.my)(\/[^\s<>"']*)?$/i);
+    if (nadiDomainMatch) {
+      const host = nadiDomainMatch[1];
+      const path = nadiDomainMatch[2] || "/";
+      const hostWithWww = /^www\./i.test(host) ? host : `www.${host}`;
+      return `https://${hostWithWww}${path}`;
+    }
+
+    return `https://${trimmed}`;
+  };
+
+  textNodes.forEach((textNode) => {
+    const textValue = textNode.nodeValue || "";
+    const urlRegex = /((?:https?:\/\/[^\s<>"']+)|(?:\b(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.nadi\.my(?:\/[^\s<>"']*)?))/gi;
+    let lastIndex = 0;
+    let hasMatch = false;
+    let match = urlRegex.exec(textValue);
+    const fragment = document.createDocumentFragment();
+
+    while (match) {
+      hasMatch = true;
+      const startIndex = match.index;
+      const fullUrl = match[1];
+      const punctuationMatch = fullUrl.match(/[),.;!?]+$/);
+      const trailingPunctuation = punctuationMatch ? punctuationMatch[0] : "";
+      const cleanUrl = trailingPunctuation ? fullUrl.slice(0, -trailingPunctuation.length) : fullUrl;
+      if (startIndex > lastIndex) {
+        fragment.appendChild(document.createTextNode(textValue.slice(lastIndex, startIndex)));
+      }
+
+      const linkEl = document.createElement("a");
+      linkEl.href = normalizeUrlForAnchor(cleanUrl);
+      linkEl.textContent = cleanUrl;
+      linkEl.target = "_blank";
+      linkEl.rel = "noopener noreferrer";
+      linkEl.className = "text-blue-600 hover:underline break-all";
+      fragment.appendChild(linkEl);
+
+      if (trailingPunctuation) {
+        fragment.appendChild(document.createTextNode(trailingPunctuation));
+      }
+
+      lastIndex = startIndex + fullUrl.length;
+      match = urlRegex.exec(textValue);
+    }
+
+    if (!hasMatch) return;
+
+    if (lastIndex < textValue.length) {
+      fragment.appendChild(document.createTextNode(textValue.slice(lastIndex)));
+    }
+
+    if (textNode.parentNode) {
+      textNode.parentNode.replaceChild(fragment, textNode);
+    }
+  });
+}
+
 function sanitizeHTMLWithLinks(html) {
   let sanitized = sanitizeHTML(html);
   if (typeof document !== "undefined") {
     const temp = document.createElement("div");
     temp.innerHTML = sanitized;
+    linkifyPlainTextUrlsInElement(temp);
     temp.querySelectorAll("a").forEach((a) => {
+      const href = String(a.getAttribute("href") || "").trim();
+      const needsHttps = href && !/^(https?:\/\/|mailto:|tel:|#|\/)/i.test(href);
+      if (needsHttps) {
+        const nadiHrefMatch = href.match(/^((?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.nadi\.my)(\/[^\s<>"']*)?$/i);
+        if (nadiHrefMatch) {
+          const host = nadiHrefMatch[1];
+          const path = nadiHrefMatch[2] || "/";
+          const hostWithWww = /^www\./i.test(host) ? host : `www.${host}`;
+          a.setAttribute("href", `https://${hostWithWww}${path}`);
+        } else {
+          a.setAttribute("href", `https://${href}`);
+        }
+      }
       a.setAttribute("target", "_blank");
       a.setAttribute("rel", "noopener noreferrer");
     });
@@ -819,6 +922,479 @@ let isDataLoaded = false;
 let showEditDeleteButtons = false;
 let programsListClicks = 0;
 let programsListTimer = null;
+let eventListLookup = new Map();
+const PROGRAM_LIST_VIEW_RECENT = "recent";
+const PROGRAM_LIST_VIEW_NADI4U = "nadi4u";
+let currentProgramListView = PROGRAM_LIST_VIEW_RECENT;
+
+const NADI4U_SCHEDULE_STORAGE_KEY = "nadi4uSchedule";
+const NADI4U_EVENT_META_STORAGE_KEY = "nadi4uEventMeta";
+const NADI4U_HEADER_ROLE_MANAGER = "manager";
+const NADI4U_HEADER_ROLE_ASSISTANT = "assistantmanager";
+const EXTERNAL_NADI4U_CATEGORY = {
+  label: "Smart Services",
+  sub: "NADI4U",
+  color: "bg-cyan-100 text-cyan-700 border-cyan-200",
+  dot: "bg-cyan-500",
+};
+
+function getNadi4uStorageItem(key) {
+  let value = null;
+
+  try {
+    value = appStorage?.getItem ? appStorage.getItem(key) : null;
+  } catch (error) {
+    value = null;
+  }
+
+  if (value !== null && value !== undefined && value !== "") {
+    return value;
+  }
+
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    return null;
+  }
+}
+
+function setNadi4uStorageItem(key, value) {
+  const serialized = typeof value === "string" ? value : JSON.stringify(value);
+
+  try {
+    if (appStorage?.setItem) {
+      appStorage.setItem(key, serialized);
+    }
+  } catch (error) {}
+
+  try {
+    localStorage.setItem(key, serialized);
+  } catch (error) {}
+}
+
+function parseStoredJsonArray(key) {
+  const raw = getNadi4uStorageItem(key);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    if (window.DEBUG_MODE) console.warn(`Invalid JSON in ${key}:`, error);
+    return [];
+  }
+}
+
+function sanitizeEventCardIdPart(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function format24HourTo12Hour(timeValue) {
+  if (typeof timeValue !== "string") return "";
+  const match = timeValue.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return "";
+
+  let hour = parseInt(match[1], 10);
+  const minute = match[2];
+  const suffix = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+
+  return `${hour}:${minute} ${suffix}`;
+}
+
+function formatNadi4uTimeRange(startTime, endTime) {
+  const start = format24HourTo12Hour(startTime);
+  const end = format24HourTo12Hour(endTime);
+  let durationLabel = "";
+
+  if (start && end) {
+    const startDate = new Date(`2000-01-01T${String(startTime).trim()}`);
+    const endDate = new Date(`2000-01-01T${String(endTime).trim()}`);
+    if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+      const diffHours = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60));
+      durationLabel = ` (${diffHours}h)`;
+    }
+  }
+
+  if (start && end) return `${start} - ${end}${durationLabel}`;
+  if (start) return start;
+  if (end) return end;
+  return "";
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function toIsoDateFromDateTime(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const datePart = trimmed.includes("T") ? trimmed.split("T")[0] : trimmed;
+  return parseDateInputToIso(datePart);
+}
+
+function compareNadi4uScheduleRows(left, right) {
+  const dateCompare = String(left?.schedule_date || "").localeCompare(String(right?.schedule_date || ""));
+  if (dateCompare !== 0) return dateCompare;
+
+  const dayLeft = Number.parseInt(left?.day_number, 10);
+  const dayRight = Number.parseInt(right?.day_number, 10);
+  if (Number.isFinite(dayLeft) && Number.isFinite(dayRight) && dayLeft !== dayRight) {
+    return dayLeft - dayRight;
+  }
+
+  return String(left?.start_time || "").localeCompare(String(right?.start_time || ""));
+}
+
+function getStoredNadi4uEventMetaMap() {
+  const rows = parseStoredJsonArray(NADI4U_EVENT_META_STORAGE_KEY);
+  const map = new Map();
+
+  rows.forEach((row) => {
+    const id = typeof row?.id === "string" ? row.id.trim() : "";
+    if (!id) return;
+    map.set(id, row);
+  });
+
+  return map;
+}
+
+function getTakwimSmartServiceGroup(categoryName) {
+  const normalized = String(categoryName || "").trim().toLowerCase();
+  if (!normalized) return "other";
+  if (normalized.includes("nadi4u")) return "nadi4u";
+  if (normalized.includes("nadi2u")) return "nadi2u";
+  return "other";
+}
+
+function buildNadi4uDisplayEvents() {
+  const scheduleRows = parseStoredJsonArray(NADI4U_SCHEDULE_STORAGE_KEY);
+  const eventMetaRows = parseStoredJsonArray(NADI4U_EVENT_META_STORAGE_KEY);
+  if (scheduleRows.length === 0 && eventMetaRows.length === 0) return [];
+
+  const scheduleByEventId = new Map();
+  scheduleRows.forEach((row) => {
+    const eventId = typeof row?.event_id === "string" ? row.event_id.trim() : "";
+    if (!eventId) return;
+    if (!scheduleByEventId.has(eventId)) {
+      scheduleByEventId.set(eventId, []);
+    }
+    scheduleByEventId.get(eventId).push(row);
+  });
+  scheduleByEventId.forEach((rows, eventId) => {
+    rows.sort(compareNadi4uScheduleRows);
+    scheduleByEventId.set(eventId, rows);
+  });
+
+  const metaById = new Map();
+  eventMetaRows.forEach((row) => {
+    const eventId = typeof row?.id === "string" ? row.id.trim() : "";
+    if (!eventId) return;
+    if (!metaById.has(eventId)) {
+      metaById.set(eventId, row);
+    }
+  });
+
+  const result = [];
+
+  metaById.forEach((eventMeta, sourceEventId) => {
+    const categoryName = typeof eventMeta?.nd_event_category?.name === "string"
+      ? eventMeta.nd_event_category.name
+      : (typeof eventMeta?.category_name === "string" ? eventMeta.category_name : "");
+    if (getTakwimSmartServiceGroup(categoryName) !== "nadi4u") {
+      return;
+    }
+
+    const schedules = scheduleByEventId.get(sourceEventId) || [];
+    const fallbackId = sourceEventId.slice(0, 8);
+    const programName = typeof eventMeta?.program_name === "string" && eventMeta.program_name.trim()
+      ? eventMeta.program_name.trim()
+      : `Smart Services NADI4U (${fallbackId})`;
+
+    const startDateFromMeta = toIsoDateFromDateTime(eventMeta?.start_datetime);
+    const endDateFromMeta = toIsoDateFromDateTime(eventMeta?.end_datetime);
+    const firstScheduleDate = schedules.length > 0 ? parseDateInputToIso(schedules[0]?.schedule_date) : "";
+    const lastScheduleDate = schedules.length > 0 ? parseDateInputToIso(schedules[schedules.length - 1]?.schedule_date) : "";
+
+    const startDate = startDateFromMeta || firstScheduleDate;
+    const endDate = endDateFromMeta || lastScheduleDate || startDate;
+    if (!startDate || !endDate) return;
+
+    const targetDate = getProgramListTargetDate();
+    let activeSchedule = null;
+    if (targetDate) {
+      activeSchedule = schedules.find((row) => parseDateInputToIso(row?.schedule_date) === targetDate) || null;
+    }
+    if (!activeSchedule && schedules.length > 0) {
+      activeSchedule = schedules[0];
+    }
+
+    const startTimeRaw = typeof activeSchedule?.start_time === "string" ? activeSchedule.start_time.trim() : "";
+    const endTimeRaw = typeof activeSchedule?.end_time === "string" ? activeSchedule.end_time.trim() : "";
+    const timeRange = formatNadi4uTimeRange(startTimeRaw, endTimeRaw);
+
+    const locationName = typeof eventMeta?.location_event === "string" ? eventMeta.location_event.trim() : "";
+    const description = typeof eventMeta?.description === "string" ? eventMeta.description.trim() : "";
+    const infoParts = [
+      locationName ? `Location: ${locationName}` : null,
+      description || null
+    ].filter(Boolean);
+
+    const compositeId = `${sourceEventId}-${startDate}-${endDate}`;
+    const externalId = `nadi4u-${sanitizeEventCardIdPart(compositeId)}`;
+
+    result.push({
+      id: externalId,
+      source: "nadi4u",
+      sourceEventId: sourceEventId,
+      isExternal: true,
+      title: programName,
+      start: startDate,
+      end: endDate,
+      category: "nadi4u",
+      subcategory: "Smart Services",
+      time: timeRange,
+      secondTime: "",
+      links: [],
+      registrationLinks: [],
+      submitLinks: [],
+      info: infoParts.join("<br>"),
+      images: [],
+      schedules: schedules,
+      externalDescription: description
+    });
+  });
+
+  return result;
+}
+
+function getCombinedEventListSource() {
+  ensureEventsArray();
+  const nadi4uEvents = buildNadi4uDisplayEvents();
+  return [...events, ...nadi4uEvents];
+}
+
+function getRecentEventListSource(sourceEvents) {
+  if (!Array.isArray(sourceEvents)) return [];
+  return sourceEvents.filter((eventItem) => !(eventItem?.isExternal && eventItem?.source === "nadi4u"));
+}
+
+function getNadi4uEventListSource(sourceEvents) {
+  if (!Array.isArray(sourceEvents)) return [];
+  return sourceEvents.filter((eventItem) => eventItem?.isExternal && eventItem?.source === "nadi4u");
+}
+
+function getProgramListTargetDate() {
+  if (window.selectedFilterDate) {
+    return window.selectedFilterDate;
+  }
+  return getAutoSelectedDateForMonth(currentYear, currentMonth);
+}
+
+function isNadi4uEventOnDate(eventItem, targetDate) {
+  if (!eventItem || !targetDate) return false;
+
+  const schedules = Array.isArray(eventItem.schedules) ? eventItem.schedules : [];
+  if (schedules.length > 0) {
+    return schedules.some((row) => parseDateInputToIso(row?.schedule_date) === targetDate);
+  }
+
+  return targetDate >= eventItem.start && targetDate <= eventItem.end;
+}
+
+function normalizeDuplicateEventTitle(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getNadi4uScheduleDateRange(eventItem) {
+  const schedules = Array.isArray(eventItem?.schedules) ? eventItem.schedules : [];
+  const parsedDates = schedules
+    .map((row) => parseDateInputToIso(row?.schedule_date))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  if (parsedDates.length > 0) {
+    return {
+      startDate: parsedDates[0],
+      endDate: parsedDates[parsedDates.length - 1]
+    };
+  }
+
+  return {
+    startDate: eventItem?.start || "",
+    endDate: eventItem?.end || eventItem?.start || ""
+  };
+}
+
+function getNadi4uScheduleTimeForDate(eventItem, targetDate) {
+  const schedules = Array.isArray(eventItem?.schedules) ? eventItem.schedules : [];
+  const byDate = schedules.find((row) => parseDateInputToIso(row?.schedule_date) === targetDate) || null;
+  if (byDate?.start_time) return String(byDate.start_time).trim();
+  if (byDate?.end_time) return String(byDate.end_time).trim();
+  return "";
+}
+
+function isNadi4uMultiDayEvent(eventItem) {
+  if (!(eventItem?.isExternal && eventItem?.source === "nadi4u")) return false;
+  const range = getNadi4uScheduleDateRange(eventItem);
+  return Boolean(range.startDate && range.endDate && range.startDate !== range.endDate);
+}
+
+function isRecentMultiDayEvent(eventItem) {
+  if (!eventItem || (eventItem?.isExternal && eventItem?.source === "nadi4u")) return false;
+  return Boolean(eventItem.start && eventItem.end && eventItem.start !== eventItem.end);
+}
+
+function dedupeNadi4uEventsByTitle(eventList) {
+  if (!Array.isArray(eventList) || eventList.length === 0) return [];
+
+  const seen = new Set();
+  const deduped = [];
+
+  eventList.forEach((eventItem) => {
+    const dedupeKey = normalizeDuplicateEventTitle(eventItem?.title);
+    if (!dedupeKey) {
+      deduped.push(eventItem);
+      return;
+    }
+
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    deduped.push(eventItem);
+  });
+
+  return deduped;
+}
+
+function getFilteredNadi4uEventList(sourceEvents) {
+  const nadi4uEvents = getNadi4uEventListSource(sourceEvents);
+  const targetDate = getProgramListTargetDate();
+  const filteredByDate = nadi4uEvents.filter((eventItem) => isNadi4uEventOnDate(eventItem, targetDate));
+  const deduped = dedupeNadi4uEventsByTitle(filteredByDate);
+
+  return [...deduped].sort((left, right) => {
+    const leftRange = getNadi4uScheduleDateRange(left);
+    const rightRange = getNadi4uScheduleDateRange(right);
+    const leftIsMultiDay = leftRange.startDate && leftRange.endDate && leftRange.startDate !== leftRange.endDate;
+    const rightIsMultiDay = rightRange.startDate && rightRange.endDate && rightRange.startDate !== rightRange.endDate;
+
+    if (leftIsMultiDay !== rightIsMultiDay) {
+      return leftIsMultiDay ? 1 : -1;
+    }
+
+    const leftTime = getNadi4uScheduleTimeForDate(left, targetDate);
+    const rightTime = getNadi4uScheduleTimeForDate(right, targetDate);
+    if (leftTime && rightTime && leftTime !== rightTime) {
+      return leftTime.localeCompare(rightTime);
+    }
+    if (leftTime && !rightTime) return -1;
+    if (!leftTime && rightTime) return 1;
+
+    return String(left?.title || "").localeCompare(String(right?.title || ""));
+  });
+}
+
+function getProgramListPageStateKey() {
+  return currentProgramListView === PROGRAM_LIST_VIEW_NADI4U ? "nadi4uListCurrentPage" : "eventListCurrentPage";
+}
+
+function updateProgramListHeader() {
+  const titleEl = document.getElementById("programsListHeader");
+  const modeEl = document.getElementById("programsListModeLabel");
+  const prevBtn = document.getElementById("programListPrevBtn");
+  const nextBtn = document.getElementById("programListNextBtn");
+  const sortBtn = document.getElementById("programListSortBtn");
+  const sortSection = document.getElementById("sortSection");
+  const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
+
+  if (titleEl) {
+    titleEl.textContent = "Programs List";
+  }
+
+  if (modeEl) {
+    modeEl.textContent = isNadi4uView ? "Smart Services NADI4U" : "Recent Events";
+  }
+
+  if (prevBtn) {
+    prevBtn.disabled = !isNadi4uView;
+  }
+
+  if (nextBtn) {
+    nextBtn.disabled = isNadi4uView;
+  }
+
+  if (sortBtn) {
+    sortBtn.classList.toggle("hidden", isNadi4uView);
+  }
+
+  if (sortSection && isNadi4uView) {
+    sortSection.classList.add("hidden");
+    sortSection.classList.add("filter-hidden");
+  }
+
+  if (sortSection && !isNadi4uView) {
+    sortSection.classList.remove("hidden");
+  }
+}
+
+function getProgramListDisplayEvents(sourceEvents) {
+  const recentSource = getRecentEventListSource(sourceEvents);
+  if (currentProgramListView === PROGRAM_LIST_VIEW_NADI4U) {
+    return getFilteredNadi4uEventList(sourceEvents);
+  }
+  return getFilteredEventList(recentSource);
+}
+
+function setProgramListView(view) {
+  const normalizedView = view === PROGRAM_LIST_VIEW_NADI4U ? PROGRAM_LIST_VIEW_NADI4U : PROGRAM_LIST_VIEW_RECENT;
+  if (currentProgramListView === normalizedView) {
+    updateProgramListHeader();
+    return;
+  }
+
+  currentProgramListView = normalizedView;
+  window[getProgramListPageStateKey()] = 0;
+  renderEventList();
+}
+
+function changeProgramListView(direction) {
+  if (Number(direction) > 0) {
+    setProgramListView(PROGRAM_LIST_VIEW_NADI4U);
+    return;
+  }
+
+  setProgramListView(PROGRAM_LIST_VIEW_RECENT);
+}
+
+window.changeProgramListView = changeProgramListView;
+
+function getFilteredEventList(sourceEvents) {
+  if (!Array.isArray(sourceEvents)) return [];
+
+  if (window.selectedFilterDate) {
+    return sourceEvents.filter((eventItem) => window.selectedFilterDate >= eventItem.start && window.selectedFilterDate <= eventItem.end);
+  }
+
+  if (rangeFilter.start && rangeFilter.end) {
+    return sourceEvents.filter((eventItem) => eventItem.start <= rangeFilter.end && eventItem.end >= rangeFilter.start);
+  }
+
+  const todayStr = toLocalISOString(today);
+  return sourceEvents.filter((eventItem) => eventItem.end >= todayStr);
+}
 
 // =====================================================
 // Specialized Save Functions (Split Structure)
@@ -1321,16 +1897,20 @@ async function loadLatestAnnouncementMeta() {
 
   document.getElementById("announcementBtn").addEventListener("click", markAnnouncementsAsRead);
 
-  document.getElementById("programsListHeader").addEventListener("click", () => {
-    programsListClicks++;
-    clearTimeout(programsListTimer);
-    programsListTimer = setTimeout(() => (programsListClicks = 0), 500);
-    if (programsListClicks === 3) {
-      showEditDeleteButtons = !showEditDeleteButtons;
-      programsListClicks = 0;
-      renderEventList();
-    }
-  });
+  const programsListHeader = document.getElementById("programsListHeader");
+  if (programsListHeader) {
+    programsListHeader.addEventListener("click", () => {
+      programsListClicks++;
+      clearTimeout(programsListTimer);
+      programsListTimer = setTimeout(() => (programsListClicks = 0), 500);
+      if (programsListClicks === 3) {
+        showEditDeleteButtons = !showEditDeleteButtons;
+        programsListClicks = 0;
+        renderEventList();
+      }
+    });
+  }
+  updateProgramListHeader();
 })();
 
 function showView(viewId) {
@@ -1342,6 +1922,7 @@ function showView(viewId) {
     "offdaySettingsView",
     "holidaySettingsView",
     "schoolHolidaySettingsView",
+    "nadi4uSettingsView",
   ];
   const panel = document.getElementById("settingsModalPanel");
 
@@ -2331,6 +2912,7 @@ function toggleFilter() {
 }
 
 function toggleSort() {
+  if (currentProgramListView === PROGRAM_LIST_VIEW_NADI4U) return;
   const ss = document.getElementById("sortSection");
   ss.classList.toggle("filter-hidden");
 }
@@ -2635,7 +3217,7 @@ async function clearRangeFilter(shouldRender = true) {
   }
 }
 
-function renderCategoryCounts() {
+function renderCategoryCounts(displayEvents = []) {
   const container = document.getElementById("categoryCounts");
   if (!container) return;
 
@@ -2650,17 +3232,12 @@ function renderCategoryCounts() {
     wellbeing: 0,
     awareness: 0,
     gov: 0,
+    nadi4u: 0,
   };
 
-  events.forEach((event) => {
-    const start = new Date(event.start);
-    const end = new Date(event.end || event.start);
-    const selected = new Date(window.selectedFilterDate);
-
-    if (selected >= start && selected <= end) {
-      if (counts.hasOwnProperty(event.category)) {
-        counts[event.category]++;
-      }
+  displayEvents.forEach((eventItem) => {
+    if (counts.hasOwnProperty(eventItem.category)) {
+      counts[eventItem.category]++;
     }
   });
 
@@ -2711,15 +3288,23 @@ function renderCategoryCounts() {
     </div>`;
   }
 
+  if (counts.nadi4u > 0) {
+    html += `<div class="flex items-center gap-1.5 px-2 py-1 bg-cyan-100 border border-cyan-200 rounded-md">
+      <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+      <span class="text-[8px] font-bold text-cyan-700">SMART SERVICES NADI4U: ${counts.nadi4u}</span>
+    </div>`;
+  }
+
   html += "</div></div>";
   container.innerHTML = html;
 }
 
 function renderEventList() {
-  renderCategoryCounts();
-
-  // Ensure events is an array
+  // Ensure local events state is valid before merging external feeds
   ensureEventsArray();
+  const allEvents = getCombinedEventListSource();
+  const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
+  updateProgramListHeader();
 
   const container = document.getElementById("eventListContainer");
   if (!container) {
@@ -2729,45 +3314,48 @@ function renderEventList() {
   container.innerHTML = "";
   eventImageMap = {};
 
-  let displayEvents = [];
+  let displayEvents = getProgramListDisplayEvents(allEvents);
+  renderCategoryCounts(displayEvents);
 
-  if (window.selectedFilterDate) {
-    displayEvents = events.filter((e) => {
-      const isValid = window.selectedFilterDate >= e.start && window.selectedFilterDate <= e.end;
-      return isValid;
-    });
-  } else if (rangeFilter.start && rangeFilter.end) {
-    displayEvents = events.filter((e) => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
-  } else {
-    const todayStr = toLocalISOString(today);
-    displayEvents = events.filter((e) => e.end >= todayStr);
-  }
+  eventListLookup = new Map();
+  displayEvents.forEach((eventItem) => {
+    eventListLookup.set(String(eventItem.id), eventItem);
+  });
 
-  if (currentSort === "category") {
+  if (!isNadi4uView) {
+    if (currentSort === "category") {
+      displayEvents.sort((a, b) => {
+        if (a.category !== b.category) return a.start.localeCompare(b.start);
+        return a.category.localeCompare(b.category);
+      });
+    } else if (currentSort === "startTime") {
+      displayEvents.sort((a, b) => {
+        const dateCompare = a.start.localeCompare(b.start);
+        if (dateCompare !== 0) return dateCompare;
+        if (a.time && b.time) {
+          const timeA = a.time.split(" - ")[0];
+          const timeB = b.time.split(" - ")[0];
+          const convertTo24 = (time12) => {
+            const match = time12.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (!match) return "0000";
+            let hour = parseInt(match[1]);
+            const min = match[2];
+            const ampm = match[3].toUpperCase();
+            if (ampm === "PM" && hour !== 12) hour += 12;
+            if (ampm === "AM" && hour === 12) hour = 0;
+            return hour.toString().padStart(2, "0") + min;
+          };
+          return convertTo24(timeA).localeCompare(convertTo24(timeB));
+        }
+        return 0;
+      });
+    }
+
     displayEvents.sort((a, b) => {
-      if (a.category !== b.category) return a.start.localeCompare(b.start);
-      return a.category.localeCompare(b.category);
-    });
-  } else if (currentSort === "startTime") {
-    displayEvents.sort((a, b) => {
-      const dateCompare = a.start.localeCompare(b.start);
-      if (dateCompare !== 0) return dateCompare;
-      if (a.time && b.time) {
-        const timeA = a.time.split(" - ")[0];
-        const timeB = b.time.split(" - ")[0];
-        const convertTo24 = (time12) => {
-          const match = time12.match(/(\d+):(\d+)\s*(AM|PM)/i);
-          if (!match) return "0000";
-          let hour = parseInt(match[1]);
-          const min = match[2];
-          const ampm = match[3].toUpperCase();
-          if (ampm === "PM" && hour !== 12) hour += 12;
-          if (ampm === "AM" && hour === 12) hour = 0;
-          return hour.toString().padStart(2, "0") + min;
-        };
-        return convertTo24(timeA).localeCompare(convertTo24(timeB));
-      }
-      return 0;
+      const leftIsMultiDay = isRecentMultiDayEvent(a);
+      const rightIsMultiDay = isRecentMultiDayEvent(b);
+      if (leftIsMultiDay === rightIsMultiDay) return 0;
+      return leftIsMultiDay ? 1 : -1;
     });
   }
 
@@ -2776,23 +3364,34 @@ function renderEventList() {
   // =====================================================
   const EVENTS_PER_PAGE = 20;
   let currentPage = 0;
+  const pageStateKey = getProgramListPageStateKey();
   
   // Store pagination state globally
-  window.eventListCurrentPage = window.eventListCurrentPage || 0;
-  currentPage = window.eventListCurrentPage;
+  window[pageStateKey] = window[pageStateKey] || 0;
+  currentPage = window[pageStateKey];
   
   const totalPages = Math.ceil(displayEvents.length / EVENTS_PER_PAGE);
+  if (currentPage >= totalPages && totalPages > 0) {
+    currentPage = totalPages - 1;
+    window[pageStateKey] = currentPage;
+  }
   const paginatedEvents = displayEvents.slice(
     currentPage * EVENTS_PER_PAGE, 
     (currentPage + 1) * EVENTS_PER_PAGE
   );
 
   if (displayEvents.length === 0) {
+    window[pageStateKey] = 0;
+    const emptyTitle = isNadi4uView ? "No Smart Services NADI4U events found" : "No programs found";
+    const emptySubtitle = isNadi4uView
+      ? "Sync NADI4U from settings to refresh the Smart Services list"
+      : 'Select a date to add a program or click "Add" to create one';
+
     container.innerHTML = `
       <div class="text-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 text-slate-500 text-xs mt-2">
         <i class="fa-regular fa-calendar-xmark text-2xl text-slate-300 mb-2"></i>
-        <p class="font-medium">No programs found</p>
-        <p class="text-[10px] text-slate-400 mt-1">Select a date to add a program or click "Add" to create one</p>
+        <p class="font-medium">${emptyTitle}</p>
+        <p class="text-[10px] text-slate-400 mt-1">${emptySubtitle}</p>
       </div>
     `;
     
@@ -2831,19 +3430,49 @@ function renderEventList() {
 
   // Render events
   let eventsHtml = '';
+  const isMultiDayInCurrentView = isNadi4uView ? isNadi4uMultiDayEvent : isRecentMultiDayEvent;
+  const firstMultiDayIndexInPage = paginatedEvents.findIndex((eventItem) => isMultiDayInCurrentView(eventItem));
+  const hasRecentSectionInPage = paginatedEvents.some((eventItem) => !isMultiDayInCurrentView(eventItem));
+  const shouldInsertRangeDivider = firstMultiDayIndexInPage > 0;
+  const sectionAccentClass = isNadi4uView ? "cyan" : "blue";
+  const recentSectionLabel = "Today Events";
+
+  if (hasRecentSectionInPage) {
+    const recentDivider = document.createElement("div");
+    recentDivider.className = "relative my-2 py-1";
+    recentDivider.innerHTML = `
+      <div class="absolute inset-0 flex items-center">
+        <div class="w-full border-t border-${sectionAccentClass}-200"></div>
+      </div>
+      <div class="relative flex justify-center">
+        <span class="px-2 text-[9px] font-bold uppercase tracking-wide text-${sectionAccentClass}-700 bg-slate-50 rounded">${recentSectionLabel}</span>
+      </div>
+    `;
+    container.appendChild(recentDivider);
+  }
   
-  paginatedEvents.forEach((ev) => {
+  paginatedEvents.forEach((ev, eventIndex) => {
     // Validate event data
     if (!ev || !ev.id || !ev.start || !ev.end) {
       if (window.DEBUG_MODE) console.warn("Invalid event data:", ev);
       return;
     }
 
-    const cat = categories[ev.category];
-    if (!cat) {
-      if (window.DEBUG_MODE) console.warn("Invalid category for event:", ev.category, ev);
-      return;
+    if (shouldInsertRangeDivider && eventIndex === firstMultiDayIndexInPage) {
+      const divider = document.createElement("div");
+      divider.className = "relative my-2 py-1";
+      divider.innerHTML = `
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-${sectionAccentClass}-300"></div>
+        </div>
+        <div class="relative flex justify-center">
+          <span class="px-2 text-[9px] font-bold uppercase tracking-wide text-${sectionAccentClass}-700 bg-slate-50 rounded">Multiple Day Events</span>
+        </div>
+      `;
+      container.appendChild(divider);
     }
+
+    const cat = categories[ev.category] || EXTERNAL_NADI4U_CATEGORY;
 
     const card = document.createElement("div");
     card.className = "event-card glow-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative";
@@ -2865,9 +3494,31 @@ function renderEventList() {
       return;
     }
 
-    let dateDisplay = d1.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    if (ev.start !== ev.end) {
-      dateDisplay += " - " + d2.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    let dateStartForDisplay = d1;
+    let dateEndForDisplay = d2;
+    if (ev?.isExternal && ev?.source === "nadi4u") {
+      const range = getNadi4uScheduleDateRange(ev);
+      if (range.startDate) {
+        const parsedStart = new Date(`${range.startDate}T00:00:00`);
+        if (!Number.isNaN(parsedStart.getTime())) {
+          dateStartForDisplay = parsedStart;
+        }
+      }
+      if (range.endDate) {
+        const parsedEnd = new Date(`${range.endDate}T00:00:00`);
+        if (!Number.isNaN(parsedEnd.getTime())) {
+          dateEndForDisplay = parsedEnd;
+        }
+      }
+    }
+
+    let dateDisplay = dateStartForDisplay.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    let dateDisplayHtml = escapeHtml(dateDisplay.toUpperCase());
+    const isMultiDayDisplay = dateStartForDisplay.toDateString() !== dateEndForDisplay.toDateString();
+    if (isMultiDayDisplay) {
+      const rangeEndDisplay = dateEndForDisplay.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      dateDisplay = `${dateDisplay} - ${rangeEndDisplay}`;
+      dateDisplayHtml = escapeHtml(dateDisplay.toUpperCase());
     }
 
     let linksHtml = "";
@@ -2937,12 +3588,22 @@ function renderEventList() {
       ? hasProgramInfoValue(ev.info, ev.images, false)
       : true;
     const infoIndicatorColor = hasProgramInfo ? "#cb233b" : "#94a3b8";
+    const actionButtonsHtml = showEditDeleteButtons && !ev.isExternal
+      ? `<div class="absolute top-0 right-0 flex gap-2 opacity-100 transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
+          <button onclick="openModal('${ev.id}')" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
+            <i class="fa-solid fa-pen text-xs"></i>
+          </button>
+          <button onclick="deleteEvent('${ev.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete">
+            <i class="fa-solid fa-trash text-xs"></i>
+          </button>
+        </div>`
+      : "";
 
     card.innerHTML = `
       <div class="flex flex-col gap-1 relative">
         <div class="flex justify-between items-start">
           <div class="flex-1">
-            <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplay}</span>
+            <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplayHtml}</span>
             <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5">${ev.title}</h4>
           </div>
           <div class="flex flex-col items-end w-auto text-right gap-1">
@@ -2963,14 +3624,7 @@ function renderEventList() {
         <div id="event-info-${ev.id}" class="hidden text-[9.5px] text-slate-600 mt-1 bg-slate-50 p-2 rounded leading-relaxed whitespace-pre-line event-info-content overflow-hidden">${infoMarkup}</div>
         ${linksHtml}
         ${actionLinksHtml}
-        <div class="absolute top-0 right-0 flex gap-2 ${showEditDeleteButtons ? "opacity-100" : "opacity-0"} transition-opacity bg-white/80 backdrop-blur pl-2 pb-1 rounded-bl-lg">
-          <button onclick="openModal('${ev.id}')" class="text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
-            <i class="fa-solid fa-pen text-xs"></i>
-          </button>
-          <button onclick="deleteEvent('${ev.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete">
-            <i class="fa-solid fa-trash text-xs"></i>
-          </button>
-        </div>
+        ${actionButtonsHtml}
       </div>
     `;
 
@@ -2984,7 +3638,10 @@ function renderEventList() {
   }
   container.insertAdjacentHTML('afterend', paginationHtml || '');
 
-  const visibleEventIds = paginatedEvents.map((eventItem) => eventItem?.id).filter(Boolean);
+  const visibleEventIds = paginatedEvents
+    .filter((eventItem) => !eventItem?.isExternal)
+    .map((eventItem) => eventItem?.id)
+    .filter(Boolean);
   prefetchEventDetailsForVisibleEventIds(visibleEventIds);
 }
 
@@ -2992,22 +3649,21 @@ function renderEventList() {
 // OPTIMIZATION: Change event page
 // =====================================================
 function changeEventPage(direction) {
-  // Recalculate total
-  let displayEvents = events;
-  const todayStr = toLocalISOString(today);
-  
-  if (window.selectedFilterDate) {
-    displayEvents = events.filter((e) => window.selectedFilterDate >= e.start && window.selectedFilterDate <= e.end);
-  } else if (rangeFilter.start && rangeFilter.end) {
-    displayEvents = events.filter((e) => e.start <= rangeFilter.end && e.end >= rangeFilter.start);
-  } else {
-    displayEvents = events.filter((e) => e.end >= todayStr);
-  }
+  const allEvents = getCombinedEventListSource();
+  const displayEvents = getProgramListDisplayEvents(allEvents);
+  const pageStateKey = getProgramListPageStateKey();
   
   const EVENTS_PER_PAGE = 20;
   const totalPages = Math.ceil(displayEvents.length / EVENTS_PER_PAGE);
-  
-  window.eventListCurrentPage = Math.max(0, Math.min(totalPages - 1, window.eventListCurrentPage + direction));
+
+  if (totalPages <= 0) {
+    window[pageStateKey] = 0;
+    renderEventList();
+    return;
+  }
+
+  window[pageStateKey] = window[pageStateKey] || 0;
+  window[pageStateKey] = Math.max(0, Math.min(totalPages - 1, window[pageStateKey] + direction));
   
   renderEventList();
 }
@@ -4059,10 +4715,12 @@ async function toggleEventInfo(eventId) {
     return;
   }
 
-  const eventData = events.find((eventItem) => eventItem.id === eventId);
-  const needsDetailsFetch = !eventData
+  const eventKey = String(eventId);
+  const eventData = eventListLookup.get(eventKey) || events.find((eventItem) => String(eventItem.id) === eventKey);
+  const isExternalEvent = Boolean(eventData?.isExternal);
+  const needsDetailsFetch = !isExternalEvent && (!eventData
     || typeof eventData.info !== "string"
-    || (programImagesEnabled && !Array.isArray(eventData.images));
+    || (programImagesEnabled && !Array.isArray(eventData.images)));
 
   if (needsDetailsFetch) {
     container.innerHTML = '<span class="text-[9px] text-slate-400 italic">Loading program info...</span>';
@@ -4764,4 +5422,661 @@ function saveSchoolHolidaySettings() {
   closeSettings();
   renderCalendar();
 }
+
+// NADI4U API Functions
+function openNADI4USettings() {
+  document.getElementById('settingsMenuView').classList.add('hidden');
+  document.getElementById('nadi4uSettingsView').classList.remove('hidden');
+  document.getElementById('nadi4uSettingsView').classList.add('flex');
+
+  // Check if logged in
+  updateNADI4UView();
+}
+
+function parseNadi4uSettingsFromStorage() {
+  const raw = getNadi4uStorageItem('nadi4uSettings');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function persistNadi4uSettings(settings) {
+  setNadi4uStorageItem('nadi4uSettings', settings || {});
+}
+
+function closeHeaderLoginMenu() {
+  const dropdown = document.getElementById('logoutDropdown');
+  if (dropdown) {
+    dropdown.classList.add('hidden');
+  }
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) {
+    loginBtn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function parseLeaveUserFromStorage() {
+  let raw = null;
+  try {
+    raw = appStorage?.getItem ? appStorage.getItem('leave_user') : null;
+  } catch (error) {
+    raw = null;
+  }
+
+  if (!raw) {
+    try {
+      raw = localStorage.getItem('leave_user');
+    } catch (error) {
+      raw = null;
+    }
+  }
+
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function mapLeaveRoleToNadi4uRole(leaveRole) {
+  const normalized = String(leaveRole || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'manager') return NADI4U_HEADER_ROLE_MANAGER;
+  if (normalized === 'assistant manager') return NADI4U_HEADER_ROLE_ASSISTANT;
+  return '';
+}
+
+function toNadiSiteSlug(siteName) {
+  const raw = String(siteName || '').trim().toLowerCase();
+  if (!raw) return '';
+  const withoutPrefix = raw.replace(/^nadi\s+/, '');
+  return withoutPrefix
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/_/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function buildNadi4uTemplateEmail(role, siteSlug) {
+  const safeSlug = String(siteSlug || '').trim().toLowerCase();
+  if (!safeSlug) return '';
+  const safeRole = role === NADI4U_HEADER_ROLE_ASSISTANT
+    ? NADI4U_HEADER_ROLE_ASSISTANT
+    : NADI4U_HEADER_ROLE_MANAGER;
+  return `${safeRole}@${safeSlug}.nadi.my`;
+}
+
+function getNadi4uTemplateFromLeaveSession() {
+  const leaveUser = parseLeaveUserFromStorage();
+  if (!leaveUser) return null;
+
+  const role = mapLeaveRoleToNadi4uRole(leaveUser.role);
+  const siteName = String(leaveUser.site_name || '').trim();
+  const siteSlug = toNadiSiteSlug(siteName);
+  if (!role || !siteSlug) return null;
+
+  return {
+    role,
+    siteName,
+    siteSlug,
+    siteId: leaveUser.site_id != null ? String(leaveUser.site_id) : '',
+    email: buildNadi4uTemplateEmail(role, siteSlug)
+  };
+}
+
+function showNadi4uHeaderInlineStatus(message, type = 'info') {
+  const statusEl = document.getElementById('nadi4uHeaderInlineStatus');
+  if (!statusEl) return;
+
+  if (!message) {
+    statusEl.classList.add('hidden');
+    statusEl.textContent = '';
+    return;
+  }
+
+  statusEl.classList.remove('hidden');
+  if (type === 'error') {
+    statusEl.className = 'px-2 py-1.5 rounded text-[10px] bg-red-100 text-red-700 border border-red-200';
+  } else if (type === 'success') {
+    statusEl.className = 'px-2 py-1.5 rounded text-[10px] bg-green-100 text-green-700 border border-green-200';
+  } else {
+    statusEl.className = 'px-2 py-1.5 rounded text-[10px] bg-blue-100 text-blue-700 border border-blue-200';
+  }
+  statusEl.textContent = message;
+}
+
+function persistNadi4uHeaderTemplateState() {
+  const settings = parseNadi4uSettingsFromStorage() || {};
+  const template = getNadi4uTemplateFromLeaveSession();
+
+  if (template) {
+    settings.templateSiteId = template.siteId;
+    settings.templateSiteName = template.siteName;
+    settings.templateSiteSlug = template.siteSlug;
+    settings.templateRole = template.role;
+  } else {
+    settings.templateSiteId = '';
+    settings.templateSiteName = '';
+    settings.templateSiteSlug = '';
+    settings.templateRole = '';
+  }
+
+  persistNadi4uSettings(settings);
+  return settings;
+}
+
+function refreshNadi4uHeaderEmailPreview(persistSelection = true) {
+  const previewInput = document.getElementById('nadi4uHeaderEmailPreview');
+  if (!previewInput) return '';
+
+  const template = getNadi4uTemplateFromLeaveSession();
+  const email = template?.email || '';
+  previewInput.value = email;
+
+  if (persistSelection) {
+    persistNadi4uHeaderTemplateState();
+  }
+
+  return email;
+}
+
+function hydrateNadi4uHeaderFormFromSettings() {
+  refreshNadi4uHeaderEmailPreview(false);
+  persistNadi4uHeaderTemplateState();
+}
+
+function updateNadi4uHeaderBadge() {
+  const settings = parseNadi4uSettingsFromStorage() || {};
+  const badge = document.getElementById('nadi4uHeaderBadgeDot');
+  if (!badge) return;
+
+  if (settings?.token) {
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function refreshNadi4uHeaderMenuState() {
+  const settings = parseNadi4uSettingsFromStorage() || {};
+  const isConnected = !!settings?.token;
+  const template = getNadi4uTemplateFromLeaveSession();
+  refreshNadi4uHeaderEmailPreview(false);
+
+  const stateEl = document.getElementById('nadi4uHeaderState');
+  const logoutBtn = document.getElementById('nadi4uHeaderLogoutBtn');
+
+  if (stateEl) {
+    const userLabel = settings.userEmail || settings.email || 'NADI4U user';
+    if (isConnected) {
+      stateEl.textContent = `Connected as ${userLabel}`;
+      stateEl.className = 'text-[10px] text-green-700 mt-1';
+    } else if (template) {
+      const roleLabel = template.role === NADI4U_HEADER_ROLE_ASSISTANT ? 'Assistant Manager' : 'Manager';
+      stateEl.textContent = `Detected from Leave: ${roleLabel} - ${template.siteName}`;
+      stateEl.className = 'text-[10px] text-cyan-800 mt-1';
+    } else {
+      stateEl.textContent = 'Login Leave Access as Manager or Assistant Manager first';
+      stateEl.className = 'text-[10px] text-cyan-800 mt-1';
+    }
+  }
+
+  if (logoutBtn) {
+    logoutBtn.classList.toggle('hidden', !isConnected);
+  }
+
+  updateNadi4uHeaderBadge();
+}
+
+function initNadi4uHeaderMenu() {
+  hydrateNadi4uHeaderFormFromSettings();
+  refreshNadi4uHeaderMenuState();
+}
+
+function openNadi4uSettingsFromHeaderMenu() {
+  closeHeaderLoginMenu();
+  openSettings();
+  openNADI4USettings();
+}
+
+async function ensureNADI4USession(settings, options = {}) {
+  if (!window.NADI4U_API) {
+    throw new Error('NADI4U API is not available');
+  }
+
+  const allowBackgroundLogin = options.allowBackgroundLogin !== false;
+  const activeSettings = settings && typeof settings === 'object' ? settings : {};
+  const apiKey = activeSettings.apiKey || NADI4U_API.defaultApiKey;
+  const token = activeSettings.token || '';
+  const email = typeof activeSettings.email === 'string' ? activeSettings.email.trim() : '';
+  const password = typeof activeSettings.password === 'string' ? activeSettings.password : '';
+
+  NADI4U_API.configure(apiKey, token);
+  if (typeof NADI4U_API.setCredentials === 'function' && email && password) {
+    NADI4U_API.setCredentials(email, password, false);
+  }
+
+  if (token) {
+    return activeSettings;
+  }
+
+  if (allowBackgroundLogin && email && password) {
+    await NADI4U_API.login(email, password, { rememberCredentials: true });
+    return parseNadi4uSettingsFromStorage() || activeSettings;
+  }
+
+  throw new Error('Please login with email & password first.');
+}
+
+function updateNADI4UView() {
+  const settings = parseNadi4uSettingsFromStorage();
+  const loginView = document.getElementById('nadi4uLoginView');
+  const loggedInView = document.getElementById('nadi4uLoggedInView');
+  const emailInput = document.getElementById('nadi4uEmail');
+  const passwordInput = document.getElementById('nadi4uPassword');
+
+  if (emailInput) {
+    emailInput.value = settings?.email || '';
+  }
+
+  if (passwordInput) {
+    passwordInput.value = settings?.password || '';
+  }
+
+  if (settings && settings.token && loginView && loggedInView) {
+    // Logged in or have manual credentials
+    loginView.classList.add('hidden');
+    loggedInView.classList.remove('hidden');
+
+    // Show user email if available
+    const userEmailEl = document.getElementById('nadi4uUserEmail');
+    if (userEmailEl) {
+      if (settings.userEmail) {
+        userEmailEl.textContent = settings.userEmail;
+      } else if (settings.email) {
+        userEmailEl.textContent = settings.email;
+      } else {
+        userEmailEl.textContent = '';
+      }
+    }
+
+    // Configure API
+    if (window.NADI4U_API) {
+      NADI4U_API.configure(settings.apiKey, settings.token);
+      if (typeof NADI4U_API.setCredentials === 'function' && settings.email && settings.password) {
+        NADI4U_API.setCredentials(settings.email, settings.password, false);
+      }
+    }
+  } else if (loginView && loggedInView) {
+    // Not logged in
+    loginView.classList.remove('hidden');
+    loggedInView.classList.add('hidden');
+  }
+
+  refreshNadi4uHeaderMenuState();
+  updateNadi4uHeaderBadge();
+  hydrateNadi4uHeaderFormFromSettings();
+}
+
+async function loginNADI4U(event) {
+  const email = document.getElementById('nadi4uEmail').value.trim();
+  const password = document.getElementById('nadi4uPassword').value;
+
+  if (!email || !password) {
+    alert('Please enter email and password');
+    return;
+  }
+
+  const btn = event?.currentTarget || document.querySelector('button[onclick^="loginNADI4U"]');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Logging in...';
+    btn.disabled = true;
+  }
+
+  try {
+    if (window.NADI4U_API) {
+      const result = await NADI4U_API.login(email, password, { rememberCredentials: true });
+
+      // Get user info
+      let userEmail = email;
+      try {
+        const user = await NADI4U_API.getUser();
+        userEmail = user.email || email;
+      } catch (e) {}
+
+      // Save settings
+      const settings = parseNadi4uSettingsFromStorage() || {};
+      settings.apiKey = NADI4U_API.defaultApiKey;
+      settings.token = result.access_token;
+      settings.userEmail = userEmail;
+      settings.email = email;
+      settings.password = password;
+      settings.lastLoginSource = 'settings';
+      persistNadi4uSettings(settings);
+
+      updateNADI4UView();
+      alert('Login successful!');
+    }
+  } catch (err) {
+    alert('Login failed: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+}
+
+async function loginNadi4uWithLeaveAccessContext(options = {}) {
+  if (!window.NADI4U_API) {
+    throw new Error('NADI4U API is not available.');
+  }
+
+  const leaveUser = parseLeaveUserFromStorage();
+  const rawRole = typeof options.role === 'string' ? options.role : (leaveUser?.role || '');
+  const normalizedRawRole = String(rawRole || '').trim().toLowerCase();
+  let mappedRole = mapLeaveRoleToNadi4uRole(rawRole);
+  if (!mappedRole && (normalizedRawRole === NADI4U_HEADER_ROLE_MANAGER || normalizedRawRole === NADI4U_HEADER_ROLE_ASSISTANT)) {
+    mappedRole = normalizedRawRole;
+  }
+  if (!mappedRole) {
+    throw new Error('Leave role must be Manager or Assistant Manager.');
+  }
+
+  const siteName = String(options.siteName || leaveUser?.site_name || '').trim();
+  if (!siteName) {
+    throw new Error('Leave site is required for NADI4U login.');
+  }
+
+  const siteSlug = toNadiSiteSlug(siteName);
+  if (!siteSlug) {
+    throw new Error('Unable to generate site slug for NADI4U email.');
+  }
+
+  const siteId = options.siteId != null
+    ? String(options.siteId)
+    : (leaveUser?.site_id != null ? String(leaveUser.site_id) : '');
+  const email = buildNadi4uTemplateEmail(mappedRole, siteSlug).trim().toLowerCase();
+  const storedSettings = parseNadi4uSettingsFromStorage() || {};
+  const storedPassword = typeof storedSettings.password === 'string' ? storedSettings.password : '';
+  const password = typeof options.password === 'string' && options.password !== ''
+    ? options.password
+    : storedPassword;
+
+  if (!password) {
+    throw new Error('NADI APP password is required.');
+  }
+
+  const result = await NADI4U_API.login(email, password, { rememberCredentials: true });
+
+  let userEmail = email;
+  try {
+    const user = await NADI4U_API.getUser();
+    userEmail = user?.email || email;
+  } catch (error) {}
+
+  const settings = parseNadi4uSettingsFromStorage() || {};
+  settings.apiKey = NADI4U_API.defaultApiKey;
+  settings.token = result.access_token;
+  settings.userEmail = userEmail;
+  settings.email = email;
+  settings.password = password;
+  settings.templateSiteId = siteId;
+  settings.templateSiteName = siteName;
+  settings.templateSiteSlug = siteSlug;
+  settings.templateRole = mappedRole;
+  settings.lastLoginSource = typeof options.source === 'string' ? options.source : 'leaveAccess';
+  persistNadi4uSettings(settings);
+
+  updateNADI4UView();
+
+  let syncResult = null;
+  if (options.autoSync !== false) {
+    syncResult = await syncNADI4UData({ throwOnError: true });
+  }
+
+  return {
+    email,
+    siteName,
+    siteSlug,
+    role: mappedRole,
+    syncResult
+  };
+}
+
+async function loginNadi4uFromHeader(event) {
+  if (!window.NADI4U_API) {
+    showNadi4uHeaderInlineStatus('NADI4U API is not available.', 'error');
+    return;
+  }
+
+  const button = event?.currentTarget || document.getElementById('nadi4uHeaderLoginSyncBtn');
+  const template = getNadi4uTemplateFromLeaveSession();
+  if (!template || !template.email) {
+    showNadi4uHeaderInlineStatus('Please login Leave Access as Manager/Assistant Manager first.', 'error');
+    return;
+  }
+
+  const originalText = button ? button.innerHTML : '';
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Logging...';
+  }
+  showNadi4uHeaderInlineStatus('Logging in and syncing current month...', 'info');
+
+  try {
+    const loginResult = await loginNadi4uWithLeaveAccessContext({
+      siteId: template.siteId || '',
+      siteName: template.siteName,
+      role: template.role,
+      autoSync: true,
+      source: 'headerInline'
+    });
+    const syncResult = loginResult?.syncResult;
+    const scheduleCount = syncResult?.scheduleCount ?? 0;
+    const eventCount = syncResult?.eventCount ?? 0;
+    showNadi4uHeaderInlineStatus(`Login & sync complete (${scheduleCount} schedules, ${eventCount} events).`, 'success');
+
+    setTimeout(() => {
+      closeHeaderLoginMenu();
+      showNadi4uHeaderInlineStatus('');
+    }, 900);
+  } catch (error) {
+    showNadi4uHeaderInlineStatus(`Login/sync failed: ${error.message}`, 'error');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalText;
+    }
+  }
+}
+
+function logoutNADI4U() {
+  const previous = parseNadi4uSettingsFromStorage() || {};
+  const preservedSettings = {
+    apiKey: previous.apiKey || (window.NADI4U_API ? NADI4U_API.defaultApiKey : ''),
+    email: previous.email || '',
+    password: previous.password || '',
+    templateSiteId: previous.templateSiteId || '',
+    templateSiteName: previous.templateSiteName || '',
+    templateSiteSlug: previous.templateSiteSlug || '',
+    templateRole: previous.templateRole || NADI4U_HEADER_ROLE_MANAGER,
+    lastLoginSource: 'logout'
+  };
+
+  if (window.NADI4U_API) {
+    NADI4U_API.logout();
+    NADI4U_API.configure(preservedSettings.apiKey || NADI4U_API.defaultApiKey, '');
+    if (typeof NADI4U_API.setCredentials === 'function' && preservedSettings.email && preservedSettings.password) {
+      NADI4U_API.setCredentials(preservedSettings.email, preservedSettings.password, false);
+    }
+  }
+
+  persistNadi4uSettings(preservedSettings);
+
+  updateNADI4UView();
+  renderEventList();
+}
+
+function logoutNadi4uFromHeaderMenu() {
+  logoutNADI4U();
+  showNadi4uHeaderInlineStatus('');
+  closeHeaderLoginMenu();
+}
+
+function saveNADI4USettings() {
+  const apiKey = document.getElementById('nadi4uApiKey').value.trim();
+  const token = document.getElementById('nadi4uToken').value.trim();
+
+  if (!apiKey || !token) {
+    alert('Please fill in API Key and Token');
+    return;
+  }
+
+  const settings = parseNadi4uSettingsFromStorage() || {};
+  settings.apiKey = apiKey;
+  settings.token = token;
+  settings.userEmail = 'Manual credentials';
+  settings.lastLoginSource = 'manualCredentials';
+  persistNadi4uSettings(settings);
+
+  // Configure the API
+  if (window.NADI4U_API) {
+    NADI4U_API.configure(apiKey, token);
+    if (typeof NADI4U_API.setCredentials === 'function' && settings.email && settings.password) {
+      NADI4U_API.setCredentials(settings.email, settings.password, false);
+    }
+  }
+
+  updateNADI4UView();
+  alert('Settings saved successfully!');
+}
+
+async function testNADI4UConnection() {
+  const settings = parseNadi4uSettingsFromStorage();
+  if (!settings) {
+    showNADI4UStatus('Please login or enter credentials first', 'error');
+    return;
+  }
+
+  showNADI4UStatus('Testing connection...', 'info');
+
+  if (window.NADI4U_API) {
+    try {
+      await ensureNADI4USession(settings);
+      const data = await NADI4U_API.getAnnouncements();
+      updateNADI4UView();
+      showNADI4UStatus(`Connection successful! Found ${data.length} announcements.`, 'success');
+    } catch (err) {
+      showNADI4UStatus(`Error: ${err.message}`, 'error');
+    }
+  }
+}
+
+async function syncNADI4UData(options = {}) {
+  const throwOnError = options?.throwOnError === true;
+  const settings = parseNadi4uSettingsFromStorage();
+  if (!settings) {
+    showNADI4UStatus('Please login or enter credentials first', 'error');
+    if (throwOnError) throw new Error('Please login or enter credentials first');
+    return;
+  }
+
+  if (window.NADI4U_API) {
+    showNADI4UStatus('Syncing data...', 'info');
+
+    try {
+      await ensureNADI4USession(settings);
+      const monthYear = currentYear;
+      const monthIndex = currentMonth;
+
+      let nadi4uMonthData = { events: [], schedule: [] };
+      if (typeof NADI4U_API.getSmartServicesNadi4uMonthData === "function") {
+        nadi4uMonthData = await NADI4U_API.getSmartServicesNadi4uMonthData(monthYear, monthIndex);
+      } else {
+        throw new Error("Smart Services category sync is not available in the current API client.");
+      }
+
+      const [announcements] = await Promise.all([
+        NADI4U_API.getAnnouncements()
+      ]);
+
+      const eventMeta = Array.isArray(nadi4uMonthData.events) ? nadi4uMonthData.events : [];
+      const schedule = Array.isArray(nadi4uMonthData.schedule) ? nadi4uMonthData.schedule : [];
+
+      // Show preview
+      document.getElementById('nadi4uDataPreview').classList.remove('hidden');
+      const preview = {
+        schedule: schedule.slice(0, 5),
+        scheduleCount: schedule.length,
+        events: eventMeta.slice(0, 5),
+        eventCount: eventMeta.length,
+        announcements: announcements.slice(0, 3),
+        announcementCount: announcements.length
+      };
+      document.getElementById('nadi4uPreviewContent').textContent = JSON.stringify(preview, null, 2);
+
+      // Store for later use
+      setNadi4uStorageItem(NADI4U_SCHEDULE_STORAGE_KEY, schedule);
+      setNadi4uStorageItem('nadi4uAnnouncements', announcements);
+      setNadi4uStorageItem(NADI4U_EVENT_META_STORAGE_KEY, eventMeta);
+
+      showNADI4UStatus(`Synced ${schedule.length} schedules, ${eventMeta.length} events and ${announcements.length} announcements!`, 'success');
+      updateNADI4UView();
+      window.eventListCurrentPage = 0;
+      window.nadi4uListCurrentPage = 0;
+      renderEventList();
+      return {
+        scheduleCount: schedule.length,
+        eventCount: eventMeta.length,
+        announcementCount: announcements.length
+      };
+    } catch (err) {
+      showNADI4UStatus(`Sync failed: ${err.message}`, 'error');
+      if (throwOnError) throw err;
+    }
+  }
+}
+
+function showNADI4UStatus(message, type) {
+  const statusEl = document.getElementById('nadi4uStatus');
+  if (!statusEl) return;
+
+  statusEl.classList.remove('hidden');
+
+  if (type === 'error') {
+    statusEl.className = 'p-3 rounded-lg text-[10px] bg-red-100 text-red-700 border border-red-200';
+  } else if (type === 'success') {
+    statusEl.className = 'p-3 rounded-lg text-[10px] bg-green-100 text-green-700 border border-green-200';
+  } else {
+    statusEl.className = 'p-3 rounded-lg text-[10px] bg-blue-100 text-blue-700 border border-blue-200';
+  }
+
+  statusEl.textContent = message;
+}
+
+// Initialize NADI4U on load
+document.addEventListener('DOMContentLoaded', function() {
+  const settings = parseNadi4uSettingsFromStorage();
+  if (settings && window.NADI4U_API) {
+    if (settings.token) {
+      NADI4U_API.configure(settings.apiKey, settings.token);
+    }
+    if (typeof NADI4U_API.setCredentials === 'function' && settings.email && settings.password) {
+      NADI4U_API.setCredentials(settings.email, settings.password, false);
+    }
+  }
+
+  initNadi4uHeaderMenu();
+  updateNADI4UView();
+});
 
