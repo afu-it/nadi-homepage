@@ -893,9 +893,7 @@ async function handleStaffLogin(e) {
             source: 'leaveAccessTick'
           });
 
-          const scheduleCount = nadi4uResult?.syncResult?.scheduleCount ?? 0;
-          const eventCount = nadi4uResult?.syncResult?.eventCount ?? 0;
-          showToast(`NADI4U logged in & synced (${scheduleCount} schedules, ${eventCount} events)`, 'success');
+          showToast('NADI4U logged in & synced successfully', 'success');
         } catch (nadi4uError) {
           showToast(`Leave login done. NADI4U failed: ${nadi4uError.message}`, 'error');
         }

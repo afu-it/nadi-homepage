@@ -5881,10 +5881,7 @@ async function loginNadi4uFromHeader(event) {
       autoSync: true,
       source: 'headerInline'
     });
-    const syncResult = loginResult?.syncResult;
-    const scheduleCount = syncResult?.scheduleCount ?? 0;
-    const eventCount = syncResult?.eventCount ?? 0;
-    showNadi4uHeaderInlineStatus(`Login & sync complete (${scheduleCount} schedules, ${eventCount} events).`, 'success');
+    showNadi4uHeaderInlineStatus('Login & sync complete.', 'success');
 
     setTimeout(() => {
       closeHeaderLoginMenu();
@@ -6030,7 +6027,7 @@ async function syncNADI4UData(options = {}) {
       setNadi4uStorageItem('nadi4uAnnouncements', announcements);
       setNadi4uStorageItem(NADI4U_EVENT_META_STORAGE_KEY, eventMeta);
 
-      showNADI4UStatus(`Synced ${schedule.length} schedules, ${eventMeta.length} events and ${announcements.length} announcements!`, 'success');
+      showNADI4UStatus('Sync completed successfully.', 'success');
       updateNADI4UView();
       window.eventListCurrentPage = 0;
       window.nadi4uListCurrentPage = 0;
