@@ -32,11 +32,11 @@ const categories = {
 };
 
 const subcategories = {
-  entrepreneur: ["e-Kelas (Maxis)", "Preneur/EmpowHer", "Kidventure"],
-  learning: ["e-Kelas (Maxis)", "Dilea", "Tiny Techies", "e-Sport", "Cybersecurity", "Mahir"],
+  entrepreneur: ["Preneur", "EmpowHer", "Kidsventure"],
+  learning: ["eKelas Keusahawanan", "DiLea", "Cybersecurity", "eKelas Maxis", "Tinytechies", "eSport", "Mahir"],
   wellbeing: ["Care"],
-  awareness: ["Safe", "Shield"],
-  gov: [],
+  awareness: ["KIS"],
+  gov: ["MyDigital ID"],
 };
 
 const defaultHolidays = {

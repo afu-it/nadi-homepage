@@ -937,6 +937,43 @@ const EXTERNAL_NADI4U_CATEGORY = {
   color: "bg-cyan-100 text-cyan-700 border-cyan-200",
   dot: "bg-cyan-500",
 };
+const NADI4U_KPI_TITLE_RULES = [
+  {
+    category: "wellbeing",
+    subcategory: "CARE",
+    patterns: [/\bnadi[\s-]*care\b/i, /\bnadicare\b/i, /\bsihat\s+ramadan\b/i]
+  },
+  {
+    category: "entrepreneur",
+    subcategory: "Preneur",
+    patterns: [/\bnadi[\s-]*preneur\b/i, /\bnadipreneur\b/i]
+  },
+  {
+    category: "entrepreneur",
+    subcategory: "Kidventure",
+    patterns: [/\bkids?\s*venture\b/i, /\bkidventure\b/i]
+  },
+  {
+    category: "entrepreneur",
+    subcategory: "EmpowHer",
+    patterns: [/\bempow\s*her\b/i, /\bempowerher\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "DiLea",
+    patterns: [/\bdilea\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "Mahir",
+    patterns: [/\bmahir\s+baiki\s+gajet\b/i, /\bmahir\b/i]
+  },
+  {
+    category: "awareness",
+    subcategory: "KIS",
+    patterns: [/\bkempen\s+internet\s+selamat\b/i, /\(\s*kis\s*\)/i, /\bkis\b/i]
+  }
+];
 
 function getNadi4uStorageItem(key) {
   let value = null;
@@ -1077,6 +1114,22 @@ function getTakwimSmartServiceGroup(categoryName) {
   return "other";
 }
 
+function getNadi4uKpiLabelFromTitle(title) {
+  const source = String(title || "").trim();
+  if (!source) return null;
+
+  for (const rule of NADI4U_KPI_TITLE_RULES) {
+    if (Array.isArray(rule.patterns) && rule.patterns.some((pattern) => pattern.test(source))) {
+      return {
+        category: rule.category,
+        subcategory: rule.subcategory
+      };
+    }
+  }
+
+  return null;
+}
+
 function buildNadi4uDisplayEvents() {
   const scheduleRows = parseStoredJsonArray(NADI4U_SCHEDULE_STORAGE_KEY);
   const eventMetaRows = parseStoredJsonArray(NADI4U_EVENT_META_STORAGE_KEY);
@@ -1152,6 +1205,7 @@ function buildNadi4uDisplayEvents() {
 
     const compositeId = `${sourceEventId}-${startDate}-${endDate}`;
     const externalId = `nadi4u-${sanitizeEventCardIdPart(compositeId)}`;
+    const mappedKpiLabel = getNadi4uKpiLabelFromTitle(programName);
 
     result.push({
       id: externalId,
@@ -1163,6 +1217,8 @@ function buildNadi4uDisplayEvents() {
       end: endDate,
       category: "nadi4u",
       subcategory: "Smart Services",
+      kpiCategory: mappedKpiLabel?.category || "",
+      kpiSubcategory: mappedKpiLabel?.subcategory || "",
       time: timeRange,
       secondTime: "",
       links: [],
@@ -3226,22 +3282,38 @@ function renderCategoryCounts(displayEvents = []) {
     return;
   }
 
-  const counts = {
+  const createEmptyCounts = () => ({
     entrepreneur: 0,
     learning: 0,
     wellbeing: 0,
     awareness: 0,
     gov: 0,
-    nadi4u: 0,
+  });
+  const todayCounts = createEmptyCounts();
+  const multiDayCounts = createEmptyCounts();
+  const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
+  const isMultiDayInCurrentView = isNadi4uView ? isNadi4uMultiDayEvent : isRecentMultiDayEvent;
+  const countTotal = (counts) => Object.values(counts).reduce((a, b) => a + b, 0);
+  const addCount = (counts, categoryKey) => {
+    if (counts.hasOwnProperty(categoryKey)) {
+      counts[categoryKey]++;
+    }
   };
 
   displayEvents.forEach((eventItem) => {
-    if (counts.hasOwnProperty(eventItem.category)) {
-      counts[eventItem.category]++;
-    }
+    const mappedNadi4uCategory = eventItem?.isExternal
+      && eventItem?.source === "nadi4u"
+      && typeof eventItem?.kpiCategory === "string"
+      ? eventItem.kpiCategory
+      : "";
+    const countCategory = mappedNadi4uCategory || eventItem?.category;
+    const targetCounts = isMultiDayInCurrentView(eventItem) ? multiDayCounts : todayCounts;
+    addCount(targetCounts, countCategory);
   });
 
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const todayTotal = countTotal(todayCounts);
+  const multiDayTotal = countTotal(multiDayCounts);
+  const total = todayTotal + multiDayTotal;
 
   if (total === 0) {
     container.innerHTML =
@@ -3249,53 +3321,60 @@ function renderCategoryCounts(displayEvents = []) {
     return;
   }
 
+  const renderCountBadges = (counts) => {
+    let badgesHtml = "";
+    if (counts.entrepreneur > 0) {
+      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-yellow-100 border border-yellow-200 rounded-md">
+        <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
+        <span class="text-[8px] font-bold text-yellow-700">USAHAWAN: ${counts.entrepreneur}</span>
+      </div>`;
+    }
+    if (counts.learning > 0) {
+      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-blue-100 border border-blue-200 rounded-md">
+        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+        <span class="text-[8px] font-bold text-blue-700">PEMBELAJARAN: ${counts.learning}</span>
+      </div>`;
+    }
+    if (counts.wellbeing > 0) {
+      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 border border-emerald-200 rounded-md">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span class="text-[8px] font-bold text-emerald-700">KESEJAHTERAAN: ${counts.wellbeing}</span>
+      </div>`;
+    }
+    if (counts.awareness > 0) {
+      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-violet-100 border border-violet-200 rounded-md">
+        <span class="w-2 h-2 rounded-full bg-violet-500"></span>
+        <span class="text-[8px] font-bold text-violet-700">KESEDARAN: ${counts.awareness}</span>
+      </div>`;
+    }
+    if (counts.gov > 0) {
+      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-red-100 border border-red-200 rounded-md">
+        <span class="w-2 h-2 rounded-full bg-red-500"></span>
+        <span class="text-[8px] font-bold text-red-700">INISIATIF KERAJAAN: ${counts.gov}</span>
+      </div>`;
+    }
+
+    if (!badgesHtml) {
+      return '<div class="text-[8px] italic text-slate-400">No events</div>';
+    }
+    return `<div class="flex flex-wrap gap-2">${badgesHtml}</div>`;
+  };
+
+  const renderCountSection = (sectionLabel, sectionCounts, sectionTotal, isFirst = false) => `
+    <div class="${isFirst ? "" : "mt-3 pt-3 border-t border-slate-100"}">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[8px] font-bold uppercase tracking-wide text-slate-500">${sectionLabel}</span>
+        <span class="text-[8px] font-semibold text-slate-400">${sectionTotal}</span>
+      </div>
+      ${renderCountBadges(sectionCounts)}
+    </div>
+  `;
+
   let html = '<div class="bg-white rounded-lg border border-slate-200 p-3 shadow-sm">';
-  html += '<div class="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">Total Programs</div>';
-  html += '<div class="flex flex-wrap gap-2">';
-
-  if (counts.entrepreneur > 0) {
-    html += `<div class="flex items-center gap-1.5 px-2 py-1 bg-yellow-100 border border-yellow-200 rounded-md">
-      <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
-      <span class="text-[8px] font-bold text-yellow-700">USAHAWAN: ${counts.entrepreneur}</span>
-    </div>`;
-  }
-
-  if (counts.learning > 0) {
-    html += `<div class="flex items-center gap-1.5 px-2 py-1 bg-blue-100 border border-blue-200 rounded-md">
-      <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-      <span class="text-[8px] font-bold text-blue-700">PEMBELAJARAN: ${counts.learning}</span>
-    </div>`;
-  }
-
-  if (counts.wellbeing > 0) {
-    html += `<div class="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 border border-emerald-200 rounded-md">
-      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-      <span class="text-[8px] font-bold text-emerald-700">KESEJAHTERAAN: ${counts.wellbeing}</span>
-    </div>`;
-  }
-
-  if (counts.awareness > 0) {
-    html += `<div class="flex items-center gap-1.5 px-2 py-1 bg-violet-100 border border-violet-200 rounded-md">
-      <span class="w-2 h-2 rounded-full bg-violet-500"></span>
-      <span class="text-[8px] font-bold text-violet-700">KESEDARAN: ${counts.awareness}</span>
-    </div>`;
-  }
-
-  if (counts.gov > 0) {
-    html += `<div class="flex items-center gap-1.5 px-2 py-1 bg-red-100 border border-red-200 rounded-md">
-      <span class="w-2 h-2 rounded-full bg-red-500"></span>
-      <span class="text-[8px] font-bold text-red-700">INISIATIF KERAJAAN: ${counts.gov}</span>
-    </div>`;
-  }
-
-  if (counts.nadi4u > 0) {
-    html += `<div class="flex items-center gap-1.5 px-2 py-1 bg-cyan-100 border border-cyan-200 rounded-md">
-      <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
-      <span class="text-[8px] font-bold text-cyan-700">SMART SERVICES NADI4U: ${counts.nadi4u}</span>
-    </div>`;
-  }
-
-  html += "</div></div>";
+  html += '<div class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Total Programs</div>';
+  html += renderCountSection("Today Events", todayCounts, todayTotal, true);
+  html += renderCountSection("Multiple Day Events", multiDayCounts, multiDayTotal, false);
+  html += "</div>";
   container.innerHTML = html;
 }
 
@@ -3431,34 +3510,36 @@ function renderEventList() {
   // Render events
   let eventsHtml = '';
   const isMultiDayInCurrentView = isNadi4uView ? isNadi4uMultiDayEvent : isRecentMultiDayEvent;
-  const firstMultiDayIndexInPage = paginatedEvents.findIndex((eventItem) => isMultiDayInCurrentView(eventItem));
-  const hasRecentSectionInPage = paginatedEvents.some((eventItem) => !isMultiDayInCurrentView(eventItem));
-  const shouldInsertRangeDivider = firstMultiDayIndexInPage > 0;
   const sectionAccentClass = isNadi4uView ? "cyan" : "blue";
   const recentSectionLabel = "Today Events";
-
-  if (hasRecentSectionInPage) {
-    const recentDivider = document.createElement("div");
-    recentDivider.className = "relative my-2 py-1";
-    recentDivider.innerHTML = `
-      <div class="absolute inset-0 flex items-center">
-        <div class="w-full border-t border-${sectionAccentClass}-200"></div>
-      </div>
-      <div class="relative flex justify-center">
-        <span class="px-2 text-[9px] font-bold uppercase tracking-wide text-${sectionAccentClass}-700 bg-slate-50 rounded">${recentSectionLabel}</span>
-      </div>
-    `;
-    container.appendChild(recentDivider);
-  }
+  let hasRenderedSingleDayHeader = false;
+  let hasRenderedMultiDayHeader = false;
   
-  paginatedEvents.forEach((ev, eventIndex) => {
+  paginatedEvents.forEach((ev) => {
     // Validate event data
     if (!ev || !ev.id || !ev.start || !ev.end) {
       if (window.DEBUG_MODE) console.warn("Invalid event data:", ev);
       return;
     }
 
-    if (shouldInsertRangeDivider && eventIndex === firstMultiDayIndexInPage) {
+    const isCurrentEventMultiDay = isMultiDayInCurrentView(ev);
+
+    if (!isCurrentEventMultiDay && !hasRenderedSingleDayHeader) {
+      const recentDivider = document.createElement("div");
+      recentDivider.className = "relative my-2 py-1";
+      recentDivider.innerHTML = `
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-${sectionAccentClass}-200"></div>
+        </div>
+        <div class="relative flex justify-center">
+          <span class="px-2 text-[9px] font-bold uppercase tracking-wide text-${sectionAccentClass}-700 bg-slate-50 rounded">${recentSectionLabel}</span>
+        </div>
+      `;
+      container.appendChild(recentDivider);
+      hasRenderedSingleDayHeader = true;
+    }
+
+    if (isCurrentEventMultiDay && !hasRenderedMultiDayHeader) {
       const divider = document.createElement("div");
       divider.className = "relative my-2 py-1";
       divider.innerHTML = `
@@ -3470,9 +3551,16 @@ function renderEventList() {
         </div>
       `;
       container.appendChild(divider);
+      hasRenderedMultiDayHeader = true;
     }
 
-    const cat = categories[ev.category] || EXTERNAL_NADI4U_CATEGORY;
+    const displayCategoryKey = ev?.isExternal && ev?.source === "nadi4u" && ev?.kpiCategory
+      ? ev.kpiCategory
+      : ev.category;
+    const cat = categories[displayCategoryKey] || EXTERNAL_NADI4U_CATEGORY;
+    const displaySubcategory = ev?.isExternal && ev?.source === "nadi4u" && ev?.kpiSubcategory
+      ? ev.kpiSubcategory
+      : ev.subcategory;
 
     const card = document.createElement("div");
     card.className = "event-card glow-card group bg-white rounded-lg border border-slate-200 p-2 shadow-sm relative";
@@ -3598,20 +3686,25 @@ function renderEventList() {
           </button>
         </div>`
       : "";
+    const isLearningCategoryCard = displayCategoryKey === "learning";
+    const categoryBadgeWidthClass = isLearningCategoryCard ? "min-w-[110px] max-w-[110px]" : "min-w-[80px]";
+    const categoryLabelClass = isLearningCategoryCard
+      ? "text-[9px] font-bold uppercase leading-tight whitespace-normal break-words text-right"
+      : "text-[9px] font-bold uppercase whitespace-nowrap leading-none";
 
     card.innerHTML = `
       <div class="flex flex-col gap-1 relative">
-        <div class="flex justify-between items-start">
-          <div class="flex-1">
+        <div class="flex justify-between items-start gap-2">
+          <div class="flex-1 min-w-0">
             <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplayHtml}</span>
-            <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5">${ev.title}</h4>
+            <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5 break-words">${ev.title}</h4>
           </div>
-          <div class="flex flex-col items-end w-auto text-right gap-1">
-            <div class="flex flex-col items-end justify-center px-2 py-1 rounded border ${cat.color} min-w-[80px]">
-              <span class="text-[9px] font-bold uppercase whitespace-nowrap leading-none">${cat.label}</span>
+          <div class="flex flex-col items-end w-auto text-right gap-1 shrink-0">
+            <div class="flex flex-col items-end justify-center px-2 py-1 rounded border ${cat.color} ${categoryBadgeWidthClass}">
+              <span class="${categoryLabelClass}">${cat.label}</span>
               <span class="text-[8px] opacity-80 whitespace-nowrap leading-none mt-0.5">${cat.sub}</span>
             </div>
-            ${ev.subcategory ? `<span class="text-[9px] font-semibold ${cat.color.split(" ")[1]} ${cat.color.split(" ")[2]}">${ev.subcategory}</span>` : ""}
+            ${displaySubcategory ? `<span class="text-[9px] font-semibold ${cat.color.split(" ")[1]} ${cat.color.split(" ")[2]}">${displaySubcategory}</span>` : ""}
           </div>
         </div>
         ${ev.time || ev.secondTime ? `<div class="text-[10px] text-slate-500 font-medium"><i class="fa-regular fa-clock mr-1"></i>${ev.time || ""}${ev.secondTime ? `<br><i class="fa-regular fa-clock mr-1"></i>${ev.secondTime}` : ""}</div>` : ""}

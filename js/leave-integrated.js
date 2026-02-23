@@ -1506,22 +1506,43 @@ async function loadHolidaysFromSupabase() {
       loadDefaultHolidays();
     }
     
-    // Also try to load offdays if siteSettings is not available
+    // Also try to load offdays/replacements if siteSettings is not available
     if (typeof siteSettings === 'undefined' || !siteSettings) {
-      const { data: offdayData, error: offdayError } = await supabaseClient
+      // Primary: split IDs in current schema
+      const { data: offdayRows, error: offdayError } = await supabaseClient
         .from('site_settings')
-        .select('settings')
-        .eq('id', 1)
-        .single();
-      
-      if (!offdayError && offdayData?.settings) {
-        const settings = offdayData.settings;
+        .select('id, settings')
+        .in('id', [10, 11, 12, 13]);
+
+      if (!offdayError && Array.isArray(offdayRows) && offdayRows.length > 0) {
+        const settingsById = {};
+        offdayRows.forEach((row) => {
+          settingsById[row.id] = row.settings || {};
+        });
+
         mainCalendarOffdays = {
-          manager: settings.managerOffdays || [],
-          am: settings.assistantManagerOffdays || [],
-          managerReplace: settings.managerReplacements || [],
-          amReplace: settings.assistantManagerReplacements || []
+          manager: settingsById[10]?.managerOffdays || [],
+          am: settingsById[11]?.assistantManagerOffdays || [],
+          managerReplace: settingsById[12]?.managerReplacements || [],
+          amReplace: settingsById[13]?.assistantManagerReplacements || []
         };
+      } else {
+        // Fallback: legacy combined settings row (older deployments)
+        const { data: legacyOffdayData, error: legacyOffdayError } = await supabaseClient
+          .from('site_settings')
+          .select('settings')
+          .eq('id', 1)
+          .single();
+
+        if (!legacyOffdayError && legacyOffdayData?.settings) {
+          const settings = legacyOffdayData.settings;
+          mainCalendarOffdays = {
+            manager: settings.managerOffdays || [],
+            am: settings.assistantManagerOffdays || [],
+            managerReplace: settings.managerReplacements || [],
+            amReplace: settings.assistantManagerReplacements || []
+          };
+        }
       }
     }
     
@@ -3250,10 +3271,12 @@ function renderViewingCalendar() {
     const isHoliday = publicHoliday || isSchoolHoliday;
     const isToday = date.getTime() === today.getTime();
     
-    // Check offdays based on staff role
-    const isOffday = viewingStaffUser.role === 'Manager' 
-      ? mainCalendarOffdays.manager.includes(dateStr)
-      : mainCalendarOffdays.am.includes(dateStr);
+    // Check offdays + admin-configured replacements
+    const isManagerOff = mainCalendarOffdays.manager.includes(dateStr);
+    const isAMOff = mainCalendarOffdays.am.includes(dateStr);
+    const isManagerReplace = mainCalendarOffdays.managerReplace.includes(dateStr);
+    const isAMReplace = mainCalendarOffdays.amReplace.includes(dateStr);
+    const isOffday = viewingStaffUser.role === 'Manager' ? isManagerOff : isAMOff;
     
     const cell = document.createElement('div');
     cell.className = `min-h-[40px] w-full rounded-lg flex flex-col items-center justify-center relative py-1 ${
@@ -3292,6 +3315,18 @@ function renderViewingCalendar() {
     if (isOffday) {
       const line = document.createElement('div');
       line.className = viewingStaffUser.role === 'Manager' ? 'offday-line-m' : 'offday-line-am';
+      cell.appendChild(line);
+    }
+
+    // Add admin-configured replacement lines from site settings
+    if (isManagerReplace) {
+      const line = document.createElement('div');
+      line.className = 'replacement-line-m';
+      cell.appendChild(line);
+    }
+    if (isAMReplace) {
+      const line = document.createElement('div');
+      line.className = 'replacement-line-am';
       cell.appendChild(line);
     }
     

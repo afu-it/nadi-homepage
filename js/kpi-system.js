@@ -5,6 +5,57 @@
 const KPI_TABLE = 'kpi_records';
 const KPI_SELECT_COLUMNS = 'id,site_id,kpi_category,kpi_sub,year_month,is_done,completed_at,updated_at';
 const KPI_INFO_SETTINGS_ID = 31;
+const WELLBEING_BUNDLE_CATEGORY = 'wellbeing';
+const WELLBEING_BUNDLE_MAIN_SUB = 'CARE';
+const WELLBEING_BUNDLE_SUBS = ['CARE', 'MenWell', 'FlourisHer'];
+
+function sanitizeKpiInfoHtml(html) {
+  const raw = typeof html === 'string' ? html : '';
+
+  if (typeof DOMPurify !== 'undefined') {
+    const sanitized = DOMPurify.sanitize(raw, {
+      ADD_TAGS: ['iframe', 'font'],
+      ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'style', 'color'],
+      FORBID_TAGS: ['script', 'style', 'form']
+    });
+
+    if (typeof document === 'undefined') {
+      return sanitized;
+    }
+
+    const temp = document.createElement('div');
+    temp.innerHTML = sanitized;
+
+    if (typeof linkifyPlainTextUrlsInElement === 'function') {
+      linkifyPlainTextUrlsInElement(temp);
+    }
+
+    temp.querySelectorAll('a').forEach((a) => {
+      const href = String(a.getAttribute('href') || '').trim();
+      const needsHttps = href && !/^(https?:\/\/|mailto:|tel:|#|\/)/i.test(href);
+      if (needsHttps) {
+        const nadiHrefMatch = href.match(/^((?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.nadi\.my)(\/[^\s<>"']*)?$/i);
+        if (nadiHrefMatch) {
+          const host = nadiHrefMatch[1];
+          const path = nadiHrefMatch[2] || '/';
+          const hostWithWww = /^www\./i.test(host) ? host : `www.${host}`;
+          a.setAttribute('href', `https://${hostWithWww}${path}`);
+        } else {
+          a.setAttribute('href', `https://${href}`);
+        }
+      }
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    });
+
+    return temp.innerHTML;
+  }
+
+  if (typeof sanitizeHTMLWithLinks === 'function') {
+    return sanitizeHTMLWithLinks(raw);
+  }
+  return raw;
+}
 
 // KPI Categories and Sub-KPIs
 const kpiCategories = {
@@ -155,10 +206,17 @@ class KpiStore {
   }
 
   // Check if a sub-KPI is done
-  isDone(siteId, category, sub, yearMonth) {
+  isSubRecordDone(siteId, category, sub, yearMonth) {
     const key = this.getKey(siteId, category, sub, yearMonth);
     const record = this.records.get(key);
-    return record && record.is_done;
+    return Boolean(record && record.is_done);
+  }
+
+  isDone(siteId, category, sub, yearMonth) {
+    if (category === WELLBEING_BUNDLE_CATEGORY && sub === WELLBEING_BUNDLE_MAIN_SUB) {
+      return WELLBEING_BUNDLE_SUBS.every((bundleSub) => this.isSubRecordDone(siteId, category, bundleSub, yearMonth));
+    }
+    return this.isSubRecordDone(siteId, category, sub, yearMonth);
   }
 
   // Toggle KPI done status
@@ -264,7 +322,16 @@ class KpiUI {
   updateDialogWidth(isWide) {
     const dialog = document.querySelector('#kpiOverlay .kpi-dialog');
     if (!dialog) return;
-    dialog.classList.toggle('kpi-dialog-wide', Boolean(isWide));
+    const wide = Boolean(isWide);
+    const isInfoPanel = this.manager.activePanel === 'info';
+    const isTrackingAllPanel = wide
+      && !isInfoPanel
+      && this.manager.isSupervisor
+      && this.manager.viewMode === 'all';
+
+    dialog.classList.toggle('kpi-dialog-wide', wide);
+    dialog.classList.toggle('kpi-dialog-info', wide && isInfoPanel);
+    dialog.classList.toggle('kpi-dialog-tracking-all', isTrackingAllPanel);
   }
 
   startMonthTransition(direction) {
@@ -314,6 +381,7 @@ class KpiUI {
     const body = document.querySelector('#kpiOverlay .kpi-dialog-body');
 
     const isInfo = this.manager.activePanel === 'info';
+    const canEditInfo = isInfo && this.manager.isSupervisor;
 
     if (title) {
       title.textContent = isInfo ? 'KPI Info' : 'KPI Tracking';
@@ -331,11 +399,13 @@ class KpiUI {
 
     if (body) {
       body.classList.toggle('kpi-info-mode', isInfo);
+      body.classList.toggle('kpi-staff-tracking-mode', !isInfo && !this.manager.isSupervisor);
+      body.classList.toggle('kpi-info-editing', isInfo && this.manager.isInfoEditMode);
     }
 
     if (saveBtn) {
-      saveBtn.classList.toggle('hidden', !isInfo);
-      if (isInfo) {
+      saveBtn.classList.toggle('hidden', !canEditInfo);
+      if (canEditInfo) {
         saveBtn.innerHTML = this.manager.isInfoEditMode
           ? '<i class="fa-solid fa-floppy-disk"></i><span>Save Info</span>'
           : '<i class="fa-solid fa-pen"></i><span>Edit Mode</span>';
@@ -348,52 +418,53 @@ class KpiUI {
     const container = document.getElementById('kpiCategories');
     if (!container) return;
 
-    const allSubKpis = this.getAllSubKpis();
+    const allSubKpis = this.getAllInfoSubKpis();
     const isEditable = this.manager.isInfoEditMode;
+
+    if (!isEditable) {
+      const partitionsHtml = Object.entries(kpiCategories).map(([category, info]) => {
+        const categorySubs = this.getInfoSubsForCategory(category, info);
+        const categoryCount = category === WELLBEING_BUNDLE_CATEGORY ? 1 : categorySubs.length;
+        const itemsHtml = categorySubs.map((sub) => {
+          const key = this.manager.getKpiInfoKey(category, sub);
+          const rawHtml = this.manager.kpiInfoByKey[key] || '';
+          const safeHtml = sanitizeKpiInfoHtml(rawHtml);
+          return `
+            <article class="kpi-info-partition-item" title="${sub}">
+              <div class="kpi-info-partition-item-title">${this.getShortSubLabel(sub)}</div>
+              <div class="kpi-info-partition-item-body">${safeHtml || '<span class="kpi-info-empty">No information yet.</span>'}</div>
+            </article>
+          `;
+        }).join('');
+
+        return `
+          <section class="kpi-info-partition kpi-info-partition-${category}">
+            <div class="kpi-info-partition-header">
+              <span class="kpi-info-partition-title">${info.label}</span>
+              <span class="kpi-info-partition-count">${categoryCount}</span>
+            </div>
+            <div class="kpi-info-partition-list">
+              ${itemsHtml}
+            </div>
+          </section>
+        `;
+      }).join('');
+
+      container.innerHTML = `<div class="kpi-info-partition-grid">${partitionsHtml}</div>`;
+      return;
+    }
 
     const cardsHtml = allSubKpis.map((item, index) => {
       const key = this.manager.getKpiInfoKey(item.category, item.sub);
       const rawHtml = this.manager.kpiInfoByKey[key] || '';
-      const safeHtml = typeof sanitizeHTMLWithLinks === 'function' ? sanitizeHTMLWithLinks(rawHtml) : rawHtml;
+      const safeHtml = sanitizeKpiInfoHtml(rawHtml);
       const editorId = `kpiInfoEditor-${index}`;
-
-      if (isEditable) {
-        return `
-          <section class="kpi-info-card">
-            <div class="kpi-info-header">
-              <div class="kpi-info-title-wrap">
-                <span class="kpi-info-index">${index + 1}</span>
-                <div>
-                  <div class="kpi-info-title">${this.getShortSubLabel(item.sub)}</div>
-                  <div class="kpi-info-subtitle">${item.sub}</div>
-                </div>
-              </div>
-              <span class="kpi-info-category kpi-info-category-${item.category}">${kpiCategories[item.category]?.label || item.category}</span>
-            </div>
-            <div class="kpi-info-toolbar" id="${editorId}-toolbar">
-              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'bold')"><i class="fa-solid fa-bold"></i></button>
-              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'italic')"><i class="fa-solid fa-italic"></i></button>
-              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'underline')"><i class="fa-solid fa-underline"></i></button>
-              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'insertUnorderedList')"><i class="fa-solid fa-list-ul"></i></button>
-              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'insertOrderedList')"><i class="fa-solid fa-list-ol"></i></button>
-              <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoLink('${editorId}')"><i class="fa-solid fa-link"></i></button>
-            </div>
-            <div
-              id="${editorId}"
-              class="kpi-info-editor"
-              data-kpi-key="${key}"
-              contenteditable="true"
-              spellcheck="true"
-            >${safeHtml}</div>
-          </section>
-        `;
-      }
 
       return `
         <section class="kpi-info-card">
           <div class="kpi-info-header">
             <div class="kpi-info-title-wrap">
-              <span class="kpi-info-index">${index + 1}</span>
+              <span class="kpi-info-index">${item.infoNumber}</span>
               <div>
                 <div class="kpi-info-title">${this.getShortSubLabel(item.sub)}</div>
                 <div class="kpi-info-subtitle">${item.sub}</div>
@@ -401,12 +472,60 @@ class KpiUI {
             </div>
             <span class="kpi-info-category kpi-info-category-${item.category}">${kpiCategories[item.category]?.label || item.category}</span>
           </div>
-          <div class="kpi-info-view">${safeHtml || '<span class="kpi-info-empty">No information yet.</span>'}</div>
+          <div class="kpi-info-toolbar" id="${editorId}-toolbar">
+            <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'bold')"><i class="fa-solid fa-bold"></i></button>
+            <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'italic')"><i class="fa-solid fa-italic"></i></button>
+            <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'underline')"><i class="fa-solid fa-underline"></i></button>
+            <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'insertUnorderedList')"><i class="fa-solid fa-list-ul"></i></button>
+            <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoFormat('${editorId}', 'insertOrderedList')"><i class="fa-solid fa-list-ol"></i></button>
+            <button type="button" class="kpi-info-tool" onclick="kpiManager.applyInfoLink('${editorId}')"><i class="fa-solid fa-link"></i></button>
+            <label class="kpi-info-color-tool" title="Text Color">
+              <i class="fa-solid fa-palette"></i>
+              <input
+                id="${editorId}-color-picker"
+                type="color"
+                class="kpi-info-color-input"
+                value="#1e293b"
+                onmousedown="kpiManager.captureInfoSelection('${editorId}')"
+                onchange="kpiManager.applyInfoColor('${editorId}', this.value)"
+              >
+            </label>
+            <input
+              id="${editorId}-color-hex"
+              type="text"
+              class="kpi-info-color-hex"
+              value="#1E293B"
+              maxlength="7"
+              spellcheck="false"
+              aria-label="Hex color"
+              onfocus="kpiManager.captureInfoSelection('${editorId}')"
+              onkeydown="if(event.key === 'Enter'){event.preventDefault();kpiManager.applyInfoHexColor('${editorId}');}"
+              onblur="kpiManager.applyInfoHexColor('${editorId}', true)"
+            >
+          </div>
+          <div
+            id="${editorId}"
+            class="kpi-info-editor"
+            data-kpi-key="${key}"
+            contenteditable="true"
+            spellcheck="true"
+            onmouseup="setTimeout(function(){ kpiManager.captureInfoSelection('${editorId}'); }, 0)"
+            onkeyup="kpiManager.captureInfoSelection('${editorId}')"
+            onfocus="kpiManager.captureInfoSelection('${editorId}')"
+          >${safeHtml}</div>
         </section>
       `;
     }).join('');
 
-    container.innerHTML = `<div class="kpi-info-grid">${cardsHtml}</div>`;
+    container.innerHTML = `
+      <section class="kpi-info-edit-panel">
+        <header class="kpi-info-edit-panel-header">
+          <h3 class="kpi-info-edit-panel-title">KPI Info Editor</h3>
+          <p class="kpi-info-edit-panel-note">Edit content here, then click Save Info.</p>
+        </header>
+        <div class="kpi-info-grid">${cardsHtml}</div>
+      </section>
+    `;
   }
 
   renderSiteControl() {
@@ -461,13 +580,19 @@ class KpiUI {
   async renderCategories() {
     const container = document.getElementById('kpiCategories');
     if (!container) return;
+    container.classList.toggle('kpi-supervisor-all-view', this.manager.viewMode === 'all');
 
     if (this.manager.viewMode === 'all') {
       container.innerHTML = this.renderAllSitesMatrix();
       return;
     }
 
-    container.innerHTML = this.renderSingleSiteMatrix();
+    if (this.manager.isSupervisor) {
+      container.innerHTML = this.renderSingleSiteMatrix();
+      return;
+    }
+
+    container.innerHTML = this.renderSingleSiteVertical();
   }
 
   getAllSubKpis() {
@@ -475,6 +600,36 @@ class KpiUI {
     for (const [category, info] of Object.entries(kpiCategories)) {
       for (const sub of info.subs) {
         allSubKpis.push({ category, sub });
+      }
+    }
+    return allSubKpis;
+  }
+
+  getInfoSubsForCategory(category, info) {
+    const baseSubs = Array.isArray(info?.subs) ? info.subs : [];
+    if (category === WELLBEING_BUNDLE_CATEGORY && baseSubs.includes(WELLBEING_BUNDLE_MAIN_SUB)) {
+      return WELLBEING_BUNDLE_SUBS;
+    }
+    return baseSubs;
+  }
+
+  getAllInfoSubKpis() {
+    const allSubKpis = [];
+    let infoNumber = 1;
+    for (const [category, info] of Object.entries(kpiCategories)) {
+      const categorySubs = this.getInfoSubsForCategory(category, info);
+
+      if (category === WELLBEING_BUNDLE_CATEGORY && categorySubs.length) {
+        for (const sub of categorySubs) {
+          allSubKpis.push({ category, sub, infoNumber });
+        }
+        infoNumber++;
+        continue;
+      }
+
+      for (const sub of categorySubs) {
+        allSubKpis.push({ category, sub, infoNumber });
+        infoNumber++;
       }
     }
     return allSubKpis;
@@ -494,14 +649,42 @@ class KpiUI {
     return shortLabels[sub] || sub;
   }
 
+  getSupervisorMatrixLayout() {
+    const matrixColumns = [];
+    const categoryGroups = [];
+    let labelNumber = 1;
+
+    for (const [category, info] of Object.entries(kpiCategories)) {
+      if (category === WELLBEING_BUNDLE_CATEGORY) {
+        for (const wellbeingSub of WELLBEING_BUNDLE_SUBS) {
+          matrixColumns.push({ category, sub: wellbeingSub, number: labelNumber });
+        }
+        categoryGroups.push({
+          key: category,
+          label: info.label,
+          count: WELLBEING_BUNDLE_SUBS.length
+        });
+        labelNumber++;
+        continue;
+      }
+
+      for (const sub of info.subs) {
+        matrixColumns.push({ category, sub, number: labelNumber });
+        labelNumber++;
+      }
+      categoryGroups.push({ key: category, label: info.label, count: info.subs.length });
+    }
+
+    return {
+      matrixColumns,
+      categoryGroups,
+      totalKpiCount: labelNumber - 1
+    };
+  }
+
   renderAllSitesMatrix() {
-    const allSubKpis = this.getAllSubKpis();
+    const { matrixColumns, categoryGroups, totalKpiCount } = this.getSupervisorMatrixLayout();
     const { availableSites, currentYearMonth } = this.manager;
-    const categoryGroups = Object.entries(kpiCategories).map(([key, info]) => ({
-      key,
-      label: info.label,
-      count: info.subs.length
-    }));
 
     if (!availableSites.length) {
       return `
@@ -522,25 +705,33 @@ class KpiUI {
               <th rowspan="2">Total</th>
             </tr>
             <tr>
-              ${allSubKpis.map((item, index) => `<th class="kpi-matrix-col-${item.category}" title="${item.sub}"><div class="kpi-matrix-head"><span class="kpi-matrix-head-num">${index + 1}</span><span class="kpi-matrix-head-text">${this.getShortSubLabel(item.sub)}</span></div></th>`).join('')}
+              ${matrixColumns.map((item) => `<th class="kpi-matrix-col-${item.category}" title="${item.sub}"><div class="kpi-matrix-head"><span class="kpi-matrix-head-num">${item.number}</span><span class="kpi-matrix-head-text">${this.getShortSubLabel(item.sub)}</span></div></th>`).join('')}
             </tr>
           </thead>
           <tbody>
     `;
 
     for (const site of availableSites) {
-      let doneCount = 0;
-      const rowCells = allSubKpis.map((item) => {
-        const done = this.store.isDone(site.site_id, item.category, item.sub, currentYearMonth);
-        if (done) doneCount++;
+      const rowCells = matrixColumns.map((item) => {
+        const done = item.category === WELLBEING_BUNDLE_CATEGORY
+          ? this.store.isSubRecordDone(site.site_id, item.category, item.sub, currentYearMonth)
+          : this.store.isDone(site.site_id, item.category, item.sub, currentYearMonth);
         return `<td class="kpi-matrix-col-${item.category}"><span class="kpi-matrix-dot ${done ? 'done' : ''}" title="${done ? 'Done' : 'Pending'}"></span></td>`;
       }).join('');
 
+      let doneCount = 0;
+      for (const category of Object.keys(kpiCategories)) {
+        const progress = this.store.getCategoryProgress(site.site_id, category, currentYearMonth);
+        doneCount += progress.done;
+      }
+      const totalStatusClass = doneCount === totalKpiCount ? 'kpi-total-complete' : 'kpi-total-incomplete';
+      const siteStatusClass = doneCount === totalKpiCount ? 'kpi-site-complete' : 'kpi-site-incomplete';
+
       html += `
         <tr>
-          <td class="kpi-matrix-site">${site.site_name}</td>
+          <td class="kpi-matrix-site ${siteStatusClass}">${site.site_name}</td>
           ${rowCells}
-          <td class="kpi-matrix-total">${doneCount}/13</td>
+          <td class="kpi-matrix-total ${totalStatusClass}">${doneCount}/${totalKpiCount}</td>
         </tr>
       `;
     }
@@ -565,17 +756,11 @@ class KpiUI {
       `;
     }
 
-    const allSubKpis = this.getAllSubKpis();
-    const categoryGroups = Object.entries(kpiCategories).map(([key, info]) => ({
-      key,
-      label: info.label,
-      count: info.subs.length
-    }));
-
-    let doneCount = 0;
-    const rowCells = allSubKpis.map((item) => {
-      const done = this.store.isDone(currentSiteId, item.category, item.sub, currentYearMonth);
-      if (done) doneCount++;
+    const { matrixColumns, categoryGroups, totalKpiCount } = this.getSupervisorMatrixLayout();
+    const rowCells = matrixColumns.map((item) => {
+      const done = item.category === WELLBEING_BUNDLE_CATEGORY
+        ? this.store.isSubRecordDone(currentSiteId, item.category, item.sub, currentYearMonth)
+        : this.store.isDone(currentSiteId, item.category, item.sub, currentYearMonth);
       return `
         <td class="kpi-matrix-col-${item.category}">
           <label title="${done ? 'Done' : 'Pending'}">
@@ -590,6 +775,14 @@ class KpiUI {
       `;
     }).join('');
 
+    let doneCount = 0;
+    for (const category of Object.keys(kpiCategories)) {
+      const progress = this.store.getCategoryProgress(currentSiteId, category, currentYearMonth);
+      doneCount += progress.done;
+    }
+    const totalStatusClass = doneCount === totalKpiCount ? 'kpi-total-complete' : 'kpi-total-incomplete';
+    const siteStatusClass = doneCount === totalKpiCount ? 'kpi-site-complete' : 'kpi-site-incomplete';
+
     return `
       <div class="kpi-matrix-wrap">
         <table class="kpi-matrix-table">
@@ -600,17 +793,136 @@ class KpiUI {
               <th rowspan="2">Total</th>
             </tr>
             <tr>
-              ${allSubKpis.map((item, index) => `<th class="kpi-matrix-col-${item.category}" title="${item.sub}"><div class="kpi-matrix-head"><span class="kpi-matrix-head-num">${index + 1}</span><span class="kpi-matrix-head-text">${this.getShortSubLabel(item.sub)}</span></div></th>`).join('')}
+              ${matrixColumns.map((item) => `<th class="kpi-matrix-col-${item.category}" title="${item.sub}"><div class="kpi-matrix-head"><span class="kpi-matrix-head-num">${item.number}</span><span class="kpi-matrix-head-text">${this.getShortSubLabel(item.sub)}</span></div></th>`).join('')}
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td class="kpi-matrix-site">${currentSiteName || '-'}</td>
+              <td class="kpi-matrix-site ${siteStatusClass}">${currentSiteName || '-'}</td>
               ${rowCells}
-              <td class="kpi-matrix-total">${doneCount}/13</td>
+              <td class="kpi-matrix-total ${totalStatusClass}">${doneCount}/${totalKpiCount}</td>
             </tr>
           </tbody>
         </table>
+      </div>
+    `;
+  }
+
+  renderSingleSiteVertical() {
+    const { currentSiteId, currentSiteName, currentYearMonth } = this.manager;
+    if (!currentSiteId) {
+      return `
+        <div class="kpi-empty">
+          <i class="fa-solid fa-folder-open"></i>
+          <p>No site selected</p>
+        </div>
+      `;
+    }
+
+    const totalKpis = this.getAllSubKpis().length;
+    let totalDone = 0;
+
+    const staffCategoryOrder = ['entrepreneur', 'awareness', 'learning', 'wellbeing', 'gov'];
+    const orderedCategories = staffCategoryOrder
+      .map((key) => [key, kpiCategories[key]])
+      .filter(([, info]) => Boolean(info));
+
+    const categoriesHtml = orderedCategories.map(([category, info]) => {
+      const progress = this.store.getCategoryProgress(currentSiteId, category, currentYearMonth);
+      totalDone += progress.done;
+      const isOpen = this.openCategories.has(category);
+
+      const renderSubItem = (sub) => {
+        if (category === WELLBEING_BUNDLE_CATEGORY && sub === WELLBEING_BUNDLE_MAIN_SUB) {
+          const wellbeingChecksHtml = WELLBEING_BUNDLE_SUBS.map((bundleSub) => {
+            const checked = this.store.isSubRecordDone(currentSiteId, category, bundleSub, currentYearMonth);
+            return `
+              <label class="kpi-item kpi-item-wellbeing-sub" title="${bundleSub} (${checked ? 'Done' : 'Pending'})">
+                <input
+                  type="checkbox"
+                  class="kpi-checkbox kpi-checkbox-${category}"
+                  ${checked ? 'checked' : ''}
+                  onchange="kpiManager.toggleKpiItem('${category}', '${bundleSub}', this.checked)"
+                >
+                <div class="kpi-item-label">${bundleSub}</div>
+              </label>
+            `;
+          }).join('');
+
+          return `<div class="kpi-wellbeing-bundle">${wellbeingChecksHtml}</div>`;
+        }
+
+        const done = this.store.isDone(currentSiteId, category, sub, currentYearMonth);
+        const shortLabel = this.getShortSubLabel(sub);
+        return `
+          <label class="kpi-item" title="${sub} (${done ? 'Done' : 'Pending'})">
+            <input
+              type="checkbox"
+              class="kpi-checkbox kpi-checkbox-${category}"
+              ${done ? 'checked' : ''}
+              onchange="kpiManager.toggleKpiItem('${category}', '${sub.replace(/'/g, "\\'")}', this.checked)"
+            >
+            <div class="kpi-item-label">${shortLabel}</div>
+          </label>
+        `;
+      };
+
+      let subItemsHtml = '';
+      if (category === 'learning') {
+        const firstColumn = info.subs.slice(0, 4).map((sub) => renderSubItem(sub)).join('');
+        const secondColumn = info.subs.slice(4).map((sub) => renderSubItem(sub)).join('');
+        subItemsHtml = `
+          <div class="kpi-learning-split">
+            <div class="kpi-learning-column">${firstColumn}</div>
+            <div class="kpi-learning-column">${secondColumn}</div>
+          </div>
+        `;
+      } else {
+        subItemsHtml = info.subs.map((sub) => renderSubItem(sub)).join('');
+      }
+
+      return `
+        <section class="kpi-category kpi-category-card kpi-category-card-${category} ${isOpen ? 'open' : ''}">
+          <button
+            type="button"
+            class="kpi-category-header"
+            onclick="kpiManager.toggleCategory('${category}')"
+            aria-expanded="${isOpen ? 'true' : 'false'}"
+          >
+            <span class="kpi-category-left">
+              <span class="kpi-category-color kpi-color-${category}"></span>
+              <span class="kpi-category-title">${info.label}</span>
+            </span>
+            <span class="kpi-category-right">
+              <span class="kpi-category-progress ${progress.done === progress.total ? 'complete' : ''}">
+                ${progress.done}/${progress.total}
+              </span>
+              <i class="fa-solid fa-chevron-down kpi-category-chevron" aria-hidden="true"></i>
+            </span>
+          </button>
+          <div class="kpi-category-body" ${isOpen ? '' : 'style="display: none;"'}>
+            ${subItemsHtml}
+          </div>
+        </section>
+      `;
+    }).join('');
+    const totalStatusClass = totalDone === totalKpis ? 'kpi-total-complete' : 'kpi-total-incomplete';
+
+    return `
+      <div class="kpi-staff-compact">
+        <section class="kpi-staff-summary">
+          <div>
+            <div class="kpi-staff-summary-label">Site</div>
+            <div class="kpi-staff-summary-value">${currentSiteName || '-'}</div>
+          </div>
+          <div class="kpi-staff-total-wrap">
+            <div class="kpi-staff-summary-label">Total</div>
+            <div class="kpi-staff-total-value ${totalStatusClass}">${totalDone}/${totalKpis}</div>
+          </div>
+        </section>
+        <div class="kpi-staff-categories">
+          ${categoriesHtml}
+        </div>
       </div>
     `;
   }
@@ -655,11 +967,17 @@ class KpiManager {
     this.isInfoEditMode = false;
     this.kpiInfoByKey = {};
     this.isKpiInfoLoaded = false;
+    this.infoSelections = new Map();
   }
 
   // Get year-month string (e.g., "2026-01")
   getYearMonthString() {
     return `${this.currentYear}-${String(this.currentMonth).padStart(2, '0')}`;
+  }
+
+  shouldUseWideDialog() {
+    if (this.activePanel === 'info') return true;
+    return this.isSupervisor;
   }
 
   // Initialize with logged-in user
@@ -674,6 +992,8 @@ class KpiManager {
     }
 
     this.viewMode = 'single';
+    this.activePanel = 'tracking';
+    this.isInfoEditMode = false;
     if (user && user.site_id) {
       this.currentSiteId = user.site_id;
       this.currentSiteName = user.site_name || '-';
@@ -728,7 +1048,7 @@ class KpiManager {
     this.ui.renderMonthDisplay();
     this.ui.renderSiteControl();
     this.ui.renderTabState();
-    this.ui.updateDialogWidth(true);
+    this.ui.updateDialogWidth(this.shouldUseWideDialog());
     await this.renderActivePanel();
     this.updateBadge();
   }
@@ -754,7 +1074,7 @@ class KpiManager {
     if (!overlay) return;
 
     overlay.classList.add('open');
-    this.ui.updateDialogWidth(true);
+    this.ui.updateDialogWidth(this.shouldUseWideDialog());
     overlay.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   }
@@ -890,27 +1210,136 @@ class KpiManager {
     this.activePanel = panel === 'info' ? 'info' : 'tracking';
     if (this.activePanel !== 'info') {
       this.isInfoEditMode = false;
+      this.infoSelections.clear();
     }
+    this.ui.updateDialogWidth(this.shouldUseWideDialog());
     this.ui.renderTabState();
     await this.renderActivePanel();
+  }
+
+  normalizeInfoColor(color) {
+    const value = typeof color === 'string' ? color.trim() : '';
+    if (!value) return '';
+
+    const withHash = value.startsWith('#') ? value : `#${value}`;
+    const match = withHash.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+    if (!match) return '';
+
+    let hex = match[1];
+    if (hex.length === 3) {
+      hex = hex.split('').map((ch) => ch + ch).join('');
+    }
+
+    return `#${hex.toUpperCase()}`;
+  }
+
+  getInfoColorPickerValue(editorId) {
+    const picker = document.getElementById(`${editorId}-color-picker`);
+    const pickerColor = this.normalizeInfoColor(picker?.value || '');
+    return pickerColor || '#1E293B';
+  }
+
+  syncInfoColorInputs(editorId, color) {
+    const normalized = this.normalizeInfoColor(color);
+    if (!normalized) return;
+
+    const picker = document.getElementById(`${editorId}-color-picker`);
+    const hexInput = document.getElementById(`${editorId}-color-hex`);
+    if (picker) picker.value = normalized.toLowerCase();
+    if (hexInput) hexInput.value = normalized;
+  }
+
+  captureInfoSelection(editorId) {
+    const editor = document.getElementById(editorId);
+    if (!editor || this.activePanel !== 'info' || !this.isInfoEditMode || typeof window.getSelection !== 'function') {
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount < 1) return;
+
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    if (!editor.contains(container) && container !== editor) return;
+
+    this.infoSelections.set(editorId, range.cloneRange());
+  }
+
+  restoreInfoSelection(editorId) {
+    const editor = document.getElementById(editorId);
+    if (!editor || typeof window.getSelection !== 'function') return false;
+
+    const selection = window.getSelection();
+    if (!selection) return false;
+
+    const savedRange = this.infoSelections.get(editorId);
+    if (savedRange) {
+      const container = savedRange.commonAncestorContainer;
+      if (editor.contains(container) || container === editor) {
+        selection.removeAllRanges();
+        selection.addRange(savedRange);
+        return true;
+      }
+    }
+
+    const fallbackRange = document.createRange();
+    fallbackRange.selectNodeContents(editor);
+    fallbackRange.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(fallbackRange);
+    return true;
   }
 
   applyInfoFormat(editorId, command) {
     const editor = document.getElementById(editorId);
     if (!editor || this.activePanel !== 'info' || !this.isInfoEditMode) return;
     editor.focus();
+    this.restoreInfoSelection(editorId);
     document.execCommand(command, false, null);
+    this.captureInfoSelection(editorId);
   }
 
   applyInfoLink(editorId) {
     const editor = document.getElementById(editorId);
     if (!editor || this.activePanel !== 'info' || !this.isInfoEditMode) return;
+    editor.focus();
+    this.restoreInfoSelection(editorId);
     const value = window.prompt('Enter URL (https://...)');
     if (!value) return;
     const url = value.trim();
     if (!url) return;
     editor.focus();
+    this.restoreInfoSelection(editorId);
     document.execCommand('createLink', false, url);
+    this.captureInfoSelection(editorId);
+  }
+
+  applyInfoColor(editorId, color) {
+    const editor = document.getElementById(editorId);
+    if (!editor || this.activePanel !== 'info' || !this.isInfoEditMode) return;
+    const selectedColor = this.normalizeInfoColor(color);
+    if (!selectedColor) return;
+    editor.focus();
+    this.restoreInfoSelection(editorId);
+    document.execCommand('foreColor', false, selectedColor);
+    this.syncInfoColorInputs(editorId, selectedColor);
+    this.captureInfoSelection(editorId);
+  }
+
+  applyInfoHexColor(editorId, silent = false) {
+    const input = document.getElementById(`${editorId}-color-hex`);
+    if (!input || this.activePanel !== 'info' || !this.isInfoEditMode) return;
+
+    const normalized = this.normalizeInfoColor(input.value);
+    if (!normalized) {
+      input.value = this.getInfoColorPickerValue(editorId);
+      if (!silent && typeof showToast === 'function') {
+        showToast('Use a valid hex color like #2563EB', 'error');
+      }
+      return;
+    }
+
+    this.applyInfoColor(editorId, normalized);
   }
 
   toggleInfoCardEdit(editorId, buttonElement) {
@@ -940,7 +1369,7 @@ class KpiManager {
   }
 
   async saveInfoContent() {
-    if (this.activePanel !== 'info') return;
+    if (this.activePanel !== 'info' || !this.isSupervisor) return;
 
     if (!this.isInfoEditMode) {
       this.isInfoEditMode = true;
@@ -956,7 +1385,7 @@ class KpiManager {
       const key = editor.getAttribute('data-kpi-key');
       if (!key) continue;
       const raw = editor.innerHTML || '';
-      const safe = typeof sanitizeHTMLWithLinks === 'function' ? sanitizeHTMLWithLinks(raw) : raw;
+      const safe = sanitizeKpiInfoHtml(raw);
       const plain = safe.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
       if (plain) {
         nextInfoByKey[key] = safe;
