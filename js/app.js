@@ -6655,9 +6655,8 @@ function refreshNadi4uHeaderMenuState() {
   const logoutBtn = document.getElementById('nadi4uHeaderLogoutBtn');
 
   if (stateEl) {
-    const userLabel = settings.userEmail || settings.email || 'NADI4U user';
     if (isConnected) {
-      stateEl.textContent = `Connected as ${userLabel}`;
+      stateEl.textContent = 'Connected to NES';
       stateEl.className = 'text-[10px] text-green-700 mt-1';
     } else if (template) {
       const roleLabel = template.role === NADI4U_HEADER_ROLE_ASSISTANT ? 'Assistant Manager' : 'Manager';
