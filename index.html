@@ -370,9 +370,27 @@
                 >
                   <i class="fa-solid fa-chevron-left text-[10px]"></i>
                 </button>
-                <div class="flex flex-col leading-tight">
+                <div class="flex flex-col leading-tight gap-1">
                   <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
                   <span id="programsListModeLabel" class="text-[10px] font-semibold text-slate-500">Recent Events</span>
+                  <div id="programListTypeTabs" class="flex items-center gap-1.5">
+                    <button
+                      id="programListDayBtn"
+                      onclick="setNadi4uListType('day')"
+                      class="px-2 py-1 rounded border text-[9px] font-bold transition-colors"
+                      type="button"
+                    >
+                      Today Events
+                    </button>
+                    <button
+                      id="programListMultiBtn"
+                      onclick="setNadi4uListType('multi')"
+                      class="px-2 py-1 rounded border text-[9px] font-bold transition-colors"
+                      type="button"
+                    >
+                      Multiple Day Events
+                    </button>
+                  </div>
                 </div>
                 <button
                   id="programListNextBtn"
@@ -400,6 +418,14 @@
                   <i class="fa-solid fa-arrow-down-a-z text-[10px]"></i>
                 </button>
                 <button
+                  id="programListSearchBtn"
+                  onclick="toggleNadi4uSearch()"
+                  class="hidden w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-cyan-600 hover:border-cyan-300 shadow-sm"
+                  title="Search Smart Services NADI4U"
+                >
+                  <i class="fa-solid fa-magnifying-glass text-[10px]"></i>
+                </button>
+                <button
                   onclick="openModalWithSelectedDate()"
                   class="text-[10px] font-bold text-white bg-slate-900 hover:bg-slate-700 px-3 py-1.5 rounded shadow flex items-center gap-1"
                 >
@@ -420,6 +446,39 @@
                 <option value="category">Category</option>
                 <option value="startTime" selected>Start Time</option>
               </select>
+            </div>
+
+            <div id="nadi4uSearchSection" class="hidden filter-hidden bg-white p-2 rounded-lg border border-cyan-200 mb-3 shadow-sm">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[9px] font-bold text-cyan-700 uppercase">Smart Services Search</span>
+                <button
+                  id="clearNadi4uSearchBtn"
+                  onclick="clearNadi4uSearch()"
+                  class="hidden text-[9px] text-red-500 hover:underline"
+                >
+                  Reset
+                </button>
+              </div>
+              <div class="flex gap-2 items-center">
+                <label for="nadi4uSearchInput" class="sr-only">Search Smart Services NADI4U</label>
+                <input
+                  type="text"
+                  id="nadi4uSearchInput"
+                  name="nadi4uSearchInput"
+                  autocomplete="off"
+                  placeholder="Search title, location, keyword..."
+                  oninput="queueNadi4uSearch(this.value)"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();applyNadi4uSearch();}"
+                  class="w-full px-2 py-1.5 bg-cyan-50 border border-cyan-200 rounded text-[10px] outline-none focus:border-cyan-400 text-slate-700"
+                />
+                <button
+                  type="button"
+                  onclick="applyNadi4uSearch()"
+                  class="px-2.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-[9px] font-bold rounded transition-colors"
+                >
+                  Search
+                </button>
+              </div>
             </div>
 
             <div

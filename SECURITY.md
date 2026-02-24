@@ -2,20 +2,31 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+This project is maintained on the main branch and latest deployment state.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| Current main | Yes |
+| Older snapshots | No |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Please report security issues privately to the project maintainer instead of opening a public issue.
+Include:
+- Affected feature/path
+- Reproduction steps
+- Impact assessment
+- Suggested mitigation (if any)
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Acknowledgement target: within 3 business days.
+
+## Security Notes for This Project
+
+- Supabase `events` queries must use projected columns and month-range filtering.
+- Do not commit private Supabase keys.
+- Rich text rendering must stay sanitized (DOMPurify).
+- Auto-login for NADI4U is currently enabled for operations convenience.
+  - Treat that account as low-privilege.
+  - Rotate credentials regularly.
+  - Avoid granting write/admin capabilities to that account.
+- Keep Total Programs aggregation independent from list-type UI toggles to avoid misleading operational reporting.

@@ -269,8 +269,52 @@ const NADI4U_API = {
     const monthStart = new Date(year, month, 1).toISOString();
     const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
 
-    const eventsUrl = `${this.baseUrl}/nd_event?select=id,program_name,description,location_event,start_datetime,end_datetime,site_id,category_id,status_id,nd_event_category:category_id(id,name)&status_id=neq.1&start_datetime=lte.${encodeURIComponent(monthEnd)}&end_datetime=gte.${encodeURIComponent(monthStart)}&order=start_datetime.asc`;
-    const eventsRaw = await this.fetchJson(eventsUrl);
+    const primarySelectColumns = [
+      'id',
+      'program_name',
+      'description',
+      'location_event',
+      'start_datetime',
+      'end_datetime',
+      'site_id',
+      'category_id',
+      'subcategory_id',
+      'program_id',
+      'status_id',
+      'program_mode',
+      'nd_program_mode:program_mode(id,name)',
+      'nd_event_category:category_id(id,name)',
+      'nd_event_subcategory:subcategory_id(id,name)',
+      'nd_event_program:program_id(id,name)'
+    ].join(',');
+    const fallbackSelectColumns = [
+      'id',
+      'program_name',
+      'description',
+      'location_event',
+      'start_datetime',
+      'end_datetime',
+      'site_id',
+      'category_id',
+      'status_id',
+      'program_mode',
+      'nd_program_mode:program_mode(id,name)',
+      'nd_event_category:category_id(id,name)'
+    ].join(',');
+    const baseEventsQuery = `&status_id=neq.1&start_datetime=lte.${encodeURIComponent(monthEnd)}&end_datetime=gte.${encodeURIComponent(monthStart)}&order=start_datetime.asc`;
+
+    let eventsRaw = [];
+    try {
+      const eventsUrl = `${this.baseUrl}/nd_event?select=${primarySelectColumns}${baseEventsQuery}`;
+      eventsRaw = await this.fetchJson(eventsUrl);
+    } catch (error) {
+      if (window.DEBUG_MODE) {
+        console.warn('NADI4U primary month query failed. Falling back to minimal metadata query.', error);
+      }
+      const fallbackUrl = `${this.baseUrl}/nd_event?select=${fallbackSelectColumns}${baseEventsQuery}`;
+      eventsRaw = await this.fetchJson(fallbackUrl);
+    }
+
     const events = Array.isArray(eventsRaw)
       ? eventsRaw.filter((eventItem) => this.getTakwimCategoryGroup(eventItem?.nd_event_category?.name) === 'nadi4u')
       : [];

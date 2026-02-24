@@ -925,12 +925,26 @@ let programsListTimer = null;
 let eventListLookup = new Map();
 const PROGRAM_LIST_VIEW_RECENT = "recent";
 const PROGRAM_LIST_VIEW_NADI4U = "nadi4u";
-let currentProgramListView = PROGRAM_LIST_VIEW_RECENT;
+let currentProgramListView = PROGRAM_LIST_VIEW_NADI4U;
+let nadi4uSearchQuery = "";
+let nadi4uSubcategoryFilter = "";
+let nadi4uSubcategoryFilterSource = "";
+let nadi4uSearchDebounceTimer = null;
+const NADI4U_SEARCH_DEBOUNCE_MS = 350;
 
 const NADI4U_SCHEDULE_STORAGE_KEY = "nadi4uSchedule";
 const NADI4U_EVENT_META_STORAGE_KEY = "nadi4uEventMeta";
 const NADI4U_HEADER_ROLE_MANAGER = "manager";
 const NADI4U_HEADER_ROLE_ASSISTANT = "assistantmanager";
+const NADI4U_AUTO_LOGIN_EMAIL = "assistantmanager@kebun-bunga.nadi.my";
+const NADI4U_AUTO_LOGIN_PASSWORD = "1234qwefASDF#";
+const NADI4U_AUTO_LOGIN_SITE_NAME = "NADI Kebun Bunga";
+const NADI4U_AUTO_LOGIN_SITE_SLUG = "kebun-bunga";
+const NADI4U_AUTO_LOGIN_SOURCE = "autoKebunBunga";
+let nadi4uAutoLoginSyncPromise = null;
+const NADI4U_LIST_TYPE_DAY = "day";
+const NADI4U_LIST_TYPE_MULTI = "multi";
+let nadi4uListType = NADI4U_LIST_TYPE_DAY;
 const EXTERNAL_NADI4U_CATEGORY = {
   label: "Smart Services",
   sub: "NADI4U",
@@ -972,6 +986,105 @@ const NADI4U_KPI_TITLE_RULES = [
     category: "awareness",
     subcategory: "KIS",
     patterns: [/\bkempen\s+internet\s+selamat\b/i, /\(\s*kis\s*\)/i, /\bkis\b/i]
+  }
+];
+const NADI4U_KPI_PILLAR_RULES = [
+  {
+    category: "entrepreneur",
+    patterns: [/\bentrepreneur(ship)?\b/i, /\bkeusahawan(an)?\b/i, /\busahawan\b/i]
+  },
+  {
+    category: "learning",
+    patterns: [/\blifelong\s+learning\b/i, /\bpembelajaran\b/i, /\bsepanjang\s+hayat\b/i]
+  },
+  {
+    category: "wellbeing",
+    patterns: [/\bwell\s*being\b/i, /\bwellbeing\b/i, /\bkesejahteraan\b/i]
+  },
+  {
+    category: "awareness",
+    patterns: [/\bawareness\b/i, /\bkesedaran\b/i]
+  },
+  {
+    category: "gov",
+    patterns: [/\bgov(?:ernment)?\s*initiative\b/i, /\binisiatif\b/i, /\bkerajaan\b/i, /\bmydigital\s*id\b/i]
+  }
+];
+const NADI4U_KPI_SUBCATEGORY_RULES = [
+  {
+    category: "entrepreneur",
+    subcategory: "Preneur",
+    patterns: [/\bpreneur\b/i]
+  },
+  {
+    category: "entrepreneur",
+    subcategory: "EmpowHer",
+    patterns: [/\bempow\s*her\b/i, /\bempowerher\b/i]
+  },
+  {
+    category: "entrepreneur",
+    subcategory: "Kidventure",
+    patterns: [/\bkids?\s*venture\b/i, /\bkidventure\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "eKelas Keusahawanan",
+    patterns: [/\bekelas\b.*\bkeusahawanan\b/i, /\bkeusahawanan\b.*\bekelas\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "DiLea",
+    patterns: [/\bdilea\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "Cybersecurity",
+    patterns: [/\bcyber\s*security\b/i, /\bcybersecurity\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "eKelas Maxis",
+    patterns: [/\bekelas\b.*\bmaxis\b/i, /\bmaxis\b.*\bekelas\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "Tinytechies",
+    patterns: [/\btiny\s*techies\b/i, /\btinytechies\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "eSport",
+    patterns: [/\be\s*sport\b/i, /\besport\b/i]
+  },
+  {
+    category: "learning",
+    subcategory: "Mahir",
+    patterns: [/\bmahir\b/i]
+  },
+  {
+    category: "wellbeing",
+    subcategory: "CARE",
+    patterns: [/\bcare\b/i, /\bnadi[\s-]*care\b/i, /\bsihat\s+ramadan\b/i]
+  },
+  {
+    category: "wellbeing",
+    subcategory: "MenWell",
+    patterns: [/\bmen\s*well\b/i, /\bmenwell\b/i]
+  },
+  {
+    category: "wellbeing",
+    subcategory: "FlourisHer",
+    patterns: [/\bflouris\s*her\b/i, /\bflourisher\b/i]
+  },
+  {
+    category: "awareness",
+    subcategory: "KIS",
+    patterns: [/\bkempen\s+internet\s+selamat\b/i, /\(\s*kis\s*\)/i, /\bkis\b/i]
+  },
+  {
+    category: "gov",
+    subcategory: "MyDigital ID",
+    patterns: [/\bmy\s*digital\s*id\b/i, /\bmydigital\s*id\b/i]
   }
 ];
 
@@ -1063,6 +1176,58 @@ function formatNadi4uTimeRange(startTime, endTime) {
   return "";
 }
 
+function extractUrlsFromProgramInfo(infoContent) {
+  const value = typeof infoContent === "string" ? infoContent : "";
+  if (!value) return [];
+
+  const urls = [];
+  const pushUrl = (url) => {
+    const href = String(url || "").trim();
+    if (!href || !/^https?:\/\//i.test(href)) return;
+    urls.push(href);
+  };
+
+  if (typeof document !== "undefined") {
+    const temp = document.createElement("div");
+    temp.innerHTML = typeof sanitizeHTMLWithLinks === "function" ? sanitizeHTMLWithLinks(value) : value;
+    temp.querySelectorAll("a").forEach((anchor) => pushUrl(anchor.getAttribute("href")));
+  } else {
+    const urlRegex = /https?:\/\/[^\s<>"']+/gi;
+    const matches = value.match(urlRegex) || [];
+    matches.forEach((url) => pushUrl(url));
+  }
+
+  const seen = new Set();
+  return urls.filter((url) => {
+    const key = url.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mergeRegistrationLinksWithProgramInfo(registrationLinks, infoContent) {
+  const baseLinks = Array.isArray(registrationLinks)
+    ? registrationLinks.filter((link) => link && typeof link.url === "string" && link.url.trim())
+    : [];
+
+  const result = baseLinks.map((link) => ({
+    platform: link.platform || "NES",
+    url: String(link.url || "").trim()
+  }));
+
+  const existingUrlSet = new Set(result.map((link) => link.url.toLowerCase()));
+  const infoUrls = extractUrlsFromProgramInfo(infoContent);
+  infoUrls.forEach((url) => {
+    const key = url.toLowerCase();
+    if (existingUrlSet.has(key)) return;
+    result.push({ platform: "Website", url });
+    existingUrlSet.add(key);
+  });
+
+  return result;
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -1114,6 +1279,35 @@ function getTakwimSmartServiceGroup(categoryName) {
   return "other";
 }
 
+function getPrimaryNadi4uSiteId(siteValue) {
+  if (Array.isArray(siteValue)) {
+    const first = siteValue.find((item) => item !== null && item !== undefined && String(item).trim() !== "");
+    return first !== undefined ? String(first).trim() : "";
+  }
+
+  if (siteValue !== null && siteValue !== undefined) {
+    const value = String(siteValue).trim();
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function buildNadi4uRegistrationUrl(eventId, siteValue) {
+  const eventIdValue = String(eventId || "").trim();
+  if (!eventIdValue) return "";
+
+  const siteIdValue = getPrimaryNadi4uSiteId(siteValue);
+  const base = `https://app.nadi.my/event-registration/${encodeURIComponent(eventIdValue)}`;
+  return siteIdValue ? `${base}?site_id=${encodeURIComponent(siteIdValue)}` : base;
+}
+
+function isExcludedNadi4uProgramTitle(title) {
+  const source = String(title || "").trim();
+  if (!source) return false;
+  return /\btest\s*program\b/i.test(source);
+}
+
 function getNadi4uKpiLabelFromTitle(title) {
   const source = String(title || "").trim();
   if (!source) return null;
@@ -1128,6 +1322,84 @@ function getNadi4uKpiLabelFromTitle(title) {
   }
 
   return null;
+}
+
+function getNadi4uKpiCategoryFromPillar(pillarName) {
+  const source = String(pillarName || "").trim();
+  if (!source) return "";
+
+  for (const rule of NADI4U_KPI_PILLAR_RULES) {
+    if (Array.isArray(rule.patterns) && rule.patterns.some((pattern) => pattern.test(source))) {
+      return rule.category;
+    }
+  }
+
+  return "";
+}
+
+function getNadi4uKpiSubcategoryFromText(sourceText, categoryKey = "") {
+  const source = String(sourceText || "").trim();
+  if (!source) return "";
+
+  for (const rule of NADI4U_KPI_SUBCATEGORY_RULES) {
+    if (categoryKey && rule.category !== categoryKey) continue;
+    if (Array.isArray(rule.patterns) && rule.patterns.some((pattern) => pattern.test(source))) {
+      return rule.subcategory;
+    }
+  }
+
+  return "";
+}
+
+function resolveNadi4uKpiLabel(eventMeta, title) {
+  const pillarLabel = typeof eventMeta?.nd_event_subcategory?.name === "string"
+    ? eventMeta.nd_event_subcategory.name.trim()
+    : "";
+  const programLabel = typeof eventMeta?.nd_event_program?.name === "string"
+    ? eventMeta.nd_event_program.name.trim()
+    : "";
+  let categoryKey = getNadi4uKpiCategoryFromPillar(pillarLabel) || getNadi4uKpiCategoryFromPillar(programLabel);
+  let subcategoryLabel = getNadi4uKpiSubcategoryFromText(programLabel, categoryKey);
+
+  if (!subcategoryLabel) {
+    subcategoryLabel = getNadi4uKpiSubcategoryFromText(title, categoryKey);
+  }
+
+  const titleMapped = getNadi4uKpiLabelFromTitle(title);
+  if (!categoryKey && titleMapped?.category) {
+    categoryKey = titleMapped.category;
+  }
+  if (!subcategoryLabel && titleMapped?.subcategory && (!categoryKey || titleMapped.category === categoryKey)) {
+    subcategoryLabel = titleMapped.subcategory;
+  }
+
+  if (!subcategoryLabel && programLabel) {
+    subcategoryLabel = programLabel;
+  }
+
+  return {
+    category: categoryKey || "",
+    subcategory: subcategoryLabel || "",
+    pillar: pillarLabel,
+    programme: programLabel
+  };
+}
+
+function getNadi4uProgramTypeLabel(eventMeta) {
+  const modeName = typeof eventMeta?.nd_program_mode?.name === "string"
+    ? eventMeta.nd_program_mode.name.trim()
+    : "";
+  if (modeName) return modeName;
+
+  const rawMode = eventMeta?.program_mode;
+  if (typeof rawMode === "string") {
+    const value = rawMode.trim();
+    if (value && !/^\d+$/.test(value)) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 function buildNadi4uDisplayEvents() {
@@ -1173,6 +1445,9 @@ function buildNadi4uDisplayEvents() {
     const programName = typeof eventMeta?.program_name === "string" && eventMeta.program_name.trim()
       ? eventMeta.program_name.trim()
       : `Smart Services NADI4U (${fallbackId})`;
+    if (isExcludedNadi4uProgramTitle(programName)) {
+      return;
+    }
 
     const startDateFromMeta = toIsoDateFromDateTime(eventMeta?.start_datetime);
     const endDateFromMeta = toIsoDateFromDateTime(eventMeta?.end_datetime);
@@ -1205,7 +1480,12 @@ function buildNadi4uDisplayEvents() {
 
     const compositeId = `${sourceEventId}-${startDate}-${endDate}`;
     const externalId = `nadi4u-${sanitizeEventCardIdPart(compositeId)}`;
-    const mappedKpiLabel = getNadi4uKpiLabelFromTitle(programName);
+    const mappedKpiLabel = resolveNadi4uKpiLabel(eventMeta, programName);
+    const programType = getNadi4uProgramTypeLabel(eventMeta);
+    const nadi4uRegistrationUrl = buildNadi4uRegistrationUrl(sourceEventId, eventMeta?.site_id);
+    const registrationLinks = nadi4uRegistrationUrl
+      ? [{ platform: "NES", url: nadi4uRegistrationUrl }]
+      : [];
 
     result.push({
       id: externalId,
@@ -1219,10 +1499,13 @@ function buildNadi4uDisplayEvents() {
       subcategory: "Smart Services",
       kpiCategory: mappedKpiLabel?.category || "",
       kpiSubcategory: mappedKpiLabel?.subcategory || "",
+      kpiPillar: mappedKpiLabel?.pillar || "",
+      kpiProgramme: mappedKpiLabel?.programme || "",
+      programType: programType,
       time: timeRange,
       secondTime: "",
       links: [],
-      registrationLinks: [],
+      registrationLinks: registrationLinks,
       submitLinks: [],
       info: infoParts.join("<br>"),
       images: [],
@@ -1257,6 +1540,94 @@ function getProgramListTargetDate() {
   return getAutoSelectedDateForMonth(currentYear, currentMonth);
 }
 
+function normalizeNadi4uSearchQuery(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeNadi4uSubcategoryFilterValue(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseNadi4uSubcategoryFilterSource(rawSource) {
+  const source = String(rawSource || "").trim().toLowerCase();
+  if (!source) {
+    return { scope: "", weekIndex: null };
+  }
+
+  const weeklyMatch = source.match(/^weekly:(\d+)$/);
+  if (weeklyMatch) {
+    const parsedWeekIndex = Number.parseInt(weeklyMatch[1], 10);
+    return {
+      scope: "weekly",
+      weekIndex: Number.isInteger(parsedWeekIndex) && parsedWeekIndex > 0 ? parsedWeekIndex : null
+    };
+  }
+
+  if (source === "weekly") {
+    return { scope: "weekly", weekIndex: null };
+  }
+
+  return {
+    scope: source,
+    weekIndex: null
+  };
+}
+
+function isMonthlyNadi4uSubcategoryFilterActive() {
+  const normalizedSubcategoryFilter = normalizeNadi4uSubcategoryFilterValue(nadi4uSubcategoryFilter);
+  if (!normalizedSubcategoryFilter) return false;
+  const filterSourceContext = parseNadi4uSubcategoryFilterSource(nadi4uSubcategoryFilterSource);
+  return filterSourceContext.scope === "monthly";
+}
+
+function getEventSubcategoryForNadi4uFilter(eventItem) {
+  const mappedSubcategory = eventItem?.isExternal
+    && eventItem?.source === "nadi4u"
+    && typeof eventItem?.kpiSubcategory === "string"
+    ? eventItem.kpiSubcategory
+    : "";
+  const fallbackSubcategory = typeof eventItem?.subcategory === "string"
+    ? eventItem.subcategory
+    : "";
+
+  return String(mappedSubcategory || fallbackSubcategory || "").trim();
+}
+
+function eventMatchesNadi4uSubcategoryFilter(eventItem, normalizedFilter) {
+  if (!normalizedFilter) return true;
+  const eventSubcategory = getEventSubcategoryForNadi4uFilter(eventItem);
+  return normalizeNadi4uSubcategoryFilterValue(eventSubcategory) === normalizedFilter;
+}
+
+function getProgramListDaySectionLabel() {
+  return "Today Events";
+}
+
+function eventMatchesNadi4uSearch(eventItem, normalizedQuery) {
+  if (!normalizedQuery) return true;
+  const haystack = [
+    eventItem?.title,
+    eventItem?.programType,
+    eventItem?.kpiPillar,
+    eventItem?.kpiProgramme,
+    eventItem?.externalDescription,
+    eventItem?.info,
+    eventItem?.kpiSubcategory,
+    eventItem?.kpiCategory,
+    eventItem?.subcategory,
+    eventItem?.time
+  ].join(" ").toLowerCase();
+
+  const tokens = normalizedQuery.split(" ").filter(Boolean);
+  return tokens.every((token) => haystack.includes(token));
+}
+
 function isNadi4uEventOnDate(eventItem, targetDate) {
   if (!eventItem || !targetDate) return false;
 
@@ -1266,6 +1637,88 @@ function isNadi4uEventOnDate(eventItem, targetDate) {
   }
 
   return targetDate >= eventItem.start && targetDate <= eventItem.end;
+}
+
+function getIsoWeekRange(targetIsoDate) {
+  const normalizedDate = parseDateInputToIso(targetIsoDate);
+  if (!normalizedDate) {
+    return { startDate: "", endDate: "" };
+  }
+
+  const [year, month, day] = normalizedDate.split("-").map((value) => Number.parseInt(value, 10));
+  const target = new Date(year, month - 1, day);
+  if (Number.isNaN(target.getTime())) {
+    return { startDate: "", endDate: "" };
+  }
+
+  const mondayOffset = (target.getDay() + 6) % 7; // Monday=0, Sunday=6
+  const startDate = new Date(target);
+  startDate.setDate(target.getDate() - mondayOffset);
+
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 6);
+
+  return {
+    startDate: toLocalISOString(startDate),
+    endDate: toLocalISOString(endDate)
+  };
+}
+
+function getIsoMonthRange(year, month) {
+  const normalizedYear = Number.parseInt(year, 10);
+  const normalizedMonth = Number.parseInt(month, 10);
+  if (!Number.isInteger(normalizedYear) || !Number.isInteger(normalizedMonth)) {
+    return { startDate: "", endDate: "" };
+  }
+
+  const startDate = `${normalizedYear}-${String(normalizedMonth + 1).padStart(2, "0")}-01`;
+  const monthLastDay = new Date(normalizedYear, normalizedMonth + 1, 0).getDate();
+  const endDate = `${normalizedYear}-${String(normalizedMonth + 1).padStart(2, "0")}-${String(monthLastDay).padStart(2, "0")}`;
+  return { startDate, endDate };
+}
+
+function getMonthWeekRanges(year, month) {
+  const normalizedYear = Number.parseInt(year, 10);
+  const normalizedMonth = Number.parseInt(month, 10);
+  if (!Number.isInteger(normalizedYear) || !Number.isInteger(normalizedMonth)) {
+    return [];
+  }
+
+  const monthLastDay = new Date(normalizedYear, normalizedMonth + 1, 0).getDate();
+  const ranges = [];
+  let weekIndex = 1;
+
+  for (let startDay = 1; startDay <= monthLastDay; startDay += 7) {
+    const endDay = Math.min(startDay + 6, monthLastDay);
+    ranges.push({
+      weekIndex,
+      startDay,
+      endDay,
+      startDate: `${normalizedYear}-${String(normalizedMonth + 1).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`,
+      endDate: `${normalizedYear}-${String(normalizedMonth + 1).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`
+    });
+    weekIndex += 1;
+  }
+
+  return ranges;
+}
+
+function isNadi4uEventInDateRange(eventItem, startDate, endDate) {
+  if (!eventItem || !startDate || !endDate) return false;
+
+  const schedules = Array.isArray(eventItem?.schedules) ? eventItem.schedules : [];
+  if (schedules.length > 0) {
+    return schedules.some((row) => {
+      const scheduleDate = parseDateInputToIso(row?.schedule_date);
+      return Boolean(scheduleDate && scheduleDate >= startDate && scheduleDate <= endDate);
+    });
+  }
+
+  const eventStart = parseDateInputToIso(eventItem?.start);
+  const eventEnd = parseDateInputToIso(eventItem?.end || eventItem?.start);
+  if (!eventStart || !eventEnd) return false;
+
+  return eventStart <= endDate && eventEnd >= startDate;
 }
 
 function normalizeDuplicateEventTitle(title) {
@@ -1335,20 +1788,125 @@ function dedupeNadi4uEventsByTitle(eventList) {
   return deduped;
 }
 
-function getFilteredNadi4uEventList(sourceEvents) {
+function getNadi4uScopedFilterResult(sourceEvents) {
   const nadi4uEvents = getNadi4uEventListSource(sourceEvents);
+  const normalizedSearch = normalizeNadi4uSearchQuery(nadi4uSearchQuery);
+  const normalizedSubcategoryFilter = normalizeNadi4uSubcategoryFilterValue(nadi4uSubcategoryFilter);
+  const filterSourceContext = parseNadi4uSubcategoryFilterSource(nadi4uSubcategoryFilterSource);
   const targetDate = getProgramListTargetDate();
-  const filteredByDate = nadi4uEvents.filter((eventItem) => isNadi4uEventOnDate(eventItem, targetDate));
-  const deduped = dedupeNadi4uEventsByTitle(filteredByDate);
+  const monthRange = getIsoMonthRange(currentYear, currentMonth);
 
-  return [...deduped].sort((left, right) => {
+  let scopedEvents = nadi4uEvents;
+  if (normalizedSubcategoryFilter.length > 0) {
+    switch (filterSourceContext.scope) {
+      case "day":
+        scopedEvents = nadi4uEvents.filter((eventItem) =>
+          isNadi4uEventOnDate(eventItem, targetDate) && !isNadi4uMultiDayEvent(eventItem)
+        );
+        break;
+      case "multi":
+        scopedEvents = nadi4uEvents.filter((eventItem) =>
+          isNadi4uEventOnDate(eventItem, targetDate) && isNadi4uMultiDayEvent(eventItem)
+        );
+        break;
+      case "weekly": {
+        const weekRanges = getMonthWeekRanges(currentYear, currentMonth);
+        const targetWeek = Number.isInteger(filterSourceContext.weekIndex)
+          ? weekRanges.find((bucket) => bucket.weekIndex === filterSourceContext.weekIndex) || null
+          : null;
+        if (targetWeek) {
+          scopedEvents = nadi4uEvents.filter((eventItem) =>
+            isNadi4uEventInDateRange(eventItem, targetWeek.startDate, targetWeek.endDate)
+          );
+        } else {
+          const selectedWeekRange = getIsoWeekRange(targetDate);
+          scopedEvents = nadi4uEvents.filter((eventItem) =>
+            isNadi4uEventInDateRange(eventItem, selectedWeekRange.startDate, selectedWeekRange.endDate)
+          );
+        }
+        break;
+      }
+      case "monthly":
+        scopedEvents = nadi4uEvents.filter((eventItem) =>
+          isNadi4uEventInDateRange(eventItem, monthRange.startDate, monthRange.endDate)
+        );
+        break;
+      default:
+        scopedEvents = nadi4uEvents.filter((eventItem) => isNadi4uEventOnDate(eventItem, targetDate));
+        break;
+    }
+  } else if (normalizedSearch.length > 0) {
+    scopedEvents = nadi4uEvents;
+  } else {
+    scopedEvents = nadi4uEvents.filter((eventItem) => isNadi4uEventOnDate(eventItem, targetDate));
+  }
+
+  const deduped = dedupeNadi4uEventsByTitle(scopedEvents);
+  const filteredBySubcategory = normalizedSubcategoryFilter
+    ? deduped.filter((eventItem) => eventMatchesNadi4uSubcategoryFilter(eventItem, normalizedSubcategoryFilter))
+    : deduped;
+  const filteredBySearch = normalizedSearch
+    ? filteredBySubcategory.filter((eventItem) => eventMatchesNadi4uSearch(eventItem, normalizedSearch))
+    : filteredBySubcategory;
+
+  return {
+    filteredBySearch,
+    normalizedSearch,
+    normalizedSubcategoryFilter,
+    filterSourceContext,
+    targetDate
+  };
+}
+
+function getFilteredNadi4uEventList(sourceEvents) {
+  const {
+    filteredBySearch,
+    normalizedSearch,
+    normalizedSubcategoryFilter,
+    filterSourceContext,
+    targetDate
+  } = getNadi4uScopedFilterResult(sourceEvents);
+
+  const applyDayMultiSplit = normalizedSubcategoryFilter.length === 0
+    && !isMonthlyNadi4uSubcategoryFilterActive();
+  const filteredByListType = applyDayMultiSplit
+    ? filteredBySearch.filter((eventItem) => {
+      const isMultiDay = isNadi4uMultiDayEvent(eventItem);
+      return nadi4uListType === NADI4U_LIST_TYPE_MULTI ? isMultiDay : !isMultiDay;
+    })
+    : filteredBySearch;
+  const shouldUseRangeBasedSorting = normalizedSearch.length > 0
+    || filterSourceContext.scope === "weekly"
+    || filterSourceContext.scope === "monthly";
+
+  return [...filteredByListType].sort((left, right) => {
     const leftRange = getNadi4uScheduleDateRange(left);
     const rightRange = getNadi4uScheduleDateRange(right);
     const leftIsMultiDay = leftRange.startDate && leftRange.endDate && leftRange.startDate !== leftRange.endDate;
     const rightIsMultiDay = rightRange.startDate && rightRange.endDate && rightRange.startDate !== rightRange.endDate;
+    const shouldPrioritizeMultiDayGrouping = normalizedSubcategoryFilter.length === 0
+      || filterSourceContext.scope === "weekly";
 
-    if (leftIsMultiDay !== rightIsMultiDay) {
+    if (shouldPrioritizeMultiDayGrouping && leftIsMultiDay !== rightIsMultiDay) {
       return leftIsMultiDay ? 1 : -1;
+    }
+
+    if (shouldUseRangeBasedSorting) {
+      const leftStart = String(left?.start || "");
+      const rightStart = String(right?.start || "");
+      if (leftStart && rightStart && leftStart !== rightStart) {
+        return leftStart.localeCompare(rightStart);
+      }
+
+      const leftTimeFromStart = leftStart ? getNadi4uScheduleTimeForDate(left, leftStart) : "";
+      const rightTimeFromStart = rightStart ? getNadi4uScheduleTimeForDate(right, rightStart) : "";
+      if (leftTimeFromStart && rightTimeFromStart && leftTimeFromStart !== rightTimeFromStart) {
+        return leftTimeFromStart.localeCompare(rightTimeFromStart);
+      }
+      if (leftTimeFromStart && !rightTimeFromStart) return -1;
+      if (!leftTimeFromStart && rightTimeFromStart) return 1;
+
+      return String(left?.title || "").localeCompare(String(right?.title || ""));
     }
 
     const leftTime = getNadi4uScheduleTimeForDate(left, targetDate);
@@ -1364,7 +1922,53 @@ function getFilteredNadi4uEventList(sourceEvents) {
 }
 
 function getProgramListPageStateKey() {
-  return currentProgramListView === PROGRAM_LIST_VIEW_NADI4U ? "nadi4uListCurrentPage" : "eventListCurrentPage";
+  return "nadi4uListCurrentPage";
+}
+
+function syncNadi4uProgramListHeightToTotals() {
+  const eventListContainer = document.getElementById("eventListContainer");
+  if (!eventListContainer) return;
+
+  const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
+  const isDesktopLayout = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+
+  if (!isNadi4uView) {
+    eventListContainer.style.height = "";
+    eventListContainer.style.maxHeight = "500px";
+    return;
+  }
+
+  if (!isDesktopLayout) {
+    eventListContainer.style.height = "";
+    eventListContainer.style.maxHeight = "620px";
+    return;
+  }
+
+  const categoryCounts = document.getElementById("categoryCounts");
+  const totalProgramsCard = categoryCounts?.firstElementChild || null;
+  const targetBottomEl = totalProgramsCard || categoryCounts;
+
+  if (!targetBottomEl) {
+    eventListContainer.style.height = "";
+    eventListContainer.style.maxHeight = "620px";
+    return;
+  }
+
+  const listTop = eventListContainer.getBoundingClientRect().top;
+  const totalsBottom = targetBottomEl.getBoundingClientRect().bottom;
+  const calculatedHeight = Math.floor(totalsBottom - listTop);
+  const minHeight = 360;
+  const maxHeight = 1000;
+
+  if (!Number.isFinite(calculatedHeight) || calculatedHeight < minHeight) {
+    eventListContainer.style.height = "";
+    eventListContainer.style.maxHeight = "620px";
+    return;
+  }
+
+  const clampedHeight = Math.max(minHeight, Math.min(calculatedHeight, maxHeight));
+  eventListContainer.style.height = `${clampedHeight}px`;
+  eventListContainer.style.maxHeight = `${clampedHeight}px`;
 }
 
 function updateProgramListHeader() {
@@ -1372,28 +1976,42 @@ function updateProgramListHeader() {
   const modeEl = document.getElementById("programsListModeLabel");
   const prevBtn = document.getElementById("programListPrevBtn");
   const nextBtn = document.getElementById("programListNextBtn");
+  const typeTabs = document.getElementById("programListTypeTabs");
+  const dayBtn = document.getElementById("programListDayBtn");
+  const multiBtn = document.getElementById("programListMultiBtn");
   const sortBtn = document.getElementById("programListSortBtn");
   const sortSection = document.getElementById("sortSection");
-  const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
+  const searchBtn = document.getElementById("programListSearchBtn");
+  const searchSection = document.getElementById("nadi4uSearchSection");
+  const searchInput = document.getElementById("nadi4uSearchInput");
+  const clearSearchBtn = document.getElementById("clearNadi4uSearchBtn");
+  const isNadi4uView = true;
+  const hideTypeTabs = isMonthlyNadi4uSubcategoryFilterActive();
 
   if (titleEl) {
-    titleEl.textContent = "Programs List";
+    titleEl.textContent = "Smart Services NADI4U";
   }
 
   if (modeEl) {
-    modeEl.textContent = isNadi4uView ? "Smart Services NADI4U" : "Recent Events";
+    modeEl.textContent = "Program List";
   }
 
   if (prevBtn) {
-    prevBtn.disabled = !isNadi4uView;
+    prevBtn.classList.add("hidden");
+    prevBtn.disabled = true;
   }
 
   if (nextBtn) {
-    nextBtn.disabled = isNadi4uView;
+    nextBtn.classList.add("hidden");
+    nextBtn.disabled = true;
   }
 
   if (sortBtn) {
-    sortBtn.classList.toggle("hidden", isNadi4uView);
+    sortBtn.classList.add("hidden");
+  }
+
+  if (searchBtn) {
+    searchBtn.classList.toggle("hidden", !isNadi4uView);
   }
 
   if (sortSection && isNadi4uView) {
@@ -1401,21 +2019,44 @@ function updateProgramListHeader() {
     sortSection.classList.add("filter-hidden");
   }
 
-  if (sortSection && !isNadi4uView) {
-    sortSection.classList.remove("hidden");
+  if (searchSection) {
+    searchSection.classList.remove("hidden");
   }
+
+  if (searchInput) {
+    searchInput.value = nadi4uSearchQuery;
+  }
+
+  if (clearSearchBtn) {
+    clearSearchBtn.classList.toggle("hidden", !nadi4uSearchQuery && !nadi4uSubcategoryFilter);
+  }
+
+  if (typeTabs) {
+    typeTabs.classList.toggle("hidden", hideTypeTabs);
+  }
+
+  const applyTypeButtonStyles = (button, isActive) => {
+    if (!button) return;
+    button.classList.remove("bg-cyan-600", "text-white", "border-cyan-600", "bg-white", "text-cyan-700", "border-cyan-200", "hover:bg-cyan-50");
+    if (isActive) {
+      button.classList.add("bg-cyan-600", "text-white", "border-cyan-600");
+    } else {
+      button.classList.add("bg-white", "text-cyan-700", "border-cyan-200", "hover:bg-cyan-50");
+    }
+  };
+
+  applyTypeButtonStyles(dayBtn, nadi4uListType === NADI4U_LIST_TYPE_DAY);
+  applyTypeButtonStyles(multiBtn, nadi4uListType === NADI4U_LIST_TYPE_MULTI);
+
+  requestAnimationFrame(syncNadi4uProgramListHeightToTotals);
 }
 
 function getProgramListDisplayEvents(sourceEvents) {
-  const recentSource = getRecentEventListSource(sourceEvents);
-  if (currentProgramListView === PROGRAM_LIST_VIEW_NADI4U) {
-    return getFilteredNadi4uEventList(sourceEvents);
-  }
-  return getFilteredEventList(recentSource);
+  return getFilteredNadi4uEventList(sourceEvents);
 }
 
 function setProgramListView(view) {
-  const normalizedView = view === PROGRAM_LIST_VIEW_NADI4U ? PROGRAM_LIST_VIEW_NADI4U : PROGRAM_LIST_VIEW_RECENT;
+  const normalizedView = PROGRAM_LIST_VIEW_NADI4U;
   if (currentProgramListView === normalizedView) {
     updateProgramListHeader();
     return;
@@ -1427,15 +2068,113 @@ function setProgramListView(view) {
 }
 
 function changeProgramListView(direction) {
-  if (Number(direction) > 0) {
-    setProgramListView(PROGRAM_LIST_VIEW_NADI4U);
-    return;
-  }
-
-  setProgramListView(PROGRAM_LIST_VIEW_RECENT);
+  setProgramListView(PROGRAM_LIST_VIEW_NADI4U);
 }
 
 window.changeProgramListView = changeProgramListView;
+
+function setNadi4uListType(nextType) {
+  const normalizedType = nextType === NADI4U_LIST_TYPE_MULTI
+    ? NADI4U_LIST_TYPE_MULTI
+    : NADI4U_LIST_TYPE_DAY;
+  if (nadi4uListType === normalizedType) {
+    updateProgramListHeader();
+    return;
+  }
+
+  nadi4uListType = normalizedType;
+  window.nadi4uListCurrentPage = 0;
+  renderEventList();
+}
+
+window.setNadi4uListType = setNadi4uListType;
+
+function toggleNadi4uSearch() {
+  if (currentProgramListView !== PROGRAM_LIST_VIEW_NADI4U) return;
+  const section = document.getElementById("nadi4uSearchSection");
+  const input = document.getElementById("nadi4uSearchInput");
+  if (!section) return;
+  section.classList.toggle("filter-hidden");
+  if (!section.classList.contains("filter-hidden") && input) {
+    input.focus();
+    input.select();
+  }
+  requestAnimationFrame(syncNadi4uProgramListHeightToTotals);
+}
+
+function queueNadi4uSearch(value) {
+  if (currentProgramListView !== PROGRAM_LIST_VIEW_NADI4U) return;
+  if (nadi4uSearchDebounceTimer) {
+    clearTimeout(nadi4uSearchDebounceTimer);
+  }
+
+  const nextValue = typeof value === "string" ? value : "";
+  nadi4uSearchDebounceTimer = setTimeout(() => {
+    nadi4uSearchQuery = nextValue.trim();
+    window.nadi4uListCurrentPage = 0;
+    renderEventList();
+  }, NADI4U_SEARCH_DEBOUNCE_MS);
+}
+
+function applyNadi4uSearch() {
+  if (nadi4uSearchDebounceTimer) {
+    clearTimeout(nadi4uSearchDebounceTimer);
+    nadi4uSearchDebounceTimer = null;
+  }
+  const input = document.getElementById("nadi4uSearchInput");
+  nadi4uSearchQuery = input ? input.value.trim() : "";
+  window.nadi4uListCurrentPage = 0;
+  renderEventList();
+}
+
+function handleNadi4uSubcategoryFilterClick(subcategoryLabel, sourceSection = "monthly") {
+  const label = String(subcategoryLabel || "").trim();
+  if (!label) return;
+  const source = String(sourceSection || "monthly").trim().toLowerCase() || "monthly";
+
+  const normalizedLabel = normalizeNadi4uSubcategoryFilterValue(label);
+  const normalizedCurrent = normalizeNadi4uSubcategoryFilterValue(nadi4uSubcategoryFilter);
+  const normalizedCurrentSource = String(nadi4uSubcategoryFilterSource || "").trim().toLowerCase();
+  const isSameSelection = normalizedLabel === normalizedCurrent && source === normalizedCurrentSource;
+
+  nadi4uSubcategoryFilter = isSameSelection ? "" : label;
+  nadi4uSubcategoryFilterSource = isSameSelection ? "" : source;
+  if (!isSameSelection) {
+    if (source === "day") {
+      nadi4uListType = NADI4U_LIST_TYPE_DAY;
+    } else if (source === "multi") {
+      nadi4uListType = NADI4U_LIST_TYPE_MULTI;
+    }
+  }
+  nadi4uSearchQuery = "";
+  if (nadi4uSearchDebounceTimer) {
+    clearTimeout(nadi4uSearchDebounceTimer);
+    nadi4uSearchDebounceTimer = null;
+  }
+  const searchInput = document.getElementById("nadi4uSearchInput");
+  if (searchInput) searchInput.value = "";
+
+  window.nadi4uListCurrentPage = 0;
+  if (currentProgramListView !== PROGRAM_LIST_VIEW_NADI4U) {
+    setProgramListView(PROGRAM_LIST_VIEW_NADI4U);
+    return;
+  }
+  renderEventList();
+}
+
+function clearNadi4uSearch() {
+  if (nadi4uSearchDebounceTimer) {
+    clearTimeout(nadi4uSearchDebounceTimer);
+    nadi4uSearchDebounceTimer = null;
+  }
+  const input = document.getElementById("nadi4uSearchInput");
+  if (input) input.value = "";
+  nadi4uSearchQuery = "";
+  nadi4uSubcategoryFilter = "";
+  nadi4uSubcategoryFilterSource = "";
+  window.nadi4uListCurrentPage = 0;
+  renderEventList();
+}
 
 function getFilteredEventList(sourceEvents) {
   if (!Array.isArray(sourceEvents)) return [];
@@ -1966,6 +2705,7 @@ async function loadLatestAnnouncementMeta() {
       }
     });
   }
+  window.addEventListener("resize", () => requestAnimationFrame(syncNadi4uProgramListHeightToTotals), { passive: true });
   updateProgramListHeader();
 })();
 
@@ -3273,86 +4013,185 @@ async function clearRangeFilter(shouldRender = true) {
   }
 }
 
-function renderCategoryCounts(displayEvents = []) {
+function renderCategoryCounts(displayEvents = [], sourceEvents = null) {
   const container = document.getElementById("categoryCounts");
   if (!container) return;
 
-  if (!window.selectedFilterDate) {
-    container.innerHTML = "";
-    return;
-  }
-
-  const createEmptyCounts = () => ({
-    entrepreneur: 0,
-    learning: 0,
-    wellbeing: 0,
-    awareness: 0,
-    gov: 0,
-  });
+  const createEmptyCounts = () => ({});
   const todayCounts = createEmptyCounts();
   const multiDayCounts = createEmptyCounts();
+  const monthlyCounts = createEmptyCounts();
+  let weeklyBuckets = [];
   const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
+  const sourceEventList = Array.isArray(sourceEvents) && sourceEvents.length > 0
+    ? sourceEvents
+    : getCombinedEventListSource();
+  const normalizedSubcategoryFilter = isNadi4uView
+    ? normalizeNadi4uSubcategoryFilterValue(nadi4uSubcategoryFilter)
+    : "";
+  const normalizedSubcategoryFilterSource = String(nadi4uSubcategoryFilterSource || "").trim().toLowerCase();
   const isMultiDayInCurrentView = isNadi4uView ? isNadi4uMultiDayEvent : isRecentMultiDayEvent;
-  const countTotal = (counts) => Object.values(counts).reduce((a, b) => a + b, 0);
-  const addCount = (counts, categoryKey) => {
-    if (counts.hasOwnProperty(categoryKey)) {
-      counts[categoryKey]++;
-    }
-  };
-
-  displayEvents.forEach((eventItem) => {
+  const normalizeCountKey = (value) => String(value || "").trim().toLowerCase();
+  const countTotal = (counts) => Object.values(counts || {}).reduce((sum, item) => {
+    return sum + (Number(item?.count) || 0);
+  }, 0);
+  const getEventCountCategory = (eventItem) => {
     const mappedNadi4uCategory = eventItem?.isExternal
       && eventItem?.source === "nadi4u"
       && typeof eventItem?.kpiCategory === "string"
       ? eventItem.kpiCategory
       : "";
-    const countCategory = mappedNadi4uCategory || eventItem?.category;
+    return mappedNadi4uCategory || eventItem?.category || "";
+  };
+  const getEventCountSubcategory = (eventItem, categoryKey) => {
+    const mappedNadi4uSubcategory = eventItem?.isExternal
+      && eventItem?.source === "nadi4u"
+      && typeof eventItem?.kpiSubcategory === "string"
+      ? eventItem.kpiSubcategory
+      : "";
+    const defaultSubcategory = typeof eventItem?.subcategory === "string"
+      ? eventItem.subcategory
+      : "";
+    const subcategoryLabel = String(mappedNadi4uSubcategory || defaultSubcategory || "").trim();
+    if (subcategoryLabel) return subcategoryLabel;
+
+    if (categoryKey && categories?.[categoryKey]?.sub) {
+      return String(categories[categoryKey].sub || "").trim();
+    }
+
+    return "Uncategorized";
+  };
+  const addCount = (counts, subcategoryLabel, categoryKey) => {
+    const label = String(subcategoryLabel || "").trim();
+    if (!label) return;
+
+    const key = normalizeCountKey(label);
+    if (!key) return;
+
+    if (!counts[key]) {
+      counts[key] = {
+        label,
+        count: 0,
+        category: categoryKey || ""
+      };
+    }
+
+    counts[key].count += 1;
+    if (!counts[key].category && categoryKey) {
+      counts[key].category = categoryKey;
+    }
+  };
+
+  let dayMultiCountSourceEvents = Array.isArray(displayEvents) ? displayEvents : [];
+  if (isNadi4uView) {
+    const scopedFilterResult = getNadi4uScopedFilterResult(sourceEventList);
+    dayMultiCountSourceEvents = Array.isArray(scopedFilterResult.filteredBySearch)
+      ? scopedFilterResult.filteredBySearch
+      : [];
+  }
+
+  dayMultiCountSourceEvents.forEach((eventItem) => {
+    const countCategory = getEventCountCategory(eventItem);
+    const countSubcategory = getEventCountSubcategory(eventItem, countCategory);
     const targetCounts = isMultiDayInCurrentView(eventItem) ? multiDayCounts : todayCounts;
-    addCount(targetCounts, countCategory);
+    addCount(targetCounts, countSubcategory, countCategory);
   });
 
   const todayTotal = countTotal(todayCounts);
   const multiDayTotal = countTotal(multiDayCounts);
-  const total = todayTotal + multiDayTotal;
+  let monthlyTotal = 0;
 
-  if (total === 0) {
-    container.innerHTML =
-      '<div class="bg-white rounded-lg border border-slate-200 p-3 shadow-sm"><div class="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">Total Programs</div><div class="text-xs text-slate-400 italic text-center py-2">No programs found.</div></div>';
-    return;
+  if (isNadi4uView) {
+    const normalizedSearch = normalizeNadi4uSearchQuery(nadi4uSearchQuery);
+    let nadi4uAggregateEvents = dedupeNadi4uEventsByTitle(getNadi4uEventListSource(sourceEventList));
+
+    if (normalizedSubcategoryFilter) {
+      nadi4uAggregateEvents = nadi4uAggregateEvents.filter((eventItem) =>
+        eventMatchesNadi4uSubcategoryFilter(eventItem, normalizedSubcategoryFilter)
+      );
+    }
+
+    if (normalizedSearch) {
+      nadi4uAggregateEvents = nadi4uAggregateEvents.filter((eventItem) =>
+        eventMatchesNadi4uSearch(eventItem, normalizedSearch)
+      );
+    }
+
+    const monthRange = getIsoMonthRange(currentYear, currentMonth);
+    weeklyBuckets = getMonthWeekRanges(currentYear, currentMonth).map((range) => ({
+      ...range,
+      counts: createEmptyCounts(),
+      total: 0
+    }));
+
+    nadi4uAggregateEvents.forEach((eventItem) => {
+      const countCategory = getEventCountCategory(eventItem);
+      const countSubcategory = getEventCountSubcategory(eventItem, countCategory);
+      if (!countSubcategory) return;
+
+      weeklyBuckets.forEach((bucket) => {
+        if (isNadi4uEventInDateRange(eventItem, bucket.startDate, bucket.endDate)) {
+          addCount(bucket.counts, countSubcategory, countCategory);
+        }
+      });
+
+      if (isNadi4uEventInDateRange(eventItem, monthRange.startDate, monthRange.endDate)) {
+        addCount(monthlyCounts, countSubcategory, countCategory);
+      }
+    });
+
+    weeklyBuckets = weeklyBuckets.map((bucket) => ({
+      ...bucket,
+      total: countTotal(bucket.counts)
+    }));
+    monthlyTotal = countTotal(monthlyCounts);
   }
 
-  const renderCountBadges = (counts) => {
-    let badgesHtml = "";
-    if (counts.entrepreneur > 0) {
-      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-yellow-100 border border-yellow-200 rounded-md">
-        <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
-        <span class="text-[8px] font-bold text-yellow-700">USAHAWAN: ${counts.entrepreneur}</span>
+  const renderCountBadges = (counts, options = {}) => {
+    const clickable = options?.clickable === true;
+    const clickSource = String(options?.clickSource || "monthly").trim().toLowerCase() || "monthly";
+    const categoryOrder = ["entrepreneur", "learning", "wellbeing", "awareness", "gov"];
+    const getCategoryRank = (categoryKey) => {
+      const index = categoryOrder.indexOf(String(categoryKey || "").trim().toLowerCase());
+      return index >= 0 ? index : categoryOrder.length;
+    };
+
+    const items = Object.values(counts || {})
+      .filter((item) => item && (Number(item.count) || 0) > 0)
+      .sort((left, right) => {
+        const rankDiff = getCategoryRank(left.category) - getCategoryRank(right.category);
+        if (rankDiff !== 0) return rankDiff;
+
+        const labelDiff = String(left.label || "").localeCompare(String(right.label || ""));
+        if (labelDiff !== 0) return labelDiff;
+
+        return (Number(right.count) || 0) - (Number(left.count) || 0);
+      });
+
+    const badgesHtml = items.map((item) => {
+      const categoryMeta = categories?.[item.category] || EXTERNAL_NADI4U_CATEGORY;
+      const colorTokens = String(categoryMeta?.color || "").split(" ").filter(Boolean);
+      const bgClass = colorTokens[0] || "bg-slate-100";
+      const textClass = colorTokens[1] || "text-slate-700";
+      const borderClass = colorTokens[2] || "border-slate-200";
+      const dotClass = categoryMeta?.dot || "bg-slate-400";
+      const normalizedItemLabel = normalizeNadi4uSubcategoryFilterValue(item.label);
+      const isClickable = clickable && isNadi4uView && normalizedItemLabel.length > 0;
+      const isActive = isClickable
+        && normalizedItemLabel === normalizedSubcategoryFilter
+        && clickSource === normalizedSubcategoryFilterSource;
+      const encodedLabel = encodeURIComponent(item.label);
+      const clickableClasses = isClickable ? "cursor-pointer hover:shadow-sm hover:-translate-y-[1px] transition-all" : "";
+      const activeClasses = isActive ? "ring-2 ring-cyan-400 ring-offset-1" : "";
+      const clickAttrs = isClickable
+        ? `role="button" tabindex="0" onclick="handleNadi4uSubcategoryFilterClick(decodeURIComponent('${encodedLabel}'),'${clickSource}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();handleNadi4uSubcategoryFilterClick(decodeURIComponent('${encodedLabel}'),'${clickSource}');}"`
+        : "";
+
+      return `<div class="flex items-center gap-1.5 px-2 py-1 ${bgClass} border ${borderClass} rounded-md ${clickableClasses} ${activeClasses}" ${clickAttrs}>
+        <span class="w-2 h-2 rounded-full ${dotClass}"></span>
+        <span class="text-[8px] font-bold ${textClass}">${escapeHtml(item.label)}: ${item.count}</span>
       </div>`;
-    }
-    if (counts.learning > 0) {
-      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-blue-100 border border-blue-200 rounded-md">
-        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-        <span class="text-[8px] font-bold text-blue-700">PEMBELAJARAN: ${counts.learning}</span>
-      </div>`;
-    }
-    if (counts.wellbeing > 0) {
-      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 border border-emerald-200 rounded-md">
-        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-        <span class="text-[8px] font-bold text-emerald-700">KESEJAHTERAAN: ${counts.wellbeing}</span>
-      </div>`;
-    }
-    if (counts.awareness > 0) {
-      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-violet-100 border border-violet-200 rounded-md">
-        <span class="w-2 h-2 rounded-full bg-violet-500"></span>
-        <span class="text-[8px] font-bold text-violet-700">KESEDARAN: ${counts.awareness}</span>
-      </div>`;
-    }
-    if (counts.gov > 0) {
-      badgesHtml += `<div class="flex items-center gap-1.5 px-2 py-1 bg-red-100 border border-red-200 rounded-md">
-        <span class="w-2 h-2 rounded-full bg-red-500"></span>
-        <span class="text-[8px] font-bold text-red-700">INISIATIF KERAJAAN: ${counts.gov}</span>
-      </div>`;
-    }
+    }).join("");
 
     if (!badgesHtml) {
       return '<div class="text-[8px] italic text-slate-400">No events</div>';
@@ -3360,22 +4199,65 @@ function renderCategoryCounts(displayEvents = []) {
     return `<div class="flex flex-wrap gap-2">${badgesHtml}</div>`;
   };
 
-  const renderCountSection = (sectionLabel, sectionCounts, sectionTotal, isFirst = false) => `
+  const renderCountSection = (sectionLabel, sectionCounts, sectionTotal, options = {}) => {
+    const isFirst = options?.isFirst === true;
+    const clickable = options?.clickable === true;
+    const clickSource = String(options?.clickSource || "monthly").trim().toLowerCase() || "monthly";
+    return `
     <div class="${isFirst ? "" : "mt-3 pt-3 border-t border-slate-100"}">
       <div class="flex items-center justify-between mb-1">
         <span class="text-[8px] font-bold uppercase tracking-wide text-slate-500">${sectionLabel}</span>
         <span class="text-[8px] font-semibold text-slate-400">${sectionTotal}</span>
       </div>
-      ${renderCountBadges(sectionCounts)}
+      ${renderCountBadges(sectionCounts, { clickable, clickSource })}
     </div>
   `;
+  };
+
+  const renderWeeklyBreakdownSection = (buckets = [], options = {}) => {
+    if (!Array.isArray(buckets) || buckets.length === 0) return "";
+    const isFirst = options?.isFirst === true;
+    const clickable = options?.clickable === true;
+    const clickSourceBase = String(options?.clickSource || "weekly").trim().toLowerCase() || "weekly";
+
+    const weekRows = buckets.map((bucket) => `
+      <div class="rounded-md border border-slate-100 bg-slate-50 p-2">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Week ${bucket.weekIndex} (${bucket.startDay}-${bucket.endDay})</span>
+          <span class="text-[8px] font-semibold text-slate-400">${bucket.total}</span>
+        </div>
+        ${renderCountBadges(bucket.counts, { clickable, clickSource: `${clickSourceBase}:${bucket.weekIndex}` })}
+      </div>
+    `).join("");
+
+    return `
+      <div class="${isFirst ? "" : "mt-3 pt-3 border-t border-slate-100"}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Weekly Events</span>
+          <span class="text-[8px] font-semibold text-slate-400">${buckets.length} Weeks</span>
+        </div>
+        <div class="space-y-2">${weekRows}</div>
+      </div>
+    `;
+  };
 
   let html = '<div class="bg-white rounded-lg border border-slate-200 p-3 shadow-sm">';
   html += '<div class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Total Programs</div>';
-  html += renderCountSection("Today Events", todayCounts, todayTotal, true);
-  html += renderCountSection("Multiple Day Events", multiDayCounts, multiDayTotal, false);
+  let hasRenderedSection = false;
+  html += renderCountSection(getProgramListDaySectionLabel(), todayCounts, todayTotal, { isFirst: true, clickable: true, clickSource: "day" });
+  hasRenderedSection = true;
+  html += renderCountSection("Multiple Day Events", multiDayCounts, multiDayTotal, { isFirst: false, clickable: true, clickSource: "multi" });
+  if (isNadi4uView) {
+    const weeklySectionHtml = renderWeeklyBreakdownSection(weeklyBuckets, { isFirst: !hasRenderedSection, clickable: true, clickSource: "weekly" });
+    if (weeklySectionHtml) {
+      html += weeklySectionHtml;
+      hasRenderedSection = true;
+    }
+    html += renderCountSection("Monthly Events", monthlyCounts, monthlyTotal, { isFirst: !hasRenderedSection, clickable: true });
+  }
   html += "</div>";
   container.innerHTML = html;
+  requestAnimationFrame(syncNadi4uProgramListHeightToTotals);
 }
 
 function renderEventList() {
@@ -3394,7 +4276,7 @@ function renderEventList() {
   eventImageMap = {};
 
   let displayEvents = getProgramListDisplayEvents(allEvents);
-  renderCategoryCounts(displayEvents);
+  renderCategoryCounts(displayEvents, allEvents);
 
   eventListLookup = new Map();
   displayEvents.forEach((eventItem) => {
@@ -3511,9 +4393,7 @@ function renderEventList() {
   let eventsHtml = '';
   const isMultiDayInCurrentView = isNadi4uView ? isNadi4uMultiDayEvent : isRecentMultiDayEvent;
   const sectionAccentClass = isNadi4uView ? "cyan" : "blue";
-  const recentSectionLabel = "Today Events";
-  let hasRenderedSingleDayHeader = false;
-  let hasRenderedMultiDayHeader = false;
+  const shouldRenderDayMultiHeaders = false;
   
   paginatedEvents.forEach((ev) => {
     // Validate event data
@@ -3524,7 +4404,7 @@ function renderEventList() {
 
     const isCurrentEventMultiDay = isMultiDayInCurrentView(ev);
 
-    if (!isCurrentEventMultiDay && !hasRenderedSingleDayHeader) {
+    if (shouldRenderDayMultiHeaders && !isCurrentEventMultiDay) {
       const recentDivider = document.createElement("div");
       recentDivider.className = "relative my-2 py-1";
       recentDivider.innerHTML = `
@@ -3532,14 +4412,13 @@ function renderEventList() {
           <div class="w-full border-t border-${sectionAccentClass}-200"></div>
         </div>
         <div class="relative flex justify-center">
-          <span class="px-2 text-[9px] font-bold uppercase tracking-wide text-${sectionAccentClass}-700 bg-slate-50 rounded">${recentSectionLabel}</span>
+          <span class="px-2 text-[9px] font-bold uppercase tracking-wide text-${sectionAccentClass}-700 bg-slate-50 rounded">${getProgramListDaySectionLabel()}</span>
         </div>
       `;
       container.appendChild(recentDivider);
-      hasRenderedSingleDayHeader = true;
     }
 
-    if (isCurrentEventMultiDay && !hasRenderedMultiDayHeader) {
+    if (shouldRenderDayMultiHeaders && isCurrentEventMultiDay) {
       const divider = document.createElement("div");
       divider.className = "relative my-2 py-1";
       divider.innerHTML = `
@@ -3551,7 +4430,6 @@ function renderEventList() {
         </div>
       `;
       container.appendChild(divider);
-      hasRenderedMultiDayHeader = true;
     }
 
     const displayCategoryKey = ev?.isExternal && ev?.source === "nadi4u" && ev?.kpiCategory
@@ -3626,7 +4504,8 @@ function renderEventList() {
 
     // Add Registration and Submit Link buttons
     let actionLinksHtml = "";
-    const hasRegistrationLinks = ev.registrationLinks && ev.registrationLinks.length > 0;
+    const mergedRegistrationLinks = mergeRegistrationLinksWithProgramInfo(ev.registrationLinks, ev.info);
+    const hasRegistrationLinks = mergedRegistrationLinks.length > 0;
     const hasSubmitLinks = ev.submitLinks && ev.submitLinks.length > 0;
     
     if (hasRegistrationLinks || hasSubmitLinks) {
@@ -3636,7 +4515,7 @@ function renderEventList() {
       if (hasRegistrationLinks) {
         actionLinksHtml += '<div class="flex flex-col gap-1">';
         actionLinksHtml += '<label class="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Registration Link</label>';
-        ev.registrationLinks.forEach((link) => {
+        mergedRegistrationLinks.forEach((link) => {
           if (link.url) {
             actionLinksHtml += `
             <div class="flex items-center gap-2 text-[9px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
@@ -3686,6 +4565,9 @@ function renderEventList() {
           </button>
         </div>`
       : "";
+    const programTypeLabel = ev?.isExternal && ev?.source === "nadi4u" && typeof ev?.programType === "string"
+      ? ev.programType.trim()
+      : "";
     const isLearningCategoryCard = displayCategoryKey === "learning";
     const categoryBadgeWidthClass = isLearningCategoryCard ? "min-w-[110px] max-w-[110px]" : "min-w-[80px]";
     const categoryLabelClass = isLearningCategoryCard
@@ -3697,6 +4579,7 @@ function renderEventList() {
         <div class="flex justify-between items-start gap-2">
           <div class="flex-1 min-w-0">
             <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">${dateDisplayHtml}</span>
+            ${programTypeLabel ? `<span class="text-[10px] font-bold tracking-wide block mt-0.5" style="color:#2228a4;">- ${escapeHtml(programTypeLabel.toUpperCase())} -</span>` : ""}
             <h4 class="text-xs font-bold text-slate-800 leading-tight mt-0.5 break-words">${ev.title}</h4>
           </div>
           <div class="flex flex-col items-end w-auto text-right gap-1 shrink-0">
@@ -5541,6 +6424,70 @@ function persistNadi4uSettings(settings) {
   setNadi4uStorageItem('nadi4uSettings', settings || {});
 }
 
+function buildAutoNadi4uSettings(existingSettings = {}) {
+  const base = existingSettings && typeof existingSettings === 'object' ? existingSettings : {};
+  const apiKey = (window.NADI4U_API && NADI4U_API.defaultApiKey) || base.apiKey || '';
+
+  return {
+    ...base,
+    apiKey,
+    email: NADI4U_AUTO_LOGIN_EMAIL,
+    password: NADI4U_AUTO_LOGIN_PASSWORD,
+    templateRole: NADI4U_HEADER_ROLE_ASSISTANT,
+    templateSiteName: NADI4U_AUTO_LOGIN_SITE_NAME,
+    templateSiteSlug: NADI4U_AUTO_LOGIN_SITE_SLUG,
+    lastLoginSource: NADI4U_AUTO_LOGIN_SOURCE
+  };
+}
+
+function persistAutoNadi4uSettings() {
+  const currentSettings = parseNadi4uSettingsFromStorage() || {};
+  const nextSettings = buildAutoNadi4uSettings(currentSettings);
+  persistNadi4uSettings(nextSettings);
+
+  if (window.NADI4U_API) {
+    NADI4U_API.configure(nextSettings.apiKey || NADI4U_API.defaultApiKey, nextSettings.token || '');
+    if (typeof NADI4U_API.setCredentials === 'function') {
+      NADI4U_API.setCredentials(nextSettings.email, nextSettings.password, false);
+    }
+  }
+
+  return nextSettings;
+}
+
+async function autoLoginAndSyncNadi4uOnLoad() {
+  if (!window.NADI4U_API) return null;
+  if (nadi4uAutoLoginSyncPromise) return nadi4uAutoLoginSyncPromise;
+
+  nadi4uAutoLoginSyncPromise = (async () => {
+    try {
+      persistAutoNadi4uSettings();
+      const loginResult = await NADI4U_API.login(NADI4U_AUTO_LOGIN_EMAIL, NADI4U_AUTO_LOGIN_PASSWORD, { rememberCredentials: true });
+
+      const mergedSettings = buildAutoNadi4uSettings(parseNadi4uSettingsFromStorage() || {});
+      if (loginResult?.access_token) {
+        mergedSettings.token = loginResult.access_token;
+      }
+      mergedSettings.userEmail = NADI4U_AUTO_LOGIN_EMAIL;
+      persistNadi4uSettings(mergedSettings);
+
+      updateNADI4UView();
+      const syncResult = await syncNADI4UData({ throwOnError: false });
+      return syncResult || null;
+    } catch (error) {
+      if (window.DEBUG_MODE) {
+        console.error('Auto NADI4U login/sync failed:', error);
+      }
+      showNADI4UStatus(`Auto sync failed: ${error.message}`, 'error');
+      return null;
+    } finally {
+      nadi4uAutoLoginSyncPromise = null;
+    }
+  })();
+
+  return nadi4uAutoLoginSyncPromise;
+}
+
 function closeHeaderLoginMenu() {
   const dropdown = document.getElementById('logoutDropdown');
   if (dropdown) {
@@ -6155,18 +7102,19 @@ function showNADI4UStatus(message, type) {
 }
 
 // Initialize NADI4U on load
-document.addEventListener('DOMContentLoaded', function() {
-  const settings = parseNadi4uSettingsFromStorage();
-  if (settings && window.NADI4U_API) {
-    if (settings.token) {
+document.addEventListener('DOMContentLoaded', async function() {
+  const settings = persistAutoNadi4uSettings();
+  if (window.NADI4U_API) {
+    if (settings?.token) {
       NADI4U_API.configure(settings.apiKey, settings.token);
     }
-    if (typeof NADI4U_API.setCredentials === 'function' && settings.email && settings.password) {
+    if (typeof NADI4U_API.setCredentials === 'function' && settings?.email && settings?.password) {
       NADI4U_API.setCredentials(settings.email, settings.password, false);
     }
   }
 
   initNadi4uHeaderMenu();
   updateNADI4UView();
+  await autoLoginAndSyncNadi4uOnLoad();
 });
 
