@@ -46,3 +46,9 @@ coverage/
 # Claude/Agent instruction files (local development)
 AGENTS.md
 CLAUDE.md
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
