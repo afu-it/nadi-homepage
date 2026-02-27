@@ -73,7 +73,7 @@ const announcementSubcategories = {
   "Pembelajaran Sepanjang Hayat": ["eKelas Maxis", "DiLea", "TinyTechies", "ESPORT", "Cybersecurity", "MAHIR"],
 };
 
-const DISABLE_IFRAME_STORAGE = true;
+const DISABLE_IFRAME_STORAGE = false;
 
 function isInIframe() {
   try {

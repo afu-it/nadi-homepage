@@ -805,6 +805,17 @@ function showStaffLogin() {
   document.getElementById('supervisorLoginForm').classList.add('hidden');
 }
 
+function refreshProgramListAfterLeaveLogin() {
+  if (typeof window.updateNADI4UView === 'function') {
+    window.updateNADI4UView();
+  }
+  if (typeof window.renderEventList === 'function') {
+    window.eventListCurrentPage = 0;
+    window.nadi4uListCurrentPage = 0;
+    window.renderEventList();
+  }
+}
+
 // Handle STAFF login (no password required)
 async function handleStaffLogin(e) {
   e.preventDefault();
@@ -873,6 +884,7 @@ async function handleStaffLogin(e) {
     };
     
     leaveStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
+    refreshProgramListAfterLeaveLogin();
     
     // Update UI
     updateLoginButton();
@@ -977,6 +989,7 @@ async function handleSupervisorLogin(e) {
     };
     
     leaveStorage.setItem('leave_user', JSON.stringify(currentLeaveUser));
+    refreshProgramListAfterLeaveLogin();
     
     // Update UI
     updateLoginButton();

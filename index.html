@@ -38,24 +38,46 @@
     <link rel="stylesheet" href="css/kpi-system.css" />
     <script>
       (function () {
+        const createMemoryStorage = function () {
+          const memory = new Map();
+          return {
+            getItem(key) {
+              return memory.has(key) ? memory.get(key) : null;
+            },
+            setItem(key, value) {
+              memory.set(key, String(value));
+            },
+            removeItem(key) {
+              memory.delete(key);
+            }
+          };
+        };
+
+        const canUseStorage = function (storage) {
+          try {
+            const probeKey = "__nadi_storage_probe__" + Date.now();
+            storage.setItem(probeKey, "1");
+            storage.removeItem(probeKey);
+            return true;
+          } catch (error) {
+            return false;
+          }
+        };
+
         try {
           if (window.top !== window.self) {
-            const memory = new Map();
-            const shim = {
-              getItem(key) {
-                return memory.has(key) ? memory.get(key) : null;
-              },
-              setItem(key, value) {
-                memory.set(key, String(value));
-              },
-              removeItem(key) {
-                memory.delete(key);
-              }
-            };
-            Object.defineProperty(window, "localStorage", { value: shim, configurable: true });
-            Object.defineProperty(window, "sessionStorage", { value: shim, configurable: true });
+            if (!canUseStorage(window.localStorage)) {
+              Object.defineProperty(window, "localStorage", { value: createMemoryStorage(), configurable: true });
+            }
+            if (!canUseStorage(window.sessionStorage)) {
+              Object.defineProperty(window, "sessionStorage", { value: createMemoryStorage(), configurable: true });
+            }
           }
-        } catch (error) {}
+        } catch (error) {
+          const fallback = createMemoryStorage();
+          Object.defineProperty(window, "localStorage", { value: fallback, configurable: true });
+          Object.defineProperty(window, "sessionStorage", { value: fallback, configurable: true });
+        }
       })();
     </script>
     <script src="js/supabase.js"></script>

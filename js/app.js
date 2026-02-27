@@ -6950,6 +6950,10 @@ async function loginNADI4U(event) {
       persistNadi4uSettings(settings);
 
       updateNADI4UView();
+      await syncNADI4UData({ throwOnError: false });
+      window.eventListCurrentPage = 0;
+      window.nadi4uListCurrentPage = 0;
+      renderEventList();
       alert('Login successful!');
     }
   } catch (err) {
