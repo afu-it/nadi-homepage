@@ -152,33 +152,6 @@
                     <div id="leaveQuickActions" class="space-y-1.5"></div>
                   </div>
 
-                  <div id="nadi4uHeaderSection" class="rounded-lg border border-cyan-200 bg-cyan-50/50 p-2.5 space-y-2">
-                    <div>
-                      <div class="text-[9px] font-bold uppercase tracking-wide text-cyan-700">NADI APP</div>
-                      <p id="nadi4uHeaderState" class="text-[10px] text-cyan-800 mt-1">Not connected</p>
-                    </div>
-
-                    <div id="nadi4uHeaderInlineStatus" class="hidden px-2 py-1.5 rounded text-[10px]"></div>
-
-                    <div class="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        id="nadi4uHeaderLoginSyncBtn"
-                        onclick="loginNadi4uFromHeader(event)"
-                        class="px-2 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-[10px] font-bold rounded transition-colors"
-                      >
-                        <i class="fa-solid fa-rotate-right mr-1"></i>Refresh
-                      </button>
-                      <button
-                        type="button"
-                        id="nadi4uHeaderLogoutBtn"
-                        onclick="logoutNadi4uFromHeaderMenu()"
-                        class="hidden px-2 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-[10px] font-bold rounded border border-red-200 transition-colors"
-                      >
-                        <i class="fa-solid fa-sign-out-alt mr-1"></i>Logout
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -2327,7 +2300,7 @@
                 <span>Show password</span>
               </label>
             </div>
-            
+
             <button type="submit" class="w-full btn btn-primary btn-lg">
               <i class="fa-solid fa-right-to-bracket"></i> Login
             </button>

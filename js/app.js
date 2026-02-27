@@ -945,6 +945,9 @@ let nadi4uAutoLoginSyncPromise = null;
 const NADI4U_LIST_TYPE_DAY = "day";
 const NADI4U_LIST_TYPE_MULTI = "multi";
 let nadi4uListType = NADI4U_LIST_TYPE_DAY;
+const NADI4U_WEEKLY_VIEW_RECENT = "recent";
+const NADI4U_WEEKLY_VIEW_ALL = "all";
+let nadi4uWeeklyViewMode = NADI4U_WEEKLY_VIEW_RECENT;
 const EXTERNAL_NADI4U_CATEGORY = {
   label: "Smart Services",
   sub: "NADI4U",
@@ -1190,11 +1193,15 @@ function extractUrlsFromProgramInfo(infoContent) {
   if (typeof document !== "undefined") {
     const temp = document.createElement("div");
     temp.innerHTML = typeof sanitizeHTMLWithLinks === "function" ? sanitizeHTMLWithLinks(value) : value;
-    temp.querySelectorAll("a").forEach((anchor) => pushUrl(anchor.getAttribute("href")));
+    temp.querySelectorAll("a").forEach((anchor) => {
+      pushUrl(anchor.getAttribute("href"));
+    });
   } else {
     const urlRegex = /https?:\/\/[^\s<>"']+/gi;
     const matches = value.match(urlRegex) || [];
-    matches.forEach((url) => pushUrl(url));
+    matches.forEach((url) => {
+      pushUrl(url);
+    });
   }
 
   const seen = new Set();
@@ -1338,6 +1345,48 @@ function getUserNadi4uSiteId() {
   if (mappedId) return mappedId;
 
   return '';
+}
+
+function getCurrentNadi4uWeeklyViewMode() {
+  return nadi4uWeeklyViewMode === NADI4U_WEEKLY_VIEW_ALL
+    ? NADI4U_WEEKLY_VIEW_ALL
+    : NADI4U_WEEKLY_VIEW_RECENT;
+}
+
+function setNadi4uWeeklyViewMode(mode) {
+  const normalizedMode = String(mode || "").trim().toLowerCase();
+  nadi4uWeeklyViewMode = normalizedMode === NADI4U_WEEKLY_VIEW_ALL
+    ? NADI4U_WEEKLY_VIEW_ALL
+    : NADI4U_WEEKLY_VIEW_RECENT;
+}
+
+function getNadi4uRecentWeeklyBuckets(buckets = []) {
+  if (!Array.isArray(buckets) || buckets.length === 0) return [];
+
+  const now = new Date();
+  const todayIso = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("-");
+  const currentBucket = buckets.find((bucket) => {
+    const startDate = String(bucket?.startDate || "").trim();
+    const endDate = String(bucket?.endDate || "").trim();
+    return startDate && endDate && todayIso >= startDate && todayIso <= endDate;
+  });
+  if (currentBucket) return [currentBucket];
+
+  const recentBucketWithEvents = [...buckets].reverse().find((bucket) => (Number(bucket?.total) || 0) > 0);
+  if (recentBucketWithEvents) return [recentBucketWithEvents];
+
+  return [buckets[buckets.length - 1]];
+}
+
+function handleNadi4uWeeklyViewModeChange(mode) {
+  setNadi4uWeeklyViewMode(mode);
+  if (currentProgramListView === PROGRAM_LIST_VIEW_NADI4U) {
+    renderEventList();
+  }
 }
 
 function buildNadi4uRegistrationUrl(eventId, siteValue) {
@@ -4272,8 +4321,12 @@ function renderCategoryCounts(displayEvents = [], sourceEvents = null) {
     const isFirst = options?.isFirst === true;
     const clickable = options?.clickable === true;
     const clickSourceBase = String(options?.clickSource || "weekly").trim().toLowerCase() || "weekly";
+    const weeklyViewMode = getCurrentNadi4uWeeklyViewMode();
+    const visibleBuckets = weeklyViewMode === NADI4U_WEEKLY_VIEW_ALL
+      ? buckets
+      : getNadi4uRecentWeeklyBuckets(buckets);
 
-    const weekRows = buckets.map((bucket) => `
+    const weekRows = visibleBuckets.map((bucket) => `
       <div class="rounded-md border border-slate-100 bg-slate-50 p-2">
         <div class="flex items-center justify-between mb-1">
           <span class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Week ${bucket.weekIndex} (${bucket.startDay}-${bucket.endDay})</span>
@@ -4287,7 +4340,16 @@ function renderCategoryCounts(displayEvents = [], sourceEvents = null) {
       <div class="${isFirst ? "" : "mt-3 pt-3 border-t border-slate-100"}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Weekly Events</span>
-          <span class="text-[8px] font-semibold text-slate-400">${buckets.length} Weeks</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[8px] font-semibold text-slate-400">${visibleBuckets.length}/${buckets.length} Weeks</span>
+            <select
+              class="text-[8px] font-semibold text-slate-600 border border-slate-200 rounded px-1.5 py-0.5 bg-white"
+              onchange="handleNadi4uWeeklyViewModeChange(this.value)"
+            >
+              <option value="${NADI4U_WEEKLY_VIEW_RECENT}" ${weeklyViewMode === NADI4U_WEEKLY_VIEW_RECENT ? "selected" : ""}>Recent Week</option>
+              <option value="${NADI4U_WEEKLY_VIEW_ALL}" ${weeklyViewMode === NADI4U_WEEKLY_VIEW_ALL ? "selected" : ""}>All Weeks</option>
+            </select>
+          </div>
         </div>
         <div class="space-y-2">${weekRows}</div>
       </div>
