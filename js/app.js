@@ -3731,13 +3731,45 @@ function closeDeleteModal() {
   }, 200);
 }
 
+function sortSectionsForTopPriority(sections) {
+  if (!Array.isArray(sections)) return [];
+
+  const normalizeHeader = (value) => String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const getPriority = (section) => {
+    const header = normalizeHeader(section && section.header);
+    if (header.includes("nadi availability today")) return 0;
+    if (header.includes("kpi") && header.includes("reminder")) return 1;
+    return 2;
+  };
+
+  return sections
+    .map((section, index) => ({ section, index, priority: getPriority(section) }))
+    .sort((left, right) => {
+      if (left.priority !== right.priority) return left.priority - right.priority;
+      return left.index - right.index;
+    })
+    .map((item) => item.section);
+}
+
+function isTopAlignedPrioritySection(section) {
+  const header = String((section && section.header) || "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!header) return false;
+  if (header.includes("nadi availability today")) return true;
+  return header.includes("kpi") && header.includes("reminder");
+}
+
 function renderCustomLinks() {
   const container = document.getElementById("customLinksWrapper");
   container.innerHTML = "";
 
   if (!siteSettings.sections || siteSettings.sections.length === 0) return;
 
-  siteSettings.sections.forEach((sec) => {
+  const orderedSections = sortSectionsForTopPriority(siteSettings.sections);
+  const topAlignedGrid = document.createElement("div");
+  topAlignedGrid.className = "grid grid-cols-1 lg:grid-cols-2 gap-6 items-start";
+  const normalSections = [];
+
+  orderedSections.forEach((sec) => {
     const sectionDiv = document.createElement("div");
 
     if (sec.type === "divider") {
@@ -3755,6 +3787,9 @@ function renderCustomLinks() {
       `;
     } else {
       sectionDiv.className = "pt-8 mb-8";
+      if (isTopAlignedPrioritySection(sec)) {
+        sectionDiv.className = "pt-1 mb-2";
+      }
 
       const headerWrapper = document.createElement("div");
       headerWrapper.className = "relative flex justify-center mb-8";
@@ -3822,7 +3857,18 @@ function renderCustomLinks() {
       sectionDiv.appendChild(gridWrapper);
     }
 
-    container.appendChild(sectionDiv);
+    if (sec.type !== "divider" && isTopAlignedPrioritySection(sec)) {
+      topAlignedGrid.appendChild(sectionDiv);
+    } else {
+      normalSections.push(sectionDiv);
+    }
+  });
+
+  if (topAlignedGrid.childElementCount > 0) {
+    container.appendChild(topAlignedGrid);
+  }
+  normalSections.forEach((sectionNode) => {
+    container.appendChild(sectionNode);
   });
 }
 
