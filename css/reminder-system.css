@@ -157,9 +157,9 @@
   inset: 0;
   z-index: 50;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 1.5rem;
+  padding: clamp(0.25rem, 1vh, 0.75rem) 1.5rem 1.5rem;
   font-family: "Plus Jakarta Sans", sans-serif;
   visibility: hidden;
   opacity: 0;
