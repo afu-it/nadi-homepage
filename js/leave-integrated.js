@@ -648,6 +648,9 @@ function updateLoginButton() {
   if (typeof window.updateNadi4uHeaderBadge === 'function') {
     window.updateNadi4uHeaderBadge();
   }
+  if (typeof window.renderEventList === 'function') {
+    window.renderEventList();
+  }
 }
 
 function renderLeaveQuickActions() {

@@ -1213,7 +1213,8 @@ function mergeRegistrationLinksWithProgramInfo(registrationLinks, infoContent) {
 
   const result = baseLinks.map((link) => ({
     platform: link.platform || "NES",
-    url: String(link.url || "").trim()
+    url: String(link.url || "").trim(),
+    message: link.message || undefined
   }));
 
   const existingUrlSet = new Set(result.map((link) => link.url.toLowerCase()));
@@ -1291,6 +1292,52 @@ function getPrimaryNadi4uSiteId(siteValue) {
   }
 
   return "";
+}
+
+
+const NADI_SITE_NAME_TO_ID = {
+  "Air Putih": "951", "NADI Air Putih": "951",
+  "Kebun Bunga": "952", "NADI Kebun Bunga": "952",
+  "Pulau Tikus": "953", "NADI Pulau Tikus": "953",
+  "Tanjong Bunga": "954", "NADI Tanjong Bunga": "954",
+  "Komtar": "955", "NADI Komtar": "955",
+  "Padang Kota": "956", "NADI Padang Kota": "956",
+  "Pengkalan Kota": "957", "NADI Pengkalan Kota": "957",
+  "Batu Lancang": "958", "NADI Batu Lancang": "958",
+  "Datok Keramat": "959", "NADI Datok Keramat": "959",
+  "Sungai Pinang": "960", "NADI Sungai Pinang": "960",
+  "Air Itam": "961", "NADI Air Itam": "961",
+  "Paya Terubong": "962", "NADI Paya Terubong": "962",
+  "Seri Delima": "963", "NADI Seri Delima": "963",
+  "Batu Uban": "964", "NADI Batu Uban": "964",
+  "Batu Maung": "965", "NADI Batu Maung": "965",
+  "Pantai Jerejak": "966", "NADI Pantai Jerejak": "966",
+  "Bayan Lepas": "967", "NADI Bayan Lepas": "967",
+  "Pulau Betong": "968", "NADI Pulau Betong": "968"
+};
+
+function resolveNumericSiteId(siteNameOrId) {
+  if (!siteNameOrId) return '';
+  const trimmed = String(siteNameOrId).trim();
+  if (/^\d{3,4}$/.test(trimmed)) return trimmed;
+  return NADI_SITE_NAME_TO_ID[trimmed] || '';
+}
+
+function getUserNadi4uSiteId() {
+  try {
+    const raw = localStorage.getItem('leave_user');
+    if (raw) {
+      const leaveUser = JSON.parse(raw);
+      const mappedId = resolveNumericSiteId(leaveUser?.site_name) || resolveNumericSiteId(leaveUser?.site_id);
+      if (mappedId) return mappedId;
+    }
+  } catch (_) {}
+
+  const settings = parseNadi4uSettingsFromStorage();
+  const mappedId = resolveNumericSiteId(settings?.templateSiteName) || resolveNumericSiteId(settings?.templateSiteId);
+  if (mappedId) return mappedId;
+
+  return '';
 }
 
 function buildNadi4uRegistrationUrl(eventId, siteValue) {
@@ -1432,6 +1479,7 @@ function buildNadi4uDisplayEvents() {
 
   const result = [];
 
+  const userSiteId = getUserNadi4uSiteId();
   metaById.forEach((eventMeta, sourceEventId) => {
     const categoryName = typeof eventMeta?.nd_event_category?.name === "string"
       ? eventMeta.nd_event_category.name
@@ -1482,10 +1530,15 @@ function buildNadi4uDisplayEvents() {
     const externalId = `nadi4u-${sanitizeEventCardIdPart(compositeId)}`;
     const mappedKpiLabel = resolveNadi4uKpiLabel(eventMeta, programName);
     const programType = getNadi4uProgramTypeLabel(eventMeta);
-    const nadi4uRegistrationUrl = buildNadi4uRegistrationUrl(sourceEventId, eventMeta?.site_id);
-    const registrationLinks = nadi4uRegistrationUrl
-      ? [{ platform: "NES", url: nadi4uRegistrationUrl }]
-      : [];
+    let registrationLinks = [];
+    if (userSiteId) {
+      const nadi4uRegistrationUrl = buildNadi4uRegistrationUrl(sourceEventId, userSiteId);
+      if (nadi4uRegistrationUrl) {
+        registrationLinks = [{ platform: "NES", url: nadi4uRegistrationUrl }];
+      }
+    } else {
+      registrationLinks = [{ platform: "NES", url: "https://app.nadi.my/", message: "Please login to register easily" }];
+    }
 
     result.push({
       id: externalId,
@@ -4518,9 +4571,10 @@ function renderEventList() {
         mergedRegistrationLinks.forEach((link) => {
           if (link.url) {
             actionLinksHtml += `
-            <div class="flex items-center gap-2 text-[9px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden">
+            <div class="flex items-center gap-2 text-[9px] bg-slate-50 px-2 py-1 rounded border border-slate-100 relative overflow-hidden flex-wrap sm:flex-nowrap">
               <span class="font-bold text-slate-600 w-12 truncate shrink-0">${link.platform || 'NES'}</span>
-              <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline truncate flex-1 block">${link.url}</a>
+              <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline truncate ${link.message ? 'shrink-0 max-w-[150px]' : 'flex-1 block'}">${link.url}</a>
+              ${link.message ? `<span class="text-red-500 font-bold ml-auto shrink-0 truncate">${link.message}</span>` : ''}
             </div>`;
           }
         });
@@ -6469,6 +6523,14 @@ async function autoLoginAndSyncNadi4uOnLoad() {
         mergedSettings.token = loginResult.access_token;
       }
       mergedSettings.userEmail = NADI4U_AUTO_LOGIN_EMAIL;
+      try {
+        const raw = localStorage.getItem('leave_user');
+        if (raw) {
+          const leaveUser = JSON.parse(raw);
+          const mappedId = resolveNumericSiteId(leaveUser?.site_name) || resolveNumericSiteId(leaveUser?.site_id);
+          if (mappedId) mergedSettings.templateSiteId = mappedId;
+        }
+      } catch (_) {}
       persistNadi4uSettings(mergedSettings);
 
       updateNADI4UView();
