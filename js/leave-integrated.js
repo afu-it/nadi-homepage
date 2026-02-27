@@ -581,6 +581,9 @@ function initLeaveManagement() {
     try {
       currentLeaveUser = JSON.parse(savedUser);
       updateLoginButton();
+      if (typeof window.refreshKpiBadgeFromSession === 'function') {
+        window.refreshKpiBadgeFromSession(currentLeaveUser);
+      }
       loadUserLeaveRequests();
       subscribeToLeaveUpdates();
     } catch (error) {
@@ -714,6 +717,14 @@ document.addEventListener('click', function(e) {
 function logoutUser() {
   currentLeaveUser = null;
   leaveStorage.removeItem('leave_user');
+  if (typeof window.refreshKpiBadgeFromSession === 'function') {
+    window.refreshKpiBadgeFromSession(null);
+  }
+  if (typeof window.renderEventList === 'function') {
+    window.eventListCurrentPage = 0;
+    window.nadi4uListCurrentPage = 0;
+    window.renderEventList();
+  }
   updateLoginButton();
   const dropdown = document.getElementById('logoutDropdown');
   if (dropdown) dropdown.classList.add('hidden');
@@ -808,6 +819,9 @@ function showStaffLogin() {
 function refreshProgramListAfterLeaveLogin() {
   if (typeof window.updateNADI4UView === 'function') {
     window.updateNADI4UView();
+  }
+  if (typeof window.refreshKpiBadgeFromSession === 'function') {
+    window.refreshKpiBadgeFromSession(currentLeaveUser);
   }
   if (typeof window.renderEventList === 'function') {
     window.eventListCurrentPage = 0;
@@ -1059,6 +1073,9 @@ async function handleLeaveLogout() {
     
     leaveStorage.removeItem('leave_user');
     currentLeaveUser = null;
+    if (typeof window.refreshKpiBadgeFromSession === 'function') {
+      window.refreshKpiBadgeFromSession(null);
+    }
     updateLoginButton();
     location.reload();
   }
@@ -1866,7 +1883,9 @@ function drawReplacementConnectors() {
   if (!grid) return;
   
   // Remove existing connectors
-  document.querySelectorAll('.replacement-connector').forEach(el => el.remove());
+  document.querySelectorAll('.replacement-connector').forEach((el) => {
+    el.remove();
+  });
   
   // Find all worked dates that have replacement links
   const workedCells = grid.querySelectorAll('[data-worked-date]');
@@ -3402,7 +3421,9 @@ function drawViewingReplacementConnectors() {
   if (!grid) return;
   
   // Remove existing connectors
-  grid.querySelectorAll('.replacement-connector').forEach(el => el.remove());
+  grid.querySelectorAll('.replacement-connector').forEach((el) => {
+    el.remove();
+  });
   
   // Find all worked dates that have replacement links
   const workedCells = grid.querySelectorAll('[data-worked-date]');

@@ -1177,6 +1177,7 @@ class KpiManager {
     if (!badge) return;
 
     if (!this.currentSiteId || this.viewMode === 'all') {
+      badge.textContent = '';
       badge.classList.add('hidden');
       return;
     }
@@ -1413,18 +1414,64 @@ class KpiManager {
 // Global instance
 let kpiManager;
 
+function getLeaveUserFromStorage() {
+  const parseUser = (raw) => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && parsed.site_id) {
+        return parsed;
+      }
+    } catch (error) {
+      return null;
+    }
+    return null;
+  };
+
+  let raw = null;
+  try {
+    raw = window.safeStorage?.getItem ? window.safeStorage.getItem('leave_user') : null;
+  } catch (error) {
+    raw = null;
+  }
+
+  if (!raw) {
+    try {
+      raw = localStorage.getItem('leave_user');
+    } catch (error) {
+      raw = null;
+    }
+  }
+
+  return parseUser(raw);
+}
+
+async function refreshKpiBadgeFromSession(preferredUser = null) {
+  if (!kpiManager) return;
+
+  const resolvedUser = preferredUser
+    || ((typeof currentLeaveUser !== 'undefined' && currentLeaveUser) ? currentLeaveUser : null)
+    || getLeaveUserFromStorage();
+
+  if (!resolvedUser || !resolvedUser.site_id) {
+    kpiManager.currentSiteId = null;
+    kpiManager.viewMode = 'single';
+    kpiManager.updateBadge();
+    return;
+  }
+
+  kpiManager.initWithUser(resolvedUser);
+  await kpiManager.loadData();
+}
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
   kpiManager = new KpiManager();
   await kpiManager.init();
-
-  // Check if user is already logged in (from previous session)
-  // and load KPI data to show badge
-  if (typeof currentLeaveUser !== 'undefined' && currentLeaveUser && currentLeaveUser.site_id) {
-    kpiManager.initWithUser(currentLeaveUser);
-    await kpiManager.loadData();
-  }
+  await refreshKpiBadgeFromSession();
 });
+
+window.refreshKpiBadgeFromSession = refreshKpiBadgeFromSession;
 
 // Handle KPI button click - check login first
 function handleKpiButtonClick() {

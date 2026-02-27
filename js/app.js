@@ -1340,10 +1340,6 @@ function getUserNadi4uSiteId() {
     }
   } catch (_) {}
 
-  const settings = parseNadi4uSettingsFromStorage();
-  const mappedId = resolveNumericSiteId(settings?.templateSiteName) || resolveNumericSiteId(settings?.templateSiteId);
-  if (mappedId) return mappedId;
-
   return '';
 }
 
