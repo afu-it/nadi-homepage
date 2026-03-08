@@ -2029,6 +2029,14 @@ function getProgramListPageStateKey() {
   return "nadi4uListCurrentPage";
 }
 
+function getProgramListEventsPerPage() {
+  const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
+  if (isNadi4uView && nadi4uListType === NADI4U_LIST_TYPE_MULTI) {
+    return 10;
+  }
+  return 20;
+}
+
 function syncNadi4uProgramListHeightToTotals() {
   const eventListContainer = document.getElementById("eventListContainer");
   if (!eventListContainer) return;
@@ -2162,19 +2170,6 @@ function updateProgramListHeader() {
       button.classList.add("bg-white", "text-cyan-700", "border-cyan-200", "hover:bg-cyan-50");
     }
   };
-
-  const allEvents = getCombinedEventListSource();
-  const { filteredBySearch } = getNadi4uScopedFilterResult(allEvents);
-  const dayEventsCount = filteredBySearch.filter((eventItem) => !isNadi4uMultiDayEvent(eventItem)).length;
-  const multiDayEventsCount = filteredBySearch.filter((eventItem) => isNadi4uMultiDayEvent(eventItem)).length;
-
-  if (dayBtn) {
-    dayBtn.textContent = `Today Events (${dayEventsCount})`;
-  }
-
-  if (multiBtn) {
-    multiBtn.textContent = `Multiple Day Events (${multiDayEventsCount})`;
-  }
 
   applyTypeButtonStyles(dayBtn, nadi4uListType === NADI4U_LIST_TYPE_DAY);
   applyTypeButtonStyles(multiBtn, nadi4uListType === NADI4U_LIST_TYPE_MULTI);
