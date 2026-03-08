@@ -1397,7 +1397,13 @@ function buildNadi4uRegistrationUrl(eventId, siteValue) {
 function isExcludedNadi4uProgramTitle(title) {
   const source = String(title || "").trim();
   if (!source) return false;
-  return /\btest\s*program\b/i.test(source);
+
+  if (/\btest\s*program\b/i.test(source)) return true;
+  if (/\breach\b[\s\-:/|()]*\bjom\s*saring\b/i.test(source)) return true;
+  if (/\bjom\s*saring\b[\s\-:/|()]*\breach\b/i.test(source)) return true;
+  if (/\btaklimat\s+pengasuhan\s+d(?:igital|gital|igtal|igitial)(?:\s+(?:2|ii))?\b/i.test(source)) return true;
+
+  return /\bpe(?:ng|g)asuhan\s+d(?:igital|gital|igtal|igitial)\s*(?:2|ii)\b/i.test(source);
 }
 
 function getNadi4uKpiLabelFromTitle(title) {
@@ -2023,14 +2029,6 @@ function getProgramListPageStateKey() {
   return "nadi4uListCurrentPage";
 }
 
-function getProgramListEventsPerPage() {
-  const isNadi4uView = currentProgramListView === PROGRAM_LIST_VIEW_NADI4U;
-  if (isNadi4uView && nadi4uListType === NADI4U_LIST_TYPE_MULTI) {
-    return 10;
-  }
-  return 20;
-}
-
 function syncNadi4uProgramListHeightToTotals() {
   const eventListContainer = document.getElementById("eventListContainer");
   if (!eventListContainer) return;
@@ -2093,6 +2091,11 @@ function updateProgramListHeader() {
   const clearSearchBtn = document.getElementById("clearNadi4uSearchBtn");
   const isNadi4uView = true;
   const hideTypeTabs = isMonthlyNadi4uSubcategoryFilterActive();
+  const {
+    filteredBySearch
+  } = getNadi4uScopedFilterResult(getCombinedEventListSource());
+  const dayCount = filteredBySearch.filter((eventItem) => !isNadi4uMultiDayEvent(eventItem)).length;
+  const multiCount = filteredBySearch.filter((eventItem) => isNadi4uMultiDayEvent(eventItem)).length;
 
   if (titleEl) {
     titleEl.textContent = "Smart Services NADI4U";
@@ -2139,6 +2142,14 @@ function updateProgramListHeader() {
 
   if (typeTabs) {
     typeTabs.classList.toggle("hidden", hideTypeTabs);
+  }
+
+  if (dayBtn) {
+    dayBtn.textContent = `Today Events (${dayCount})`;
+  }
+
+  if (multiBtn) {
+    multiBtn.textContent = `Multiple Day Events (${multiCount})`;
   }
 
   const applyTypeButtonStyles = (button, isActive) => {
@@ -4500,8 +4511,7 @@ function renderEventList() {
   }
 
   // =====================================================
-  // OPTIMIZATION: Pagination
-  // Multiple Day Events in NADI4U view are limited to 10 cards/page.
+  // OPTIMIZATION: Pagination (20 events per page)
   // =====================================================
   const EVENTS_PER_PAGE = getProgramListEventsPerPage();
   let currentPage = 0;
@@ -7276,6 +7286,33 @@ async function syncNADI4UData(options = {}) {
   }
 }
 
+async function syncNadi4uFromProgramList(event) {
+  const button = event?.currentTarget || document.getElementById("programListSyncBtn");
+  const icon = button ? button.querySelector("i") : null;
+
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-70", "cursor-not-allowed");
+  }
+  if (icon) {
+    icon.classList.remove("fa-rotate-right");
+    icon.classList.add("fa-spinner", "fa-spin");
+  }
+
+  try {
+    await syncNADI4UData({ throwOnError: false });
+  } finally {
+    if (icon) {
+      icon.classList.remove("fa-spinner", "fa-spin");
+      icon.classList.add("fa-rotate-right");
+    }
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-70", "cursor-not-allowed");
+    }
+  }
+}
+
 function showNADI4UStatus(message, type) {
   const statusEl = document.getElementById('nadi4uStatus');
   if (!statusEl) return;
@@ -7309,4 +7346,3 @@ document.addEventListener('DOMContentLoaded', async function() {
   updateNADI4UView();
   await autoLoginAndSyncNadi4uOnLoad();
 });
-

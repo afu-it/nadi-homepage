@@ -197,7 +197,7 @@
  
     <main class="flex-grow w-full px-4 py-6">
       <div class="max-w-5xl mx-auto">
-        <div class="flex flex-col md:flex-row gap-6 items-start">
+        <div class="flex flex-col md:flex-row gap-4 items-start">
           <div class="w-full md:w-7/12 order-1 md:order-2">
             <div class="bg-white rounded-xl shadow-card border border-slate-200 p-5">
                 <div class="flex items-center justify-between mb-4">
@@ -354,8 +354,8 @@
           </div>
 
           <div class="w-full md:w-5/12 order-2 md:order-1 flex flex-col">
-            <div class="flex items-center gap-3 mb-2">
-              <div class="flex items-center gap-1.5">
+            <div class="mb-2 pr-1">
+              <div class="flex items-center gap-3 mb-2">
                 <button
                   id="programListPrevBtn"
                   onclick="changeProgramListView(-1)"
@@ -365,27 +365,9 @@
                 >
                   <i class="fa-solid fa-chevron-left text-[10px]"></i>
                 </button>
-                <div class="flex flex-col leading-tight gap-1">
+                <div class="flex flex-col leading-tight gap-1 min-w-0">
                   <h2 id="programsListHeader" class="text-base font-bold text-slate-900 cursor-pointer select-none transition-transform active:scale-95">Programs List</h2>
                   <span id="programsListModeLabel" class="text-[10px] font-semibold text-slate-500">Recent Events</span>
-                  <div id="programListTypeTabs" class="flex items-center gap-1.5">
-                    <button
-                      id="programListDayBtn"
-                      onclick="setNadi4uListType('day')"
-                      class="px-2 py-1 rounded border text-[9px] font-bold transition-colors"
-                      type="button"
-                    >
-                      Today Events
-                    </button>
-                    <button
-                      id="programListMultiBtn"
-                      onclick="setNadi4uListType('multi')"
-                      class="px-2 py-1 rounded border text-[9px] font-bold transition-colors"
-                      type="button"
-                    >
-                      Multiple Day Events
-                    </button>
-                  </div>
                 </div>
                 <button
                   id="programListNextBtn"
@@ -396,35 +378,65 @@
                 >
                   <i class="fa-solid fa-chevron-right text-[10px]"></i>
                 </button>
+                <div class="flex gap-2 ml-auto">
+                  <button
+                    onclick="toggleFilter()"
+                    class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm"
+                  >
+                    <i class="fa-solid fa-filter text-[10px]"></i>
+                  </button>
+                  <button
+                    id="programListSortBtn"
+                    onclick="toggleSort()"
+                    class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-purple-600 hover:border-purple-300 shadow-sm"
+                    title="Sort"
+                  >
+                    <i class="fa-solid fa-arrow-down-a-z text-[10px]"></i>
+                  </button>
+                  <button
+                    id="programListSearchBtn"
+                    onclick="toggleNadi4uSearch()"
+                    class="hidden w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-cyan-600 hover:border-cyan-300 shadow-sm"
+                    title="Search Smart Services NADI4U"
+                  >
+                    <i class="fa-solid fa-magnifying-glass text-[10px]"></i>
+                  </button>
+                  <button
+                    onclick="openModalWithSelectedDate()"
+                    class="text-[10px] font-bold text-white bg-slate-900 hover:bg-slate-700 px-3 py-1.5 rounded shadow flex items-center gap-1"
+                  >
+                    <i class="fa-solid fa-plus"></i> Add
+                  </button>
+                </div>
               </div>
-              <div class="flex gap-2 ml-auto">
+              <div class="flex w-full items-center gap-1.5">
+                <div id="programListTypeTabs" class="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto whitespace-nowrap">
+                  <button
+                    id="programListDayBtn"
+                    onclick="setNadi4uListType('day')"
+                    class="h-6 px-2 rounded border text-[9px] font-bold transition-colors whitespace-nowrap shrink-0 inline-flex items-center"
+                    type="button"
+                  >
+                    Today Events
+                  </button>
+                  <button
+                    id="programListMultiBtn"
+                    onclick="setNadi4uListType('multi')"
+                    class="h-6 px-2 rounded border text-[9px] font-bold transition-colors whitespace-nowrap shrink-0 inline-flex items-center"
+                    type="button"
+                  >
+                    Multiple Day Events
+                  </button>
+                </div>
                 <button
-                  onclick="toggleFilter()"
-                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm"
+                  id="programListSyncBtn"
+                  onclick="syncNadi4uFromProgramList(event)"
+                  class="w-6 h-6 flex items-center justify-center rounded bg-cyan-600 hover:bg-cyan-700 text-white transition-colors shrink-0"
+                  type="button"
+                  title="Sync NADI4U"
+                  aria-label="Sync NADI4U"
                 >
-                  <i class="fa-solid fa-filter text-[10px]"></i>
-                </button>
-                <button
-                  id="programListSortBtn"
-                  onclick="toggleSort()"
-                  class="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-purple-600 hover:border-purple-300 shadow-sm"
-                  title="Sort"
-                >
-                  <i class="fa-solid fa-arrow-down-a-z text-[10px]"></i>
-                </button>
-                <button
-                  id="programListSearchBtn"
-                  onclick="toggleNadi4uSearch()"
-                  class="hidden w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:text-cyan-600 hover:border-cyan-300 shadow-sm"
-                  title="Search Smart Services NADI4U"
-                >
-                  <i class="fa-solid fa-magnifying-glass text-[10px]"></i>
-                </button>
-                <button
-                  onclick="openModalWithSelectedDate()"
-                  class="text-[10px] font-bold text-white bg-slate-900 hover:bg-slate-700 px-3 py-1.5 rounded shadow flex items-center gap-1"
-                >
-                  <i class="fa-solid fa-plus"></i> Add
+                  <i class="fa-solid fa-rotate-right text-[10px]"></i>
                 </button>
               </div>
             </div>
