@@ -1,55 +1,68 @@
-# AGENTS.md - NADI Home Operational Guide
+# PROJECT KNOWLEDGE BASE
 
-## Project Overview
-Vanilla JavaScript web app for NADI Pulau Pinang (18 sites) with:
-- Calendar management
-- Leave request workflow (staff + supervisors)
-- Announcement board
-- Reminder system
-- KPI tracking
-- Smart Services NADI4U program monitoring
+**Generated:** 2026-02-27
+**Commit:** ffcba03
+**Branch:** main
 
-Primary deployment: GitHub Pages embedded in Google Sites iframe.
+## OVERVIEW
+Static vanilla-JS operations app for NADI Pulau Pinang. Primary risk is behavior regression in NADI4U list/totals/filter semantics and embedded Google Sites session behavior.
 
-## Current Product Behavior (Preserve)
+## STRUCTURE
+```text
+./
+├── index.html              # Main app shell, modal containers, script bootstrap
+├── announcements.html      # Announcements-focused surface
+├── js/                     # Core runtime logic and integrations
+├── css/                    # Feature-scoped stylesheets
+├── AGENTS.md               # Root guardrails (this file)
+├── js/AGENTS.md            # JS subsystem conventions
+└── css/AGENTS.md           # CSS subsystem conventions
+```
 
-- Program List is Smart Services NADI4U only.
-- App auto-logs into NADI4U on load using configured assistant account and auto-syncs current month.
-- Total Programs panel always shows:
-  - Today Events
-  - Multiple Day Events
-  - Weekly Events (per-week breakdown)
-  - Monthly Events
-- Program List type buttons (`Today Events` / `Multiple Day Events`) affect list rows only.
-- Total Programs counts remain complete and visible regardless of selected list-type button.
-- Total Programs labels are clickable and apply scoped list filters:
-  - Today -> day-only
-  - Multiple Day -> multi-day-only
-  - Week N -> selected week
-  - Monthly -> full month
-- Program List has top buttons:
-  - Today Events
-  - Multiple Day Events
+## WHERE TO LOOK
+| Task | Location | Notes |
+|------|----------|-------|
+| Program list/totals/filter behavior | `js/app.js` | Highest-centrality file; do not break scoped filter rules |
+| NADI4U auth/token/session | `js/nadi4u-api.js`, `js/app.js` | Storage + reauth + sync pipeline |
+| Leave login/logout/session | `js/leave-integrated.js` | `leave_user` drives KPI + NES personalization |
+| KPI badge/panel | `js/kpi-system.js`, `css/kpi-system.css` | Badge must update without opening panel |
+| Reminder modal | `js/reminder-system.js`, `css/reminder-system.css` | Overlay/dialog top-position behavior |
+| Supabase client/config | `js/supabase.js`, `js/config.js` | Keep projected month-window event queries |
 
-## Technology Stack
-- Frontend: HTML5, Vanilla JavaScript (ES6+), Tailwind CSS (CDN)
-- Backend: Supabase (PostgreSQL + Realtime)
-- External API: NADI4U REST API
-- Icons: Font Awesome 6.4.0
-- Sanitization: DOMPurify
-- Static architecture (no build step)
+## CODE MAP
+- `js/app.js`: orchestration, rendering, NADI4U list transforms, top-level filters, bootstrap.
+- `js/leave-integrated.js`: leave auth/session restore, panel rendering, logout pathways.
+- `js/kpi-system.js`: KPI model, monthly calculations, top badge state, dialog lifecycle.
+- `index.html`: critical iframe-storage fallback bootstrap and root DOM containers.
 
-## Development Commands
+## CONVENTIONS (PROJECT-SPECIFIC)
+- Program List remains Smart Services NADI4U only.
+- Auto-login + auto-sync NADI4U on load must remain intact.
+- Total Programs (Today/Multiple Day/Weekly/Monthly) remain complete and always visible.
+- List type buttons affect rows only; they must not mutate total counters.
+- Total section labels are interactive scoped filters (Today/Multiple/Week/Monthly).
+- Use storage wrappers (`safeStorage` / `appStorage`) for embed safety.
 
-### Local Server
+## ANTI-PATTERNS (DO NOT INTRODUCE)
+- `select('*')` against `events`.
+- Full-table events prefetch in browser.
+- Unsanitized HTML render paths (always sanitize before `innerHTML`).
+- Reintroducing recent-events list behavior or removing NADI4U-only mode.
+- Breaking embedded refresh/session persistence in Google Sites iframe flows.
+
+## KPI DEFINITIONS
+- `entrepreneur`: Preneur, EmpowHer, Kidventure
+- `learning`: eKelas Keusahawanan, DiLea, Cybersecurity, eKelas Maxis, Tinytechies, eSport, Mahir
+- `wellbeing`: CARE bundle rule (CARE + MenWell + FlourisHer)
+- `awareness`: KIS
+- `gov`: MyDigital ID
+
+## COMMANDS
 ```bash
 python -m http.server 5500
 # or
 npx serve -p 5500
-```
 
-### JavaScript Syntax Check
-```bash
 node --check js/config.js
 node --check js/app.js
 node --check js/leave-integrated.js
@@ -59,65 +72,6 @@ node --check js/kpi-system.js
 node --check js/nadi4u-api.js
 ```
 
-## Manual Testing
-1. Open `index.html`.
-2. Verify calendar month navigation and selected-date behavior.
-3. Verify leave flow (staff request + supervisor review).
-4. Verify announcements/reminders CRUD.
-5. Verify KPI tracking and KPI Info permissions.
-6. Verify Smart Services NADI4U:
-   - Auto login and auto sync on load/refresh
-   - Program list rendering
-   - Program type display
-   - Registration links
-   - Exclusion of `TEST PROGRAM`
-7. Verify Total Programs filter click behavior for all sections.
-8. Verify toggling Program List `Today Events` / `Multiple Day Events` does not hide or zero the opposite Total Programs section.
-
-## File Structure
-```text
-├── index.html
-├── announcements.html
-├── AGENTS.md
-├── CLAUDE.md
-├── README.md
-├── SECURITY.md
-├── CHANGELOG.md
-├── css/
-│   ├── styles.css
-│   ├── leave-system.css
-│   ├── reminder-system.css
-│   └── kpi-system.css
-└── js/
-    ├── app.js
-    ├── config.js
-    ├── leave-integrated.js
-    ├── password-utils.js
-    ├── reminder-system.js
-    ├── kpi-system.js
-    ├── nadi4u-api.js
-    ├── supabase.js
-    └── supabase.config.js
-```
-
-## Supabase Rules
-1. Never use `select('*')` on `events`.
-2. Use projected columns only.
-3. Query `events` by month window.
-4. Keep month cache logic enabled.
-5. Avoid full-table prefetch in browser.
-
-## KPI Definitions
-- `entrepreneur`: Preneur, EmpowHer, Kidventure
-- `learning`: eKelas Keusahawanan, DiLea, Cybersecurity, eKelas Maxis, Tinytechies, eSport, Mahir
-- `wellbeing`: CARE bundle rule (CARE + MenWell + FlourisHer)
-- `awareness`: KIS
-- `gov`: MyDigital ID
-
-## Common Pitfalls
-1. Breaking scoped filter logic in NADI4U list.
-2. Re-introducing Recent Events list view.
-3. Removing auto-login/auto-sync bootstrap for NADI4U.
-4. Breaking month auto-selected date behavior.
-5. Unsanitized HTML rendering.
-6. Using `select('*')` on `events`.
+## NOTES
+- Repo is shallow (depth 1) but hotspot-heavy (`js/app.js`, `js/leave-integrated.js`, `js/kpi-system.js`).
+- Use child AGENTS for details before editing under `js/` or `css/`.
